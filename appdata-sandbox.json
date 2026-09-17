@@ -1230,6 +1230,17 @@
                     "sandbox-flags": [ "bind", "rec" ]
                 }
             ]
+        }],
+        "ohos.permission.PRINTER_DRIVER":[{
+            "sandbox-switch": "ON",
+            "gids": [3823],
+            "mount-paths": [{
+                    "src-path" : "/data/service/el1/<currentUserId>/printer_service/data/<variablePackageName>",
+                    "sandbox-path" : "/data/service/print",
+                    "sandbox-flags": [ "bind", "rec" ],
+                    "check-action-status": "false"
+                }
+            ]
         }]
     }],
     "inverted-permission": [{
