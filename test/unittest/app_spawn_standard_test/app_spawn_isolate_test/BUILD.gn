@@ -55,12 +55,12 @@ if (!defined(ohos_lite)) {
     # Test specific include dir
     include_dirs += [
       "${appspawn_path}/test/mock/wrapper/include",
-      "${appspawn_path}/test/unittest/app_spawn_standard_test/app_spawn_isolate_test",
+      "${appspawn_path}/util/include",
     ]
 
     # Target code sources
     sources = [
-      "${appspawn_path}/modules/common/appspawn_isolate.c",
+      "${appspawn_path}/modules/sandbox/appspawn_isolate.c",
     ]
 
     # Dependent code sources
@@ -80,7 +80,6 @@ if (!defined(ohos_lite)) {
     # Test specific sources
     sources += [
       "app_spawn_isolate_test.cpp",
-      "isolate_test_helper.cpp",
       "${appspawn_path}/test/mock/wrapper/src/lib_wrapper.c",
     ]
 

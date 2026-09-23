@@ -25,23 +25,6 @@
 #include "dec_config.h"
 #include "securec.h"
 
-// Kernel ABI batch type for DEC ioctl. path capacity is fixed to KERNEL_BATCH_SIZE.
-// Used by all DEC batch ioctl commands to keep _IOWR/_IOW size consistent with the kernel.
-typedef struct IoctlDecPolicyBatch {
-    uint64_t tokenId;
-    uint64_t timestamp;
-    PathInfo path[KERNEL_BATCH_SIZE];
-    uint32_t pathNum;
-    int32_t userId;
-    uint64_t reserved[DEC_POLICY_HEADER_RESERVED];
-    bool flag;
-} IoctlDecPolicyBatch;
-
-// Internal ioctl commands, all based on IoctlDecPolicyBatch (path[KERNEL_BATCH_SIZE]).
-#define SET_DEC_POLICY_CMD _IOWR(HM_DEC_IOCTL_BASE, HM_SET_POLICY_ID, IoctlDecPolicyBatch)
-#define CONSTRAINT_DEC_POLICY_CMD _IOW(HM_DEC_IOCTL_BASE, HM_CONSTRAINT_POLICY_ID, IoctlDecPolicyBatch)
-#define SET_DEC_PREFIX_CMD _IOWR(HM_DEC_IOCTL_BASE, HM_SET_PREFIX_ID, IoctlDecPolicyBatch)
-#define SET_DEC_IGNORE_CASE_CMD _IOWR(HM_DEC_IOCTL_BASE, HM_SET_DEC_IGNORE_CASE_ID, IoctlDecPolicyBatch)
 
 static const char *g_decConstraintDir[] = {
     "/storage/Users",

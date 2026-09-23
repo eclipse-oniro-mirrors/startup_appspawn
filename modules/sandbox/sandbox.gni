@@ -40,3 +40,9 @@ if (appspawn_controlled_app) {
         "//base/startup/appspawn/modules/sandbox/normal/sandbox_controlled_app.cpp"
     ]
 }
+
+if (appspawn_custom_sandbox) {
+    appspawn_sandbox_src += [
+        "//base/startup/appspawn/modules/sandbox/appspawn_isolate.c"
+    ]
+}
