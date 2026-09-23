@@ -15,6 +15,7 @@
 
 #include <gtest/gtest.h>
 
+#include <cerrno>
 #include <cstdlib>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -46,23 +47,23 @@ static const char *TEST_UNZIP_DIR = "./hnp_test_unzip";
 static int CreateZipWithEntryName(const char *zipPath, const char *fileName)
 {
     zipFile zf = zipOpen(zipPath, APPEND_STATUS_CREATE);
-    if (zf == NULL) {
+    if (zf == nullptr) {
         return -1;
     }
 
-    int zret = zipOpenNewFileInZip3(zf, fileName, NULL, NULL, 0, NULL, 0, NULL, Z_DEFLATED, Z_BEST_COMPRESSION,
-        0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, NULL, 0);
+    int zret = zipOpenNewFileInZip3(zf, fileName, nullptr, nullptr, 0, nullptr, 0, nullptr, Z_DEFLATED,
+        Z_BEST_COMPRESSION, 0, -MAX_WBITS, DEF_MEM_LEVEL, Z_DEFAULT_STRATEGY, nullptr, 0);
     if (zret != ZIP_OK) {
-        zipClose(zf, NULL);
+        zipClose(zf, nullptr);
         return -1;
     }
     if (zipWriteInFileInZip(zf, "test", sizeof("test")) != ZIP_OK) {
         zipCloseFileInZip(zf);
-        zipClose(zf, NULL);
+        zipClose(zf, nullptr);
         return -1;
     }
     zipCloseFileInZip(zf);
-    zipClose(zf, NULL);
+    zipClose(zf, nullptr);
     return 0;
 }
 
@@ -70,10 +71,13 @@ static int CreateLongNameZip(void)
 {
     size_t nameLen = MAX_FILE_PATH_LEN;
     char *fileName = static_cast<char *>(malloc(nameLen + 1));
-    if (fileName == NULL) {
+    if (fileName == nullptr) {
         return -1;
     }
-    (void)memset_s(fileName, nameLen + 1, 'a', nameLen);
+    if (memset_s(fileName, nameLen + 1, 'a', nameLen) != EOK) {
+        free(fileName);
+        return -1;
+    }
     fileName[nameLen] = '\0';
 
     int ret = CreateZipWithEntryName(TEST_ZIP_FILE, fileName);
@@ -83,8 +87,12 @@ static int CreateLongNameZip(void)
 
 static void RemoveTestArtifacts(void)
 {
-    remove(TEST_ZIP_FILE);
-    HnpDeleteFolder(TEST_UNZIP_DIR);
+    if (remove(TEST_ZIP_FILE) != 0 && errno != ENOENT) {
+        GTEST_LOG_(WARNING) << "remove " << TEST_ZIP_FILE << " failed";
+    }
+    if (HnpDeleteFolder(TEST_UNZIP_DIR) != 0) {
+        GTEST_LOG_(WARNING) << "delete " << TEST_UNZIP_DIR << " failed";
+    }
 }
 
 /**
