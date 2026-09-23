@@ -22,6 +22,7 @@
 
 #include "zlib.h"
 #include "contrib/minizip/zip.h"
+#include "contrib/minizip/unzip.h"
 
 #include "hnp_base.h"
 #include "securec.h"
@@ -95,6 +96,19 @@ static void RemoveTestArtifacts(void)
     }
 }
 
+static bool g_injectGetInfoFail = false;
+
+extern "C" int __wrap_unzGetCurrentFileInfo(unzFile file, unz_file_info *pfile_info, char *szFileName,
+    uLong fileNameBufferSize, void *extraField, uLong extraFieldBufferSize, char *szComment,
+    uLong commentBufferSize)
+{
+    if (g_injectGetInfoFail) {
+        return UNZ_ERRNO;
+    }
+    return __real_unzGetCurrentFileInfo(file, pfile_info, szFileName, fileNameBufferSize, extraField,
+        extraFieldBufferSize, szComment, commentBufferSize);
+}
+
 /**
 * @tc.name: Hnp_Zip_001
 * @tc.desc:  Verify HnpUnZip return error when zip entry name is too long.
@@ -144,6 +158,43 @@ HWTEST_F(HnpZipTest, Hnp_Zip_003, TestSize.Level1)
     EXPECT_EQ(HnpUnZip(TEST_ZIP_FILE, TEST_UNZIP_DIR, "prefix", signMaps, &count), 0);
     EXPECT_EQ(count, 0);
     EXPECT_EQ(access("./hnp_test_unzip/test.txt", F_OK), 0);
+    RemoveTestArtifacts();
+}
+
+/**
+* @tc.name: Hnp_Zip_004
+* @tc.desc:  Verify HnpUnZip return error when unzGetCurrentFileInfo fails.
+* @tc.type: FUNC
+* @tc.require:
+*/
+HWTEST_F(HnpZipTest, Hnp_Zip_004, TestSize.Level1)
+{
+    ASSERT_EQ(CreateZipWithEntryName(TEST_ZIP_FILE, "test.txt"), 0);
+
+    g_injectGetInfoFail = true;
+    HnpSignMapInfo signMaps[1] = {};
+    int count = 0;
+    EXPECT_EQ(HnpUnZip(TEST_ZIP_FILE, TEST_UNZIP_DIR, "prefix", signMaps, &count),
+        HNP_ERRNO_BASE_UNZIP_GET_INFO_FAILED);
+    EXPECT_EQ(count, 0);
+    g_injectGetInfoFail = false;
+    RemoveTestArtifacts();
+}
+
+/**
+* @tc.name: Hnp_Zip_005
+* @tc.desc:  Verify HnpCfgGetFromZip return error when unzGetCurrentFileInfo fails.
+* @tc.type: FUNC
+* @tc.require:
+*/
+HWTEST_F(HnpZipTest, Hnp_Zip_005, TestSize.Level1)
+{
+    ASSERT_EQ(CreateZipWithEntryName(TEST_ZIP_FILE, "test.txt"), 0);
+
+    g_injectGetInfoFail = true;
+    HnpCfgInfo cfg = {};
+    EXPECT_EQ(HnpCfgGetFromZip(TEST_ZIP_FILE, &cfg), HNP_ERRNO_BASE_UNZIP_GET_INFO_FAILED);
+    g_injectGetInfoFail = false;
     RemoveTestArtifacts();
 }
 }  // namespace OHOS

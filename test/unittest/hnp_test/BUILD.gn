@@ -29,6 +29,7 @@ if (!defined(ohos_lite)) {
     ]
     ldflags = [
       "-Wl,--wrap=strcpy_s",
+      "-Wl,--wrap=unzGetCurrentFileInfo",
     ]
     include_dirs = [
       "${appspawn_path}/service/hnp/base",
