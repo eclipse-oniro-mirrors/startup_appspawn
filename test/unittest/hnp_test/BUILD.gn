@@ -51,6 +51,7 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/test/mock/wrapper/src/lib_wrapper.c",
       "hnp_installer_test.cpp",
       "hnp_pack_test.cpp",
+      "hnp_zip_test.cpp",
     ]
 
     defines = [ "APPSPAWN_TEST" ]

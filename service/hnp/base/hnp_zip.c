@@ -481,8 +481,9 @@ int HnpUnZip(const char *inputFile, const char *outputDir, const char *hnpSignKe
     int result = unzGoToFirstFile(zipFile);
     while (result == UNZ_OK) {
         result = unzGetCurrentFileInfo(zipFile, &fileInfo, fileName, sizeof(fileName), NULL, 0, NULL, 0);
-        if (result != UNZ_OK) {
-            HNP_LOGE("unzip get zip:%{public}s info unsuccess!", inputFile);
+        if ((result != UNZ_OK) || (fileInfo.size_filename >= sizeof(fileName))) {
+            HNP_LOGE("unzip get zip:%{public}s info unsuccess, name len:%{public}lu!", inputFile,
+                fileInfo.size_filename);
             unzClose(zipFile);
             return HNP_ERRNO_BASE_UNZIP_GET_INFO_FAILED;
         }
@@ -537,8 +538,9 @@ int HnpCfgGetFromZip(const char *inputFile, HnpCfgInfo *hnpCfg)
     int ret = unzGoToFirstFile(zipFile);
     while (ret == UNZ_OK) {
         ret = unzGetCurrentFileInfo(zipFile, &fileInfo, fileName, sizeof(fileName), NULL, 0, NULL, 0);
-        if (ret != UNZ_OK) {
-            HNP_LOGE("unzip get zip:%{public}s info unsuccess!", inputFile);
+        if ((ret != UNZ_OK) || (fileInfo.size_filename >= sizeof(fileName))) {
+            HNP_LOGE("unzip get zip:%{public}s info unsuccess, name len:%{public}lu!", inputFile,
+                fileInfo.size_filename);
             unzClose(zipFile);
             return HNP_ERRNO_BASE_UNZIP_GET_INFO_FAILED;
         }
