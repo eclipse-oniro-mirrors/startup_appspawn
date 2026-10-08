@@ -46,14 +46,12 @@ if (!defined(ohos_lite)) {
       "zlib:shared_libz",
     ]
 
-    if (appspawn_support_code_signature) {
-      external_deps += [ "code_signature:libcode_sign_utils" ]
-    }
-
     defines = []
     if (defined(global_parts_info) &&
         defined(global_parts_info.security_code_signature) &&
-        appspawn_support_code_signature) {
+        appspawn_support_code_signature &&
+        !build_ohos_sdk) {
+      external_deps += [ "code_signature:libcode_sign_utils" ]
       defines += [ "CODE_SIGNATURE_ENABLE" ]
     }
     install_enable = true
