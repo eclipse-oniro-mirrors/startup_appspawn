@@ -19,10 +19,11 @@ if (!defined(ohos_lite)) {
   ohos_unittest("AppSpawn_Sandbox_Normal_Test") {
     module_out_path = "appspawn/appspawn"
     cflags = [ "-Dprivate=public" ]
+    ldflags = [ "-Wl,--wrap=calloc" ]
 
     if (appspawn_unittest_coverage) {
       cflags += [ "--coverage" ]
-      ldflags = [ "--coverage" ]
+      ldflags += [ "--coverage" ]
       cflags_cc = [ "--coverage" ]
     }
 
@@ -66,6 +67,7 @@ if (!defined(ohos_lite)) {
       "prlimit64=Prlimit64Stub",
       "sched_setscheduler=SchedSetschedulerStub",
       "seccomp=SeccompStub",
+      "GetCfgFiles=GetCfgFilesStub",
     ]
 
     # Target code include dir
@@ -127,16 +129,21 @@ if (!defined(ohos_lite)) {
     sources += appspawn_sandbox_src
 
     # add stub
-    include_dirs += [ "${appspawn_path}/test/mock" ]
+    include_dirs += [
+      "${appspawn_path}/test/mock",
+      "${appspawn_path}/test/mock/wrapper/include",
+    ]
     sources += [
       "${appspawn_path}/test/mock/app_spawn_stub.cpp",
       "${appspawn_path}/test/mock/app_system_stub.c",
+      "${appspawn_path}/test/mock/wrapper/src/lib_wrapper.c",
     ]
 
     # Test specific sources
     sources += [
       "app_spawn_sandbox_common_test.cpp",
       "app_spawn_sandbox_core_test.cpp",
+      "app_spawn_sandbox_clone_app_test.cpp",
       "app_spawn_sandbox_manager_test.cpp",
       "app_spawn_sandbox_permission_symlink_test.cpp",
       "app_spawn_lock_bundle_test.cpp",

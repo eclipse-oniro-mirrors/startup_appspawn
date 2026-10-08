@@ -35,20 +35,20 @@ static const std::string GRANT_URI_KEY = "grantUri";
 static const std::string INDEX_MIN_KEY = "indexMin";
 static const std::string INDEX_MAX_KEY = "indexMax";
 
-static void DestroyCloneAppGrantUri(ListNode *node)
+APPSPAWN_STATIC void DestroyCloneAppGrantUri(ListNode *node)
 {
     CloneAppGrantUri *entry = ListEntry(node, CloneAppGrantUri, node);
     OH_ListRemove(&entry->node);
     free(entry);
 }
 
-static int CompareExtDataId(ListNode *node, void *data)
+APPSPAWN_STATIC int CompareExtDataId(ListNode *node, void *data)
 {
     AppSpawnExtData *extData = ListEntry(node, AppSpawnExtData, node);
     return extData->dataId - *(uint32_t *)data;
 }
 
-static void FreeCloneAppGrantExtData(AppSpawnExtData *data)
+APPSPAWN_STATIC void FreeCloneAppGrantExtData(AppSpawnExtData *data)
 {
     APPSPAWN_CHECK_ONLY_EXPER(data != nullptr, return);
     CloneAppGrantExtData *grantData = reinterpret_cast<CloneAppGrantExtData *>(data);
@@ -60,7 +60,7 @@ static void FreeCloneAppGrantExtData(AppSpawnExtData *data)
     free(grantData);
 }
 
-static CloneAppGrantExtData *GetCloneAppGrantExtData(AppSpawnMgr *content)
+APPSPAWN_STATIC CloneAppGrantExtData *GetCloneAppGrantExtData(AppSpawnMgr *content)
 {
     APPSPAWN_CHECK_ONLY_EXPER(content != nullptr, return nullptr);
     uint32_t dataId = EXT_DATA_CLONE_APP_GRANT;
@@ -70,7 +70,7 @@ static CloneAppGrantExtData *GetCloneAppGrantExtData(AppSpawnMgr *content)
     return reinterpret_cast<CloneAppGrantExtData *>(extData);
 }
 
-static CloneAppGrantExtData *CreateCloneAppGrantExtData(AppSpawnMgr *content)
+APPSPAWN_STATIC CloneAppGrantExtData *CreateCloneAppGrantExtData(AppSpawnMgr *content)
 {
     APPSPAWN_CHECK(content != nullptr, return nullptr, "Invalid content");
     CloneAppGrantExtData *grantData = static_cast<CloneAppGrantExtData *>(calloc(1, sizeof(CloneAppGrantExtData)));
@@ -86,7 +86,7 @@ static CloneAppGrantExtData *CreateCloneAppGrantExtData(AppSpawnMgr *content)
     return grantData;
 }
 
-static int32_t ParseCloneAppGrantItem(cJSON *item, CloneAppGrantExtData *grantData)
+APPSPAWN_STATIC int32_t ParseCloneAppGrantItem(cJSON *item, CloneAppGrantExtData *grantData)
 {
     APPSPAWN_CHECK_ONLY_EXPER(item != nullptr && cJSON_IsObject(item), return -1);
     cJSON *grantUriNode = cJSON_GetObjectItemCaseSensitive(item, GRANT_URI_KEY.c_str());
@@ -120,7 +120,7 @@ static int32_t ParseCloneAppGrantItem(cJSON *item, CloneAppGrantExtData *grantDa
 }
 
 // JSON格式： {"cloneAppGrantDownloadUri":[{"grantUri": 0 ,"indexMin": 1,"indexMax": 5}]}
-static int32_t ReadCloneAppGrantDownloadJson(const std::string &configPath, CloneAppGrantExtData *grantData)
+APPSPAWN_STATIC int32_t ReadCloneAppGrantDownloadJson(const std::string &configPath, CloneAppGrantExtData *grantData)
 {
     APPSPAWN_CHECK(!configPath.empty() && grantData != nullptr,
         return APPSPAWN_MSG_INVALID, "Invalid configPath or grantData");
@@ -145,7 +145,7 @@ static int32_t ReadCloneAppGrantDownloadJson(const std::string &configPath, Clon
     return 0;
 }
 
-static int32_t MatchGrantUriByAppIndex(const CloneAppGrantExtData *grantData, uint32_t appIndex,
+APPSPAWN_STATIC int32_t MatchGrantUriByAppIndex(const CloneAppGrantExtData *grantData, uint32_t appIndex,
     uint32_t &matchedGrantUri)
 {
     ListNode *node = nullptr;

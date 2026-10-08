@@ -39,6 +39,10 @@
 #include "appspawn_server.h"
 #include "hilog/log.h"
 #include "securec.h"
+#include "config_policy_utils.h"
+// 目标级define已将GetCfgFiles改名为GetCfgFilesStub, 此处恢复真实符号用于转发
+#undef GetCfgFiles
+CfgFiles *GetCfgFiles(const char *path);
 
 #ifdef __cplusplus
 extern "C" {
@@ -250,6 +254,21 @@ int UmountStub(const char *path)
 int mallopt(int param, int value)
 {
     return 0;
+}
+
+// GetCfgFiles桩: 默认转发真实实现, 用例置位后返回NULL, 覆盖files == nullptr分支
+static bool g_cfgFilesNullResult = false;
+void SetGetCfgFilesNull(bool flag)
+{
+    g_cfgFilesNullResult = flag;
+}
+
+CfgFiles *GetCfgFilesStub(const char *path)
+{
+    if (g_cfgFilesNullResult) {
+        return NULL;
+    }
+    return GetCfgFiles(path);
 }
 
 int AccessStub(const char *pathName, int mode)
