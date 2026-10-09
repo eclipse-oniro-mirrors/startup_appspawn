@@ -23,10 +23,10 @@ namespace OHOS {
 namespace AppSpawn {
 
 typedef struct CloneAppGrantUri {
-    struct ListNode node; //链表节点
-    uint32_t grantUri; // 目录名使用的包名类型: 非0值分身包名 0原应用包名
-    uint32_t indexMin; // 规则生效的bundleIndex下界(含)
-    uint32_t indexMax; // 规则生效的bundleIndex上界(含)
+    struct ListNode node;     // 链表节点
+    uint32_t grantUri;        // 目录名使用的包名类型: 非0值分身包名 0原应用包名
+    uint32_t indexMin;        // 规则生效的bundleIndex下界(含)
+    uint32_t indexMax;        // 规则生效的bundleIndex上界(含)
 } CloneAppGrantUri;
 
 typedef struct CloneAppGrantExtData {
