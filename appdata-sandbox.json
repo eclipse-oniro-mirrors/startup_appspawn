@@ -431,7 +431,7 @@
             ]}, {
             "flags": "APP_SKILLS_ENABLED",
             "mount-paths": [{
-                    "src-path" : "/data/app/el1/skills/public/<PackageName>",
+                    "src-path" : "/data/app/el1/bundle/public/skills/<PackageName>",
                     "sandbox-path" : "/data/storage/el1/skills",
                     "sandbox-flags": [ "bind", "rec" ],
                     "check-action-status": "true"
@@ -899,7 +899,7 @@
         "ohos.permission.MANAGE_SKILL_PRIVILEGE":[{
             "sandbox-switch": "ON",
             "mount-paths": [{
-                    "src-path": "/data/app/el1/skills/public",
+                    "src-path": "/data/app/el1/bundle/public/skills",
                     "sandbox-path": "/data/skills/",
                     "sandbox-flags": [ "bind", "rec" ]
                 }, {
