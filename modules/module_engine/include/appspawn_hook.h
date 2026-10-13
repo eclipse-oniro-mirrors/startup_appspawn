@@ -54,6 +54,58 @@ typedef struct TagAppSpawnExtData {
     AppSpawnExtDataDump dumpNode;
 } AppSpawnExtData;
 
+/**
+ * @brief 扩展数据节点比较函数, 按dataId比较, 供OH_ListFind使用
+ *
+ * @param node 链表节点
+ * @param data 指向uint32_t dataId的指针
+ * @return int 0表示相等
+ */
+int AppSpawnExtDataCompareDataId(ListNode *node, void *data);
+
+/**
+ * @brief 按dataId查找扩展数据
+ *
+ * @param content appspawn管理数据
+ * @param dataId 扩展数据类型
+ * @return AppSpawnExtData* 未找到返回NULL
+ */
+AppSpawnExtData *FindAppSpawnExtData(const AppSpawnMgr *content, uint32_t dataId);
+
+/**
+ * @brief 创建扩展数据并挂到content->extData链表
+ *
+ * 约定: AppSpawnExtData必须是宿主结构的首成员, 摘链与释放宿主内存由框架统一完成;
+ * freeNode只需清理宿主结构内部的资源(嵌套链表/动态数组等), 不做摘链和free。
+ *
+ * @param content appspawn管理数据
+ * @param dataId 扩展数据类型
+ * @param size 宿主结构大小, 不小于sizeof(AppSpawnExtData)
+ * @param freeNode 内部资源清理函数, 可为NULL
+ * @param dumpNode dump函数, 可为NULL
+ * @return AppSpawnExtData* 失败返回NULL
+ */
+AppSpawnExtData *CreateAppSpawnExtData(AppSpawnMgr *content, uint32_t dataId,
+    size_t size, AppSpawnExtDataFree freeNode, AppSpawnExtDataDump dumpNode);
+
+/**
+ * @brief 释放单个扩展数据: 清理内部资源、摘链并释放宿主内存
+ *
+ * @param extData 目标节点, 可为NULL
+ */
+void ReleaseAppSpawnExtData(AppSpawnExtData *extData);
+
+/**
+ * @brief 按dataId查找并释放扩展数据
+ *
+ * @param content appspawn管理数据
+ * @param dataId 扩展数据类型
+ */
+__attribute__((always_inline)) inline void DestroyAppSpawnExtData(AppSpawnMgr *content, uint32_t dataId)
+{
+    ReleaseAppSpawnExtData(FindAppSpawnExtData(content, dataId));
+}
+
 typedef enum TagAppSpawnHookStage {
     // 服务状态处理
     STAGE_SERVER_PRELOAD  = 10,

@@ -39,30 +39,17 @@ typedef struct TagAppSpawnNamespace {
 } AppSpawnNamespace;
 
 APPSPAWN_STATIC pid_t GetPidByName(const char *name);
-APPSPAWN_STATIC int AppSpawnExtDataCompareDataId(ListNode *node, void *data)
-{
-    AppSpawnExtData *extData = (AppSpawnExtData *)ListEntry(node, AppSpawnExtData, node);
-    return extData->dataId - *(uint32_t *)data;
-}
 
 APPSPAWN_STATIC AppSpawnNamespace *GetAppSpawnNamespace(const AppSpawnMgr *content)
 {
-    APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return NULL);
-    uint32_t dataId = EXT_DATA_NAMESPACE;
-    ListNode *node = OH_ListFind(&content->extData, (void *)&dataId, AppSpawnExtDataCompareDataId);
-    if (node == NULL) {
-        return NULL;
-    }
-    return (AppSpawnNamespace *)ListEntry(node, AppSpawnNamespace, extData);
+    return (AppSpawnNamespace *)FindAppSpawnExtData(content, EXT_DATA_NAMESPACE);
 }
 
-APPSPAWN_STATIC void DeleteAppSpawnNamespace(AppSpawnNamespace *namespace)
+// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
+APPSPAWN_STATIC void FreeAppSpawnNamespace(struct TagAppSpawnExtData *data)
 {
-    APPSPAWN_CHECK_ONLY_EXPER(namespace != NULL, return);
-    APPSPAWN_LOGV("DeleteAppSpawnNamespace");
-    OH_ListRemove(&namespace->extData.node);
-    OH_ListInit(&namespace->extData.node);
-
+    APPSPAWN_CHECK_ONLY_EXPER(data != NULL, return);
+    AppSpawnNamespace *namespace = (AppSpawnNamespace *)data;
     if (namespace->nsInitPidFd > 0) {
         close(namespace->nsInitPidFd);
         namespace->nsInitPidFd = -1;
@@ -71,28 +58,16 @@ APPSPAWN_STATIC void DeleteAppSpawnNamespace(AppSpawnNamespace *namespace)
         close(namespace->nsSelfPidFd);
         namespace->nsSelfPidFd = -1;
     }
-    free(namespace);
 }
 
-APPSPAWN_STATIC void FreeAppSpawnNamespace(struct TagAppSpawnExtData *data)
-{
-    AppSpawnNamespace *namespace = ListEntry(data, AppSpawnNamespace, extData);
-    APPSPAWN_CHECK_ONLY_EXPER(namespace != NULL, return);
-    DeleteAppSpawnNamespace(namespace);
-}
-
-APPSPAWN_STATIC AppSpawnNamespace *CreateAppSpawnNamespace(void)
+APPSPAWN_STATIC AppSpawnNamespace *CreateAppSpawnNamespace(AppSpawnMgr *content)
 {
     APPSPAWN_LOGV("CreateAppSpawnNamespace");
-    AppSpawnNamespace *namespace = (AppSpawnNamespace *)calloc(1, sizeof(AppSpawnNamespace));
-    APPSPAWN_CHECK(namespace != NULL, return NULL, "Failed to create sandbox");
+    AppSpawnNamespace *namespace = (AppSpawnNamespace *)CreateAppSpawnExtData(
+        content, EXT_DATA_NAMESPACE, sizeof(AppSpawnNamespace), FreeAppSpawnNamespace, NULL);
+    APPSPAWN_CHECK(namespace != NULL, return NULL, "Failed to create namespace");
     namespace->nsInitPidFd = -1;
     namespace->nsSelfPidFd = -1;
-    // ext data init
-    OH_ListInit(&namespace->extData.node);
-    namespace->extData.dataId = EXT_DATA_NAMESPACE;
-    namespace->extData.freeNode = FreeAppSpawnNamespace;
-    namespace->extData.dumpNode = NULL;
     return namespace;
 }
 
@@ -187,7 +162,7 @@ APPSPAWN_STATIC int PreLoadEnablePidNs(AppSpawnMgr *content)
     if (!(content->content.sandboxNsFlags & CLONE_NEWPID)) {
         return 0;
     }
-    AppSpawnNamespace *namespace = CreateAppSpawnNamespace();
+    AppSpawnNamespace *namespace = CreateAppSpawnNamespace(content);
     APPSPAWN_CHECK(namespace != NULL, return -1, "Failed to create namespace");
 
     int ret = -1;
@@ -198,7 +173,7 @@ APPSPAWN_STATIC int PreLoadEnablePidNs(AppSpawnMgr *content)
         pid = clone(NsInitFunc, NULL, CLONE_NEWPID, NULL);
         if (pid < 0) {
             APPSPAWN_LOGE("clone pid ns init failed");
-            DeleteAppSpawnNamespace(namespace);
+            DestroyAppSpawnExtData(content, EXT_DATA_NAMESPACE);
             return ret;
         }
     } else {
@@ -208,17 +183,16 @@ APPSPAWN_STATIC int PreLoadEnablePidNs(AppSpawnMgr *content)
     namespace->nsSelfPidFd = GetNsPidFd(getpid());
     if (namespace->nsSelfPidFd < 0) {
         APPSPAWN_LOGE("open ns pid of appspawn fail");
-        DeleteAppSpawnNamespace(namespace);
+        DestroyAppSpawnExtData(content, EXT_DATA_NAMESPACE);
         return ret;
     }
 
     namespace->nsInitPidFd = GetNsPidFd(pid);
     if (namespace->nsInitPidFd < 0) {
         APPSPAWN_LOGE("open ns pid of pid_ns_init fail");
-        DeleteAppSpawnNamespace(namespace);
+        DestroyAppSpawnExtData(content, EXT_DATA_NAMESPACE);
         return ret;
     }
-    OH_ListAddTail(&content->extData, &namespace->extData.node);
     APPSPAWN_LOGI("Enable pid namespace success.");
     return 0;
 }

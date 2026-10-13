@@ -16,5 +16,9 @@
     { "name": "DumpAppSpawnMsg" },
     { "name": "AppSpawnDump" },
     { "name": "RegisterExpandSandboxCfgHandler"},
-    { "name": "GetAppSpawnMgr" }
+    { "name": "GetAppSpawnMgr" },
+    { "name": "AppSpawnExtDataCompareDataId" },
+    { "name": "FindAppSpawnExtData" },
+    { "name": "CreateAppSpawnExtData" },
+    { "name": "ReleaseAppSpawnExtData" }
 ]

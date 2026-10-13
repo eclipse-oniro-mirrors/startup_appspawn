@@ -42,47 +42,28 @@ APPSPAWN_STATIC void DestroyCloneAppGrantUri(ListNode *node)
     free(entry);
 }
 
-APPSPAWN_STATIC int CompareExtDataId(ListNode *node, void *data)
-{
-    AppSpawnExtData *extData = ListEntry(node, AppSpawnExtData, node);
-    return extData->dataId - *(uint32_t *)data;
-}
-
+// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
 APPSPAWN_STATIC void FreeCloneAppGrantExtData(AppSpawnExtData *data)
 {
     APPSPAWN_CHECK_ONLY_EXPER(data != nullptr, return);
     CloneAppGrantExtData *grantData = reinterpret_cast<CloneAppGrantExtData *>(data);
-    OH_ListRemove(&grantData->extData.node);
-    OH_ListInit(&grantData->extData.node);
     OH_ListRemoveAll(&grantData->grantQueue, DestroyCloneAppGrantUri);
     OH_ListInit(&grantData->grantQueue);
     grantData->grantCount = 0;
-    free(grantData);
 }
 
 APPSPAWN_STATIC CloneAppGrantExtData *GetCloneAppGrantExtData(AppSpawnMgr *content)
 {
-    APPSPAWN_CHECK_ONLY_EXPER(content != nullptr, return nullptr);
-    uint32_t dataId = EXT_DATA_CLONE_APP_GRANT;
-    ListNode *node = OH_ListFind(&content->extData, &dataId, CompareExtDataId);
-    APPSPAWN_CHECK_ONLY_EXPER(node != nullptr, return nullptr);
-    AppSpawnExtData *extData = ListEntry(node, AppSpawnExtData, node);
-    return reinterpret_cast<CloneAppGrantExtData *>(extData);
+    return reinterpret_cast<CloneAppGrantExtData *>(FindAppSpawnExtData(content, EXT_DATA_CLONE_APP_GRANT));
 }
 
 APPSPAWN_STATIC CloneAppGrantExtData *CreateCloneAppGrantExtData(AppSpawnMgr *content)
 {
-    APPSPAWN_CHECK(content != nullptr, return nullptr, "Invalid content");
-    CloneAppGrantExtData *grantData = static_cast<CloneAppGrantExtData *>(calloc(1, sizeof(CloneAppGrantExtData)));
+    CloneAppGrantExtData *grantData = reinterpret_cast<CloneAppGrantExtData *>(CreateAppSpawnExtData(
+        content, EXT_DATA_CLONE_APP_GRANT, sizeof(CloneAppGrantExtData),
+        FreeCloneAppGrantExtData, nullptr));
     APPSPAWN_CHECK(grantData != nullptr, return nullptr, "Failed to alloc clone app grant ext data");
-    OH_ListInit(&grantData->extData.node);
     OH_ListInit(&grantData->grantQueue);
-    grantData->configLoaded = false;
-    grantData->grantCount = 0;
-    grantData->extData.dataId = EXT_DATA_CLONE_APP_GRANT;
-    grantData->extData.freeNode = FreeCloneAppGrantExtData;
-    grantData->extData.dumpNode = nullptr;
-    OH_ListAddTail(&content->extData, &grantData->extData.node);
     return grantData;
 }
 

@@ -295,3 +295,43 @@ void RegChildLooper(struct AppSpawnContent *content, ChildLoop loop)
     APPSPAWN_CHECK(content != NULL && loop != NULL, return, "Invalid content for RegChildLooper");
     content->runChildProcessor = loop;
 }
+
+int AppSpawnExtDataCompareDataId(ListNode *node, void *data)
+{
+    AppSpawnExtData *extData = (AppSpawnExtData *)ListEntry(node, AppSpawnExtData, node);
+    return extData->dataId - *(uint32_t *)data;
+}
+
+AppSpawnExtData *FindAppSpawnExtData(const AppSpawnMgr *content, uint32_t dataId)
+{
+    APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return NULL);
+    ListNode *node = OH_ListFind(&content->extData, (void *)&dataId, AppSpawnExtDataCompareDataId);
+    APPSPAWN_CHECK_ONLY_EXPER(node != NULL, return NULL);
+    return (AppSpawnExtData *)ListEntry(node, AppSpawnExtData, node);
+}
+
+AppSpawnExtData *CreateAppSpawnExtData(AppSpawnMgr *content, uint32_t dataId,
+    size_t size, AppSpawnExtDataFree freeNode, AppSpawnExtDataDump dumpNode)
+{
+    APPSPAWN_CHECK(content != NULL, return NULL, "Invalid content for ext data %{public}u", dataId);
+    APPSPAWN_CHECK(size >= sizeof(AppSpawnExtData), return NULL, "Invalid ext data size");
+    AppSpawnExtData *extData = (AppSpawnExtData *)calloc(1, size);
+    APPSPAWN_CHECK(extData != NULL, return NULL, "Failed to alloc ext data %{public}u", dataId);
+    OH_ListInit(&extData->node);
+    extData->dataId = dataId;
+    extData->freeNode = freeNode;
+    extData->dumpNode = dumpNode;
+    OH_ListAddTail(&content->extData, &extData->node);
+    return extData;
+}
+
+void ReleaseAppSpawnExtData(AppSpawnExtData *extData)
+{
+    APPSPAWN_CHECK_ONLY_EXPER(extData != NULL, return);
+    if (extData->freeNode != NULL) {
+        extData->freeNode(extData);  // 只清理宿主结构内部资源
+    }
+    OH_ListRemove(&extData->node);
+    OH_ListInit(&extData->node);
+    free(extData);
+}
