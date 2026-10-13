@@ -40,7 +40,7 @@ struct KillInfo;
 extern "C" {
 #endif
 
-APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t uid, int reason);
+APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t uid, int reason, int errorCause);
 APPSPAWN_STATIC int KillReasonReportHook(const AppSpawnMgr *mgr, const AppSpawnedProcessInfo *appInfo);
 
 #ifdef __cplusplus
@@ -167,7 +167,8 @@ AppSpawnedProcess *CreateTestAppInfo(const char *name, pid_t pid, uid_t uid, int
     appInfo->uid = uid;
     appInfo->max = 0;
     appInfo->exitStatus = 0;
-    appInfo->killReason = killReason;
+    appInfo->killReason.reason = killReason;
+    appInfo->killReason.errorCause = 0;
     if (memcpy_s(appInfo->name, len, name, len) != 0) {
         free(appInfo);
         return nullptr;
@@ -222,7 +223,7 @@ protected:
  */
 HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_001, TestSize.Level0)
 {
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
 
     EXPECT_EQ(g_openSysloadCount, 1);
     EXPECT_EQ(g_ioctlCallCount, 1);
@@ -251,7 +252,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_002, TestSize.Level0)
 {
     EXPECT_EQ(FindSpawningFdsByPid(mgr_, getpid(), TYPE_KILL_REASON_FD), nullptr);
 
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_KILL_CGROUP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_KILL_CGROUP, 0);
 
     AppSpawnFds *fds = FindSpawningFdsByPid(mgr_, getpid(), TYPE_KILL_REASON_FD);
     ASSERT_NE(fds, nullptr);
@@ -272,9 +273,9 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_002, TestSize.Level0)
  */
 HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_003, TestSize.Level0)
 {
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
-    SetKillReason(mgr_, TEST_APP_PID + 1, TEST_APP_UID, REASON_KILL_CGROUP);
-    SetKillReason(mgr_, TEST_APP_PID + 2, TEST_APP_UID, TEST_CUSTOM_REASON);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
+    SetKillReason(mgr_, TEST_APP_PID + 1, TEST_APP_UID, REASON_KILL_CGROUP, 0);
+    SetKillReason(mgr_, TEST_APP_PID + 2, TEST_APP_UID, TEST_CUSTOM_REASON, 0);
 
     EXPECT_EQ(g_openSysloadCount, 1);
     EXPECT_EQ(g_ioctlCallCount, 3);
@@ -302,7 +303,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_004, TestSize.Level0)
 {
     g_openSysloadFail = true;
 
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
 
     EXPECT_EQ(g_openSysloadCount, 1);
     EXPECT_EQ(g_ioctlCallCount, 0);
@@ -320,12 +321,12 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_005, TestSize.Level0)
 {
     g_ioctlRet = -1;
 
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
     EXPECT_EQ(g_ioctlCallCount, 1);
     EXPECT_NE(FindSpawningFdsByPid(mgr_, getpid(), TYPE_KILL_REASON_FD), nullptr);
 
     g_ioctlRet = 0;
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
     EXPECT_EQ(g_ioctlCallCount, 2);
     EXPECT_EQ(g_openSysloadCount, 1);
 }
@@ -339,7 +340,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_005, TestSize.Level0)
  */
 HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_006, TestSize.Level0)
 {
-    SetKillReason(nullptr, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(nullptr, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
 
     EXPECT_EQ(g_openSysloadCount, 1);
     EXPECT_EQ(g_ioctlCallCount, 0);
@@ -354,14 +355,14 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_006, TestSize.Level0)
  */
 HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_007, TestSize.Level0)
 {
-    SetKillReason(mgr_, 0, 0, 0);
+    SetKillReason(mgr_, 0, 0, 0, 0);
     EXPECT_EQ(g_ioctlCallCount, 1);
     EXPECT_EQ(g_ioctlLastInfo.magic, TEST_SET_KILL_INFO_MAGIC);
     EXPECT_EQ(g_ioctlLastInfo.pid, 0);
     EXPECT_EQ(g_ioctlLastInfo.data.id, 0);
     EXPECT_EQ(g_ioctlLastInfo.data.uid, 0);
 
-    SetKillReason(mgr_, -1, TEST_APP_UID, -1);
+    SetKillReason(mgr_, -1, TEST_APP_UID, -1, 0);
     EXPECT_EQ(g_ioctlCallCount, 2);
     EXPECT_EQ(g_ioctlLastInfo.pid, -1);
     EXPECT_EQ(g_ioctlLastInfo.data.pid, -1);
@@ -517,11 +518,11 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Define_001, TestSize.Level
  */
 HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_008, TestSize.Level0)
 {
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, TEST_CUSTOM_REASON);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, TEST_CUSTOM_REASON, 0);
     EXPECT_EQ(g_ioctlCallCount, 1);
     EXPECT_EQ(g_ioctlLastInfo.data.id, TEST_CUSTOM_REASON);
 
-    SetKillReason(mgr_, TEST_APP_PID + 1, TEST_APP_UID + 1, REASON_KILL_CGROUP);
+    SetKillReason(mgr_, TEST_APP_PID + 1, TEST_APP_UID + 1, REASON_KILL_CGROUP, 0);
     EXPECT_EQ(g_ioctlCallCount, 2);
     EXPECT_EQ(g_ioctlLastInfo.magic, TEST_SET_KILL_INFO_MAGIC);
     EXPECT_EQ(g_ioctlLastInfo.structSize, static_cast<unsigned int>(sizeof(TestKillInfo)));
@@ -554,7 +555,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_009, TestSize.Level0)
 {
     g_memsetSFail = true;
 
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
 
     // fd is acquired normally; InitKillInfo bails out before filling any field.
     // The downstream info content is indeterminate here, so it is not asserted.
@@ -563,7 +564,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_009, TestSize.Level0)
 
     // Recovering the mock restores normal reporting on the reused fd
     g_memsetSFail = false;
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
     EXPECT_EQ(g_ioctlCallCount, 2);
     EXPECT_EQ(g_openSysloadCount, 1);
     EXPECT_EQ(g_ioctlLastInfo.magic, TEST_SET_KILL_INFO_MAGIC);
@@ -589,7 +590,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_010, TestSize.Level0)
     emptyNode->pid = getpid();
     OH_ListAddTail(&mgr_->spawningFdsQueue, &emptyNode->node);
 
-    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
 
     // The count=0 node is matched but must not be reused as an fd source
     EXPECT_EQ(g_openSysloadCount, 1);
@@ -610,7 +611,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_010, TestSize.Level0)
  */
 HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_InitKillInfo_001, TestSize.Level0)
 {
-    InitKillInfo(nullptr, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP);
+    InitKillInfo(nullptr, TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
 
     EXPECT_EQ(g_ioctlCallCount, 0);
     EXPECT_EQ(g_openSysloadCount, 0);
@@ -630,6 +631,155 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Hook_006, TestSize.Level0)
 
     EXPECT_EQ(g_ioctlCallCount, 0);
     EXPECT_EQ(g_openSysloadCount, 0);
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_Set_011
+ * @tc.desc: SetKillReason携带非零errorCause时，errorCause被填充到KillInfo.data.eventParamFirst，
+ *           同时reason/pid/uid等字段正确，验证errorCause参数端到端传播
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_011, TestSize.Level0)
+{
+    constexpr int testErrorCause = 9;  // e.g. SIGKILL
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_SIGNAL_KILL, testErrorCause);
+
+    EXPECT_EQ(g_ioctlCallCount, 1);
+    EXPECT_EQ(g_ioctlLastInfo.data.id, REASON_SIGNAL_KILL);
+    EXPECT_EQ(g_ioctlLastInfo.data.eventParamFirst, testErrorCause);
+    EXPECT_EQ(g_ioctlLastInfo.data.pid, TEST_APP_PID);
+    EXPECT_EQ(g_ioctlLastInfo.data.uid, static_cast<int>(TEST_APP_UID));
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_Set_012
+ * @tc.desc: SetKillReason连续两次携带不同errorCause，第二次的eventParamFirst不残留第一次的值，
+ *           KillInfo通过={0}初始化保证每次干净填充
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_012, TestSize.Level0)
+{
+    SetKillReason(mgr_, TEST_APP_PID, TEST_APP_UID, REASON_SIGNAL_KILL, 9);
+    EXPECT_EQ(g_ioctlCallCount, 1);
+    EXPECT_EQ(g_ioctlLastInfo.data.eventParamFirst, 9);
+
+    SetKillReason(mgr_, TEST_APP_PID + 1, TEST_APP_UID, REASON_SIGNAL_EXIT, 42);
+    EXPECT_EQ(g_ioctlCallCount, 2);
+    EXPECT_EQ(g_ioctlLastInfo.data.eventParamFirst, 42);
+    EXPECT_EQ(g_ioctlLastInfo.data.id, REASON_SIGNAL_EXIT);
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_InitKillInfo_002
+ * @tc.desc: InitKillInfo携带非零errorCause时，eventParamFirst被正确填充为errorCause值，
+ *           其余字段（magic/pid/uid/id/structSize）同时正确
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_InitKillInfo_002, TestSize.Level0)
+{
+    TestKillInfo info = {};
+    InitKillInfo(reinterpret_cast<struct KillInfo *>(&info), TEST_APP_PID, TEST_APP_UID, REASON_SIGNAL_KILL, 15);
+
+    EXPECT_EQ(info.magic, TEST_SET_KILL_INFO_MAGIC);
+    EXPECT_EQ(info.pid, TEST_APP_PID);
+    EXPECT_EQ(info.data.id, REASON_SIGNAL_KILL);
+    EXPECT_EQ(info.data.uid, static_cast<int>(TEST_APP_UID));
+    EXPECT_EQ(info.data.eventParamFirst, 15);
+    EXPECT_EQ(info.structSize, static_cast<unsigned int>(sizeof(TestKillInfo)));
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_InitKillInfo_003
+ * @tc.desc: InitKillInfo携带errorCause=0时，eventParamFirst为0，验证默认值填充正确
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_InitKillInfo_003, TestSize.Level0)
+{
+    TestKillInfo info = {};
+    // poison eventParamFirst to ensure InitKillInfo overwrites it with 0
+    info.data.eventParamFirst = -1;
+    InitKillInfo(reinterpret_cast<struct KillInfo *>(&info), TEST_APP_PID, TEST_APP_UID, REASON_APPSPAWN_STOP, 0);
+
+    EXPECT_EQ(info.data.eventParamFirst, 0);
+    EXPECT_EQ(info.data.id, REASON_APPSPAWN_STOP);
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_Hook_007
+ * @tc.desc: KillReasonReportHook携带非零errorCause时，errorCause端到端传播到ioctl下发的KillInfo，
+ *           验证appInfo->killReason.errorCause正确传递到eventParamFirst
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Hook_007, TestSize.Level0)
+{
+    AppSpawnedProcess *appInfo =
+        CreateTestAppInfo("kill-reason-test-007", TEST_APP_PID, TEST_APP_UID, REASON_SIGNAL_KILL);
+    ASSERT_NE(appInfo, nullptr);
+    appInfo->killReason.errorCause = 9;  // SIGKILL
+
+    int ret = ProcessMgrHookExecute(STAGE_SERVER_APP_CLEANUP, reinterpret_cast<AppSpawnContent *>(mgr_), appInfo);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(g_ioctlCallCount, 1);
+    EXPECT_EQ(g_ioctlLastInfo.data.id, REASON_SIGNAL_KILL);
+    EXPECT_EQ(g_ioctlLastInfo.data.eventParamFirst, 9);
+
+    free(appInfo);
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_Hook_008
+ * @tc.desc: KillReasonReportHook在reason=0但errorCause非零时仍不上报（reason=0为守卫条件），
+ *           验证errorCause不影响reason=0的短路逻辑
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Hook_008, TestSize.Level0)
+{
+    AppSpawnedProcess *appInfo =
+        CreateTestAppInfo("kill-reason-test-008", TEST_APP_PID, TEST_APP_UID, 0);
+    ASSERT_NE(appInfo, nullptr);
+    appInfo->killReason.errorCause = 99;  // non-zero errorCause but reason=0
+
+    int ret = ProcessMgrHookExecute(STAGE_SERVER_APP_CLEANUP, reinterpret_cast<AppSpawnContent *>(mgr_), appInfo);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(g_ioctlCallCount, 0);
+    EXPECT_EQ(g_openSysloadCount, 0);
+
+    free(appInfo);
+}
+
+/**
+ * @tc.name: App_Spawn_KillReason_Hook_009
+ * @tc.desc: KillReasonReportHook直调且reason非零errorCause非零时返回0并上报，
+ *           与Hook_006的NULL入参形成互补，覆盖hook正常路径直调场景
+ * @tc.type: FUNC
+ * @tc.level: Level0
+ * @tc.require: Kill reason report
+ */
+HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Hook_009, TestSize.Level0)
+{
+    AppSpawnedProcess *appInfo =
+        CreateTestAppInfo("kill-reason-test-009", TEST_APP_PID, TEST_APP_UID, REASON_KILL_CGROUP);
+    ASSERT_NE(appInfo, nullptr);
+    appInfo->killReason.errorCause = 7;
+
+    EXPECT_EQ(KillReasonReportHook(mgr_, appInfo), 0);
+    EXPECT_EQ(g_ioctlCallCount, 1);
+    EXPECT_EQ(g_ioctlLastInfo.data.id, REASON_KILL_CGROUP);
+    EXPECT_EQ(g_ioctlLastInfo.data.eventParamFirst, 7);
+
+    free(appInfo);
 }
 
 }  // namespace OHOS

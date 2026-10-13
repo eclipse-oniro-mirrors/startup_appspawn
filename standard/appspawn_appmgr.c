@@ -294,7 +294,8 @@ static int GetProcessTerminationStatus(pid_t pid)
 
     if (KillAndWaitStatus(pid, SIGKILL, &exitStatus) == 0) { // kill success, delete app
         app->exitStatus = exitStatus;
-        app->killReason = REASON_SIGNAL_EXIT;
+        app->killReason.reason = REASON_SIGNAL_EXIT;
+        app->killReason.errorCause = WIFSIGNALED(exitStatus) ? WTERMSIG(exitStatus) : WEXITSTATUS(exitStatus);
         ProcessMgrHookExecute(STAGE_SERVER_APP_CLEANUP, GetAppSpawnContent(), app);
         OH_ListRemove(&app->node);
         OH_ListInit(&app->node);
