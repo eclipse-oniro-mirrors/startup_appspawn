@@ -353,30 +353,14 @@ static void SandboxQueueClear(SandboxQueue *queue)
     }
 }
 
-static int AppSpawnExtDataCompareDataId(ListNode *node, void *data)
-{
-    AppSpawnExtData *extData = (AppSpawnExtData *)ListEntry(node, AppSpawnExtData, node);
-    return extData->dataId - *(uint32_t *)data;
-}
-
 AppSpawnSandboxCfg *GetAppSpawnSandbox(const AppSpawnMgr *content, ExtDataType type)
 {
     APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return NULL);
-    uint32_t dataId = type;
-    ListNode *node = OH_ListFind(&content->extData, (void *)&dataId, AppSpawnExtDataCompareDataId);
-    if (node == NULL) {
-        return NULL;
-    }
-    return (AppSpawnSandboxCfg *)ListEntry(node, AppSpawnSandboxCfg, extData);
+    return (AppSpawnSandboxCfg *)FindAppSpawnExtData(content, type);
 }
 
-void DeleteAppSpawnSandbox(AppSpawnSandboxCfg *sandbox)
+static void ClearAppSpawnSandbox(AppSpawnSandboxCfg *sandbox)
 {
-    APPSPAWN_CHECK_ONLY_EXPER(sandbox != NULL, return);
-    APPSPAWN_LOGV("DeleteAppSpawnSandbox");
-    OH_ListRemove(&sandbox->extData.node);
-    OH_ListInit(&sandbox->extData.node);
-
     // delete all queue
     SandboxQueueClear(&sandbox->requiredQueue);
     SandboxQueueClear(&sandbox->permissionQueue);
@@ -385,11 +369,18 @@ void DeleteAppSpawnSandbox(AppSpawnSandboxCfg *sandbox)
     SandboxQueueClear(&sandbox->nameGroupsQueue);
     if (sandbox->rootPath) {
         free(sandbox->rootPath);
+        sandbox->rootPath = NULL;
     }
     free(sandbox->depGroupNodes);
     sandbox->depGroupNodes = NULL;
-    free(sandbox);
-    sandbox = NULL;
+}
+
+void DeleteAppSpawnSandbox(AppSpawnSandboxCfg *sandbox)
+{
+    APPSPAWN_CHECK_ONLY_EXPER(sandbox != NULL, return);
+    APPSPAWN_LOGV("DeleteAppSpawnSandbox");
+    ClearAppSpawnSandbox(sandbox);
+    ReleaseAppSpawnExtData(&sandbox->extData);
 }
 
 static void DumpSandboxPermission(const SandboxMountNode *node, uint32_t index)
@@ -436,24 +427,19 @@ static inline void InitSandboxQueue(SandboxQueue *queue, uint32_t type)
     queue->type = type;
 }
 
+// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
 static void FreeAppSpawnSandbox(struct TagAppSpawnExtData *data)
 {
-    AppSpawnSandboxCfg *sandbox = ListEntry(data, AppSpawnSandboxCfg, extData);
-    // delete all var
-    DeleteAppSpawnSandbox(sandbox);
+    APPSPAWN_CHECK_ONLY_EXPER(data != NULL, return);
+    ClearAppSpawnSandbox((AppSpawnSandboxCfg *)data);
 }
 
-AppSpawnSandboxCfg *CreateAppSpawnSandbox(ExtDataType type)
+AppSpawnSandboxCfg *CreateAppSpawnSandbox(AppSpawnMgr *content, ExtDataType type)
 {
-    // create sandbox
-    AppSpawnSandboxCfg *sandbox = (AppSpawnSandboxCfg *)calloc(1, sizeof(AppSpawnSandboxCfg));
+    // create sandbox and add to ext data list
+    AppSpawnSandboxCfg *sandbox = (AppSpawnSandboxCfg *)CreateAppSpawnExtData(
+        content, type, sizeof(AppSpawnSandboxCfg), FreeAppSpawnSandbox, DumpSandbox);
     APPSPAWN_CHECK(sandbox != NULL, return NULL, "Failed to create sandbox");
-
-    // ext data init
-    OH_ListInit(&sandbox->extData.node);
-    sandbox->extData.dataId = type;
-    sandbox->extData.freeNode = FreeAppSpawnSandbox;
-    sandbox->extData.dumpNode = DumpSandbox;
 
     // queue
     InitSandboxQueue(&sandbox->requiredQueue, SANDBOX_TAG_REQUIRED);
@@ -501,9 +487,8 @@ static int PreLoadSandboxCfgByType(AppSpawnMgr *content, ExtDataType type)
     AppSpawnSandboxCfg *sandbox = GetAppSpawnSandbox(content, type);
     APPSPAWN_CHECK(sandbox == NULL, return 0, "type %{public}d sandbox has been load", type);
 
-    sandbox = CreateAppSpawnSandbox(type);
+    sandbox = CreateAppSpawnSandbox(content, type);
     APPSPAWN_CHECK_ONLY_EXPER(sandbox != NULL, return APPSPAWN_SYSTEM_ERROR);
-    OH_ListAddTail(&content->extData, &sandbox->extData.node);
 
     // load sandbox config by type
     LoadAppSandboxConfig(sandbox, type);

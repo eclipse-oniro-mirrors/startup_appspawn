@@ -91,11 +91,8 @@ static void SpawningQueueDestroy(ListNode *node)
 
 static void ExtDataDestroy(ListNode *node)
 {
-    AppSpawnExtData *extData = ListEntry(node, AppSpawnExtData, node);
-    AppSpawnExtDataFree freeNode = extData->freeNode;
-    if (freeNode) {
-        freeNode(extData);
-    }
+    // freeNode只清理宿主结构内部资源, 摘链与释放宿主内存由框架统一完成
+    ReleaseAppSpawnExtData((AppSpawnExtData *)ListEntry(node, AppSpawnExtData, node));
 }
 
 void DeleteAppSpawnMgr(AppSpawnMgr *mgr)

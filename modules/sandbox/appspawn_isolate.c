@@ -41,19 +41,9 @@ static FlagEntry g_pathModeMap[] = {
     {"ugc", UGC_CONSTRAINT_MODE},
 };
 
-static int AppSpawnExtDataCompareDataId(ListNode *node, void *data)
-{
-    AppSpawnExtData *extData = (AppSpawnExtData *)ListEntry(node, AppSpawnExtData, node);
-    return extData->dataId - *(uint32_t *)data;
-}
-
 APPSPAWN_STATIC SandboxPathMarkConfig *GetSandboxPathMarkConfig(const AppSpawnMgr *content)
 {
-    APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return NULL);
-    uint32_t dataId = EXT_DATA_PATH_MARK;
-    ListNode *node = OH_ListFind(&content->extData, (void *)&dataId, AppSpawnExtDataCompareDataId);
-    APPSPAWN_CHECK_ONLY_EXPER(node != NULL, return NULL);
-    return (SandboxPathMarkConfig *)ListEntry(node, SandboxPathMarkConfig, extData);
+    return (SandboxPathMarkConfig *)FindAppSpawnExtData(content, EXT_DATA_PATH_MARK);
 }
 
 static void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config)
@@ -77,26 +67,18 @@ static void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config)
     }
 }
 
+// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
 static void FreeSandboxPathMarkConfig(struct TagAppSpawnExtData *data)
 {
-    SandboxPathMarkConfig *config = ListEntry(data, SandboxPathMarkConfig, extData);
-    APPSPAWN_CHECK_ONLY_EXPER(config != NULL, return);
-    OH_ListRemove(&config->extData.node);
-    OH_ListInit(&config->extData.node);
-    ClearSandboxPathMarkConfig(config);
-    free(config);
+    APPSPAWN_CHECK_ONLY_EXPER(data != NULL, return);
+    ClearSandboxPathMarkConfig((SandboxPathMarkConfig *)data);
 }
 
-static SandboxPathMarkConfig *CreateSandboxPathMarkConfig(void)
+static SandboxPathMarkConfig *CreateSandboxPathMarkConfig(AppSpawnMgr *content)
 {
-    SandboxPathMarkConfig *config =
-        (SandboxPathMarkConfig *)calloc(1, sizeof(SandboxPathMarkConfig));
-    APPSPAWN_CHECK(config != NULL, return NULL, "Failed to create sandbox path mark config");
-    OH_ListInit(&config->extData.node);
-    config->extData.dataId = EXT_DATA_PATH_MARK;
-    config->extData.freeNode = FreeSandboxPathMarkConfig;
-    config->extData.dumpNode = NULL;
-    return config;
+    return (SandboxPathMarkConfig *)CreateAppSpawnExtData(
+        content, EXT_DATA_PATH_MARK, sizeof(SandboxPathMarkConfig),
+        FreeSandboxPathMarkConfig, NULL);
 }
 
 static int32_t LookupValueByName(const char *name, const FlagEntry *map, size_t mapSize)
@@ -252,9 +234,11 @@ static int SpawnSetPathMark(AppSpawnMgr *content, AppSpawningCtx *property)
 int SpawnLoadPathConfig(AppSpawnMgr *content)
 {
     APPSPAWN_CHECK(content != NULL, return APPSPAWN_SYSTEM_ERROR, "Invalid content");
-    SandboxPathMarkConfig *config = CreateSandboxPathMarkConfig();
+    // 已加载过则直接返回, 不重复解析配置, 也不重复下发内核策略
+    SandboxPathMarkConfig *config = GetSandboxPathMarkConfig(content);
+    APPSPAWN_ONLY_EXPER(config != NULL, return APPSPAWN_OK);
+    config = CreateSandboxPathMarkConfig(content);
     APPSPAWN_CHECK(config != NULL, return APPSPAWN_SYSTEM_ERROR, "Failed to create sandbox path mark config");
-    OH_ListAddTail(&content->extData, &config->extData.node);
 
     ParseJsonContext ctx = { .config = config };
     (void)ParseJsonConfig("etc/sandbox", "/sandbox-path-mark-policy.json", ParsePathConfig, &ctx);
