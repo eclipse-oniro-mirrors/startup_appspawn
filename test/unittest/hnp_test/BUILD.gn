@@ -29,6 +29,7 @@ if (!defined(ohos_lite)) {
     ]
     ldflags = [
       "-Wl,--wrap=strcpy_s",
+      "-Wl,--wrap=unzGetCurrentFileInfo",
     ]
     include_dirs = [
       "${appspawn_path}/service/hnp/base",
@@ -51,6 +52,8 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/test/mock/wrapper/src/lib_wrapper.c",
       "hnp_installer_test.cpp",
       "hnp_pack_test.cpp",
+      "hnp_zip_mock.c",
+      "hnp_zip_test.cpp",
     ]
 
     defines = [ "APPSPAWN_TEST" ]
