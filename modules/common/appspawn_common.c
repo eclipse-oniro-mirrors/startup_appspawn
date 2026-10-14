@@ -93,7 +93,7 @@ static const uint32_t g_testAmbientGids[] = { 9999, 9998 };   // AMBIENT_GID ent
 static const uint32_t g_testGidOnlyGids[] = { 7001, 7002 };   // GID_ONLY entry: CAP_NONE + gid-append
 #endif
 
-static const uint32_t GID_USBMONS[] = { 3825 };
+static const uint32_t GID_USBMONS[] = { 7401 };
 
 static const PermissionAttrMap g_permissionAttrMap[] = {
 #ifdef APPSPAWN_TEST
