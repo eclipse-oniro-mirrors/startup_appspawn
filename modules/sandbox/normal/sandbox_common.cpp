@@ -613,7 +613,17 @@ void SandboxCommon::GetSandboxMountConfig(const AppSpawningCtx *appProperty, con
 // 校验操作
 bool SandboxCommon::IsNeededCheckPathStatus(const AppSpawningCtx *appProperty, const char *path)
 {
-    if (strstr(path, "data/app/el1/") || strstr(path, "data/app/el2/")) {
+    // Only check bundle/public、database and base directories in el1
+    if (strstr(path, "data/app/el1/") != nullptr) {
+        // Only check bundle/public、database and base directories
+        if (strstr(path, "/bundle/public/") != nullptr || strstr(path, "base/") != nullptr) {
+            return true;
+        }
+        return false;
+    }
+    // Only check user-level application data directories (el2/uid/xxx)
+    // data/app/el2/100/base/, data/app/el2/100/log/, data/app/el2/100/database/
+    if (strstr(path, "data/app/el2/") != nullptr) {
         return true;
     }
     if ((strstr(path, "data/app/el3/") || strstr(path, "data/app/el4/") || strstr(path, "data/app/el5/")) &&
