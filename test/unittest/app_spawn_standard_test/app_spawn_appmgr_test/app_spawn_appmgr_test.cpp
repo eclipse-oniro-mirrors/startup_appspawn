@@ -541,8 +541,11 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsgNode_005, TestSize.Level0)
     AppSpawnedProcess *app = AddSpawnedProcess(9999999, "aaaa", 0, false, 0); // 9999999 test
     EXPECT_EQ(app != nullptr, 1);
     TerminateSpawnedProcess(app);
-    AppSpawnExtData extData;
-    OH_ListAddTail(&(mgr->extData), &(extData.node));
+    // Use the framework API so the node is heap-allocated and released by
+    // DeleteAppSpawnMgr; EXT_DATA_COUNT never collides with real module ids.
+    AppSpawnExtData *extData = (AppSpawnExtData *)CreateAppSpawnExtData(
+        mgr, EXT_DATA_COUNT, sizeof(AppSpawnExtData), NULL, NULL);
+    EXPECT_NE(extData, nullptr);
     ProcessAppSpawnDumpMsg(outMsg);
 
     ret = DecodeAppSpawnMsg(outMsg);

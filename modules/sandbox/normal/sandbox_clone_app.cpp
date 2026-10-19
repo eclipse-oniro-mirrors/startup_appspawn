@@ -42,7 +42,8 @@ APPSPAWN_STATIC void DestroyCloneAppGrantUri(ListNode *node)
     free(entry);
 }
 
-// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
+// freeNode cleans host-internal resources only; unlinking and freeing the
+// node is done by the framework (see appspawn_hook.h).
 APPSPAWN_STATIC void FreeCloneAppGrantExtData(AppSpawnExtData *data)
 {
     APPSPAWN_CHECK_ONLY_EXPER(data != nullptr, return);

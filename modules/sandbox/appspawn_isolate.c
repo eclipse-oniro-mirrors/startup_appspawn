@@ -67,7 +67,8 @@ static void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config)
     }
 }
 
-// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
+// freeNode cleans host-internal resources only; unlinking and freeing the
+// node is done by the framework (see appspawn_hook.h).
 static void FreeSandboxPathMarkConfig(struct TagAppSpawnExtData *data)
 {
     APPSPAWN_CHECK_ONLY_EXPER(data != NULL, return);
@@ -234,7 +235,10 @@ static int SpawnSetPathMark(AppSpawnMgr *content, AppSpawningCtx *property)
 int SpawnLoadPathConfig(AppSpawnMgr *content)
 {
     APPSPAWN_CHECK(content != NULL, return APPSPAWN_SYSTEM_ERROR, "Invalid content");
-    // 已加载过则直接返回, 不重复解析配置, 也不重复下发内核策略
+    // Load once: if a path-mark config already exists, return OK without
+    // re-parsing the JSON or re-applying kernel policy. Note a degraded
+    // first load (config file missing or parse failure) also short-circuits;
+    // retrying requires destroying the ext data node first.
     SandboxPathMarkConfig *config = GetSandboxPathMarkConfig(content);
     APPSPAWN_ONLY_EXPER(config != NULL, return APPSPAWN_OK);
     config = CreateSandboxPathMarkConfig(content);

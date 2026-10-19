@@ -78,6 +78,20 @@ AppSpawnExtData *FindAppSpawnExtData(const AppSpawnMgr *content, uint32_t dataId
  * 约定: AppSpawnExtData必须是宿主结构的首成员, 摘链与释放宿主内存由框架统一完成;
  * freeNode只需清理宿主结构内部的资源(嵌套链表/动态数组等), 不做摘链和free。
  *
+ * Contract:
+ * - extData nodes MUST be created via CreateAppSpawnExtData (framework-owned
+ *   heap memory). Manually constructing a node and linking it with
+ *   OH_ListAddTail is FORBIDDEN: ReleaseAppSpawnExtData unconditionally
+ *   unlinks and frees the node even when freeNode is NULL.
+ * - freeNode must only clean host-internal resources (nested lists, dynamic
+ *   arrays, fds ...). Do NOT unlink or free the node inside freeNode.
+ * - AppSpawnExtData must be the first member of the host struct.
+ * - The node is linked into content->extData before this function returns
+ *   and is immediately visible to FindAppSpawnExtData / dump / teardown.
+ *   Initialize derived members immediately after return; do not trigger
+ *   teardown until derived initialization completes; freeNode must tolerate
+ *   being invoked on a node whose derived members are not yet initialized.
+ *
  * @param content appspawn管理数据
  * @param dataId 扩展数据类型
  * @param size 宿主结构大小, 不小于sizeof(AppSpawnExtData)

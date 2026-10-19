@@ -252,6 +252,10 @@ static void ClearSandboxSection(SandboxSection *section)
 static void DumpSandboxQueue(const ListNode *front,
     void (*dumpSandboxMountNode)(const SandboxMountNode *node, uint32_t count))
 {
+    // Defense: queue not initialized yet (zeroed by calloc, front->next == NULL)
+    if (front == NULL || front->next == NULL) {
+        return;
+    }
     uint32_t count = 0;
     ListNode *node = front->next;
     while (node != front) {
@@ -344,6 +348,10 @@ void DeleteSandboxSection(SandboxSection *section)
 
 static void SandboxQueueClear(SandboxQueue *queue)
 {
+    // Defense: queue not initialized yet (zeroed by calloc, front.next == NULL)
+    if (queue == NULL || queue->front.next == NULL) {
+        return;
+    }
     ListNode *node = queue->front.next;
     while (node != &queue->front) {
         SandboxSection *sandboxNode = (SandboxSection *)ListEntry(node, SandboxMountNode, node);
@@ -379,7 +387,8 @@ void DeleteAppSpawnSandbox(AppSpawnSandboxCfg *sandbox)
 {
     APPSPAWN_CHECK_ONLY_EXPER(sandbox != NULL, return);
     APPSPAWN_LOGV("DeleteAppSpawnSandbox");
-    ClearAppSpawnSandbox(sandbox);
+    // FreeAppSpawnSandbox (freeNode) already clears all internal resources;
+    // the framework then unlinks and frees the node exactly once.
     ReleaseAppSpawnExtData(&sandbox->extData);
 }
 
@@ -427,7 +436,8 @@ static inline void InitSandboxQueue(SandboxQueue *queue, uint32_t type)
     queue->type = type;
 }
 
-// freeNode只清理内部资源, 摘链与释放宿主内存由框架统一完成
+// freeNode cleans host-internal resources only; unlinking and freeing the
+// node is done by the framework (see appspawn_hook.h).
 static void FreeAppSpawnSandbox(struct TagAppSpawnExtData *data)
 {
     APPSPAWN_CHECK_ONLY_EXPER(data != NULL, return);
