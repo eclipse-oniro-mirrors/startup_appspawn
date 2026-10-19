@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 
+#include <stdlib.h>
 #include "securec.h"
 #include "appspawn_exit_lock_stub.h"
 #include "appspawn.h"
+#include "appspawn_hook.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -24,6 +26,22 @@ extern "C" {
 int AddServerStageHook(AppSpawnHookStage stage, int prio, ServerStageHook hook)
 {
     return 0;
+}
+
+// Mirror modules/modulemgr/appspawn_modulemgr.c ReleaseAppSpawnExtData:
+// freeNode cleans host-internal resources only; unlinking and freeing the
+// node itself are done here (appspawn_appmgr.c ExtDataDestroy calls this).
+void ReleaseAppSpawnExtData(AppSpawnExtData *extData)
+{
+    if (extData == nullptr) {
+        return;
+    }
+    if (extData->freeNode != nullptr) {
+        extData->freeNode(extData);
+    }
+    OH_ListRemove(&extData->node);
+    OH_ListInit(&extData->node);
+    free(extData);
 }
 
 int AddAppSpawnHook(AppSpawnHookStage stage, int prio, AppSpawnHook hook)
