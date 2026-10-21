@@ -16,12 +16,14 @@
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <unistd.h>
 #include <gtest/gtest.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
 #include <sys/capability.h>
 #include <cJSON.h>
 
@@ -36,6 +38,7 @@
 #include "hisysevent_adapter.h"
 #include "app_spawn_stub.h"
 #include "app_spawn_test_helper.h"
+#include "lib_wrapper.h"
 #include "securec.h"
 
 #ifdef WITH_SELINUX
@@ -4634,6 +4637,546 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_ExtPerm_Integration_002, TestSize.Level0)
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
+    ASSERT_EQ(ret, 0);
+}
+
+// ==========================================================================
+// UT Test Cases for Appspawn Abnormal Scene Hisysevent Reporting
+// Feature: HiSysEvent bigdata reporting at exception points
+// Modified functions: SetUidGid, SetAppAccessToken, AppSpawnProcessMsg
+// ==========================================================================
+ 
+/**
+ * @brief SetUidGid with invalid uid (below MIN_VALID_APP_UID) should return APPSPAWN_MSG_INVALID
+ *        Branch: uid < MIN_VALID_APP_UID
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidUid_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client %{public}s", APPSPAWN_SERVER_NAME);
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        // Set uid to invalid value (below MIN_VALID_APP_UID=10000)
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = 1;  // invalid uid
+        dacInfo.gid = g_testHelper.GetTestGid();
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+ 
+/**
+ * @brief SetUidGid with invalid gid (below MIN_VALID_APP_GID) should return APPSPAWN_MSG_INVALID
+ *        Branch: gid < MIN_VALID_APP_GID
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGid_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client %{public}s", APPSPAWN_SERVER_NAME);
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        // Set gid to invalid value (below MIN_VALID_APP_UID=10000)
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = g_testHelper.GetTestUid();
+        dacInfo.gid = 1;  // invalid gid
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+ 
+/**
+ * @brief SetUidGid with gidCount exceeding APP_MAX_GIDS should return APPSPAWN_MSG_INVALID
+ *        Branch: gidCount > APP_MAX_GIDS
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGidCount_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client %{public}s", APPSPAWN_SERVER_NAME);
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        // Set gidCount to an excessively large value
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = g_testHelper.GetTestUid();
+        dacInfo.gid = g_testHelper.GetTestGid();
+        dacInfo.gidCount = APP_MAX_GIDS + 1;  // exceed max
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+ 
+/**
+ * @brief SetUidGid with uid == UINT32_MAX should return APPSPAWN_MSG_INVALID
+ *        Branch: uid >= UINT32_MAX boundary
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxBoundary_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client %{public}s", APPSPAWN_SERVER_NAME);
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = UINT32_MAX;  // boundary value
+        dacInfo.gid = g_testHelper.GetTestGid();
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+ 
+/**
+ * @brief SetUidGid with NULL property should not crash
+ *        Branch: processName == NULL guard
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_NullProperty_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    EXPECT_NE(mgr, nullptr);
+    int ret = SetUidGid(mgr, nullptr);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_TLV_NONE);
+}
+ 
+/**
+ * @brief setAppAccessToken with NULL params should return error (not crash)
+ *        Verifies the null check guard path. Note: App_Spawn_Common_002 also
+ *        tests this, but we keep a dedicated test for the abnormal-scene
+ *        reporting feature to ensure the guard works with the new
+ *        ReportSpawnChildProcessFail code path.
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAppAccessToken_NullParam_001, TestSize.Level0)
+{
+    int ret = SetAppAccessToken(nullptr, nullptr);
+    EXPECT_NE(ret, 0);
+}
+ 
+/**
+ * @brief AppspawnProcessMsg fork path test with minimal content
+ *        Uses a zero-initialized content. Fork will succeed in test env.
+ *        The child process may crash due to uninitialized hooks, but the
+ *        parent's fork() return is still valid (pid > 0, ret = 0).
+ *        We only verify the parent-side return value, and reap the child
+ *        to avoid zombies. This test confirms the fork path doesn't crash
+ *        the parent process.
+ *        Branch: pid >= 0 normal path (fork success in test env)
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_AppSpawnProcessMsg_ForkPath_001, TestSize.Level0)
+{
+    AppSpawnContent content = {};
+    content.mode = MODE_FOR_APP_SPAWN;
+    content.sandboxNsFlags = 0;
+    AppSpawnClient client = {};
+    client.id = 1;
+    pid_t childPid = -1;
+    int ret = AppSpawnProcessMsg(&content, &client, &childPid);
+    // In test env, fork should succeed (parent gets pid > 0)
+    EXPECT_EQ(ret, 0);
+    EXPECT_GE(childPid, 0);
+    if (childPid > 0) {
+        int status = 0;
+        // Reap child (may have exited with signal due to uninitialized hooks in test)
+        waitpid(childPid, &status, 0);
+    }
+}
+ 
+/**
+ * @brief Verify new error codes are defined and have correct values
+ *        ERR_APPSPAWN_PRCTL_FAIL and ERR_APPSPAWN_MSG_PARAM_INVALID should
+ *        follow ERR_APPSPAWN_PROCESS_INFO_INIT_FAIL in the enum
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_Hisysevent_ErrorCodes_001, TestSize.Level0)
+{
+    // ERR_APPSPAWN_PRCTL_FAIL should be right after ERR_APPSPAWN_PROCESS_INFO_INIT_FAIL
+    EXPECT_EQ(static_cast<int>(ERR_APPSPAWN_PRCTL_FAIL),
+              static_cast<int>(ERR_APPSPAWN_PROCESS_INFO_INIT_FAIL) + 1);
+    // ERR_APPSPAWN_MSG_PARAM_INVALID should follow ERR_APPSPAWN_PRCTL_FAIL
+    EXPECT_EQ(static_cast<int>(ERR_APPSPAWN_MSG_PARAM_INVALID),
+              static_cast<int>(ERR_APPSPAWN_PRCTL_FAIL) + 1);
+}
+ 
+/**
+ * @brief Verify new event name macros are defined as string literals
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_Hisysevent_EventNames_001, TestSize.Level0)
+{
+    EXPECT_STREQ(FORK_FAIL, "FORK_FAIL");
+    EXPECT_STREQ(PREFORK_FAIL, "PREFORK_FAIL");
+    EXPECT_STREQ(CHILDLOOPER_NOT_REGISTERED, "CHILDLOOPER_NOT_REGISTERED");
+    EXPECT_STREQ(SET_BOOTEVENT_PARAM_FAIL, "SET_BOOTEVENT_PARAM_FAIL");
+}
+ 
+/**
+ * @brief SetUidGid with valid uid/gid should succeed and not trigger error reporting
+ *        This is a regression test to ensure valid path is not broken by the new
+ *        hisysevent reporting code
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_ValidParams_NoRegression_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief AppSpawnProcessMsg fork failure should return APPSPAWN_FORK_FAIL
+ *        Branch: pid < 0 after fork (FORK_FAIL reporting in normal build)
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_AppSpawnProcessMsg_ForkFail_001, TestSize.Level0)
+{
+    AppSpawnContent content = {};
+    content.mode = MODE_FOR_APP_SPAWN;
+    content.sandboxNsFlags = 0;
+    AppSpawnClient client = {};
+    client.id = 1;
+    pid_t childPid = -1;
+    UpdateForkFunc([]() -> pid_t { return -1; });
+    int ret = AppSpawnProcessMsg(&content, &client, &childPid);
+    UpdateForkFunc(nullptr);
+    EXPECT_EQ(ret, APPSPAWN_FORK_FAIL);
+}
+
+/**
+ * @brief SetUidGid with the minimum valid uid (MIN_VALID_APP_UID=10000)
+ *        Branch: uid == MIN_VALID_APP_UID passes the merged uid/gid/gidCount check
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMinBoundary_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = 10000;  // MIN_VALID_APP_UID, lower boundary
+        dacInfo.gid = g_testHelper.GetTestGid();
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief SetUidGid with the maximum valid gidCount (APP_MAX_GIDS)
+ *        Branch: gidCount == APP_MAX_GIDS passes the merged uid/gid/gidCount check
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountMaxBoundary_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = 20010029;  // 20010029 test uid
+        dacInfo.gid = 20010029;  // 20010029 test gid
+        dacInfo.gidCount = APP_MAX_GIDS;  // upper boundary
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief SetUidGid with MSG_EXT_NAME_USERID ext info covers the userId branch
+ *        Branch: GetAppSpawnMsgExtInfo(MSG_EXT_NAME_USERID) != NULL -> SetUserId
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_WithUserId_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        ret = AppSpawnReqMsgAddStringInfo(reqHandle, MSG_EXT_NAME_USERID, "100");
+        APPSPAWN_CHECK(ret == 0, break, "Failed to add userid ext info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief SetUidGid with uid below MIN_VALID_APP_UID should fail the merged
+ *        parameter check (DFX report branch for invalid spawn parameters)
+ *        Branch: dacInfo->uid < MIN_VALID_APP_UID -> APPSPAWN_MSG_INVALID
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidBelowMin_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = 9999;  // below MIN_VALID_APP_UID (10000)
+        dacInfo.gid = g_testHelper.GetTestGid();
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+
+/**
+ * @brief SetUidGid with gid below MIN_VALID_APP_GID should fail the merged
+ *        parameter check
+ *        Branch: dacInfo->gid < MIN_VALID_APP_GID -> APPSPAWN_MSG_INVALID
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidBelowMin_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = 20010029;  // valid uid
+        dacInfo.gid = 9999;  // below MIN_VALID_APP_GID (10000)
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+
+/**
+ * @brief SetUidGid with gidCount exceeding APP_MAX_GIDS should fail the merged
+ *        parameter check
+ *        Branch: dacInfo->gidCount > APP_MAX_GIDS -> APPSPAWN_MSG_INVALID
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountOverMax_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = 20010029;  // valid uid
+        dacInfo.gid = 20010029;  // valid gid
+        dacInfo.gidCount = APP_MAX_GIDS + 1;  // exceeds APP_MAX_GIDS (64)
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+
+/**
+ * @brief SetUidGid with uid at UINT32_MAX should fail the merged parameter
+ *        check (uid must be strictly less than UINT32_MAX)
+ *        Branch: dacInfo->uid == UINT32_MAX -> APPSPAWN_MSG_INVALID
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxInvalid_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = UINT32_MAX;  // uid must be < UINT32_MAX
+        dacInfo.gid = 20010029;  // valid gid
+        dacInfo.gidCount = 0;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetUidGid(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
+}
+
+/**
+ * @brief SetAppAccessToken with a valid token msg should succeed and not
+ *        trigger error reporting (stub GetTokenTypeFlag returns TOKEN_HAP)
+ *        Branch: tokenInfo found + type == TOKEN_HAP + SetSelfTokenID OK
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAppAccessToken_ValidToken_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
+        reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        ret = SetAppAccessToken(mgr, property);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
     ASSERT_EQ(ret, 0);
 }
 
