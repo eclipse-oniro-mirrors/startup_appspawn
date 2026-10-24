@@ -161,8 +161,9 @@ int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo 
     }
 
     HNPAPI_LOG("\r\n [HNP API] native package install! userId=%{public}s, hap path=%{public}s, sys abi=%{public}s, "
-        "hnp root path=%{public}s, package name=%{public}s, sessionId=%{public}d, install options=%{public}d\r\n",
-        userId, hapInfo->hapPath, hapInfo->abi, hnpRootPath, hapInfo->packageName, sessionId, installOptions);
+        "hnp root path=%{public}s, package name=%{public}s, sessionId=%{public}d, install options=%{public}d, "
+        "isSideloadApp=%{public}d\r\n", userId, hapInfo->hapPath, hapInfo->abi, hnpRootPath, hapInfo->packageName,
+        sessionId, installOptions, hapInfo->isSideloadApp);
 
     argv[index++] = "hnp";
     argv[index++] = "install";
@@ -180,7 +181,8 @@ int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo 
     argv[index++] = (char *)hapInfo->appIdentifier;
 
     if (sessionId > 0) {
-        HNPAPI_ERROR_CHECK(index < MAX_ARGV_NUM, return HNP_API_ERRNO_TOO_MANY_PARAM,
+        // 追加"-x"和sessionId共2项，预留1个NULL终止槽，保证index + 2 + 1 <= MAX_ARGV_NUM
+        HNPAPI_ERROR_CHECK(index < MAX_ARGV_NUM - 2, return HNP_API_ERRNO_TOO_MANY_PARAM,
             "\r\n [HNP API] param count outof bound!\r\n");
         char sessionIdStr[SESSIONID_BUFFER_LEN] = {0};
         if (snprintf_s(sessionIdStr, SESSIONID_BUFFER_LEN, SESSIONID_BUFFER_LEN - 1, "%d", sessionId) < 0) {
@@ -191,8 +193,9 @@ int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo 
     }
 
     // 传递需要独立签名的hnp信息 相对路径 private/xx.hnp  public/xx.hnp
+    // 每轮追加"-S"和路径共2项，预留1个NULL终止槽，保证index + 2*count + 1 <= MAX_ARGV_NUM
     if (hapInfo->independentSignHnpPaths != NULL && hapInfo->count > 0) {
-        HNPAPI_ERROR_CHECK(index < MAX_ARGV_NUM && (hapInfo->count <= (MAX_ARGV_NUM - index) / 2),
+        HNPAPI_ERROR_CHECK(hapInfo->count <= (MAX_ARGV_NUM - index - 1) / 2,
             return HNP_API_ERRNO_TOO_MANY_PARAM, "\r\n [HNP API] param count outof bound!\r\n");
         for (int i = 0; i < hapInfo->count; i++) {
             HNPAPI_ERROR_CHECK(hapInfo->independentSignHnpPaths[i] != NULL, return HNP_API_ERRNO_PARAM_INVALID,
@@ -202,9 +205,17 @@ int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo 
         }
     }
     if (installOptions >= 0 && IS_OPTION_SET((unsigned int)installOptions, OPTION_INDEX_FORCE)) {
-        HNPAPI_ERROR_CHECK(index < MAX_ARGV_NUM, return HNP_API_ERRNO_TOO_MANY_PARAM,
+        // 追加"-f"共1项，预留1个NULL终止槽，保证index + 1 + 1 <= MAX_ARGV_NUM
+        HNPAPI_ERROR_CHECK(index < MAX_ARGV_NUM - 1, return HNP_API_ERRNO_TOO_MANY_PARAM,
             "\r\n [HNP API] param count outof bound!\r\n");
         argv[index++] = "-f";
+    }
+
+    if (hapInfo->isSideloadApp) {
+        // 追加"-d"共1项，预留1个NULL终止槽，保证index + 1 + 1 <= MAX_ARGV_NUM
+        HNPAPI_ERROR_CHECK(index < MAX_ARGV_NUM - 1, return HNP_API_ERRNO_TOO_MANY_PARAM,
+            "\r\n [HNP API] param count outof bound!\r\n");
+        argv[index++] = "-d";
     }
 
     return StartHnpProcess(argv);

@@ -1201,6 +1201,88 @@ HWTEST_F(HnpInstallerTest, Hnp_Install_API_004, TestSize.Level0)
 }
 
 /**
+* @tc.name: Hnp_Install_API_005
+* @tc.desc:  Verify sideload app install public hnp failed.
+* @tc.type: FUNC
+* @tc.require:issueI2215
+* @tc.author:
+*/
+HWTEST_F(HnpInstallerTest, Hnp_Install_API_005, TestSize.Level0)
+{
+    int ret;
+    bool installEnable = IsHnpInstallEnable();
+
+    EXPECT_EQ(mkdir(HNP_BASE_PATH, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH), 0);
+
+    HnpPackWithCfg(true, true);
+
+    if (IsDeveloperModeOpen()) {
+        { //sideload app can not install public hnp
+            struct HapInfo hapInfo;
+            (void)memset_s(&hapInfo, sizeof(HapInfo), 0, sizeof(HapInfo));
+            EXPECT_EQ(sprintf_s(hapInfo.packageName, sizeof(hapInfo.packageName), "%s", "sample") > 0, true);
+            EXPECT_EQ(sprintf_s(hapInfo.hapPath, sizeof(hapInfo.hapPath), "%s", "test") > 0, true);
+            EXPECT_EQ(sprintf_s(hapInfo.abi, sizeof(hapInfo.abi), "%s", "system64") > 0, true);
+            hapInfo.isSideloadApp = true;
+            ret = NativeInstallHnp("10000", "./hnp_out/", &hapInfo, 1, 1);
+            if (installEnable) {
+                EXPECT_EQ(ret, HNP_ERRNO_INSTALLER_SIDELOAD_PUBLIC_FORBIDDEN);
+                EXPECT_EQ(access(HNP_BASE_PATH"/hnppublic/bin/outt", F_OK), -1);
+                EXPECT_EQ(access(HNP_BASE_PATH"/hnppublic/bin/out2", F_OK), -1);
+            } else {
+                GTEST_LOG_(INFO) << "hnp install enable false";
+                EXPECT_EQ(ret, HNP_API_ERRNO_HNP_INSTALL_DISABLED);
+            }
+        }
+    }
+
+    HnpDeleteFolder(HNP_BASE_PATH);
+    HnpPackWithCfgDelete();
+    RemoveUidCfg(TEST_HNP_UID);
+}
+
+/**
+* @tc.name: Hnp_Install_API_006
+* @tc.desc:  Verify sideload app install private hnp succeed.
+* @tc.type: FUNC
+* @tc.require:issueI2215
+* @tc.author:
+*/
+HWTEST_F(HnpInstallerTest, Hnp_Install_API_006, TestSize.Level0)
+{
+    int ret;
+    bool installEnable = IsHnpInstallEnable();
+
+    EXPECT_EQ(mkdir(HNP_BASE_PATH, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH), 0);
+
+    HnpPackWithCfg(false, true);
+
+    if (IsDeveloperModeOpen()) {
+        { //sideload app install private hnp only
+            struct HapInfo hapInfo;
+            (void)memset_s(&hapInfo, sizeof(HapInfo), 0, sizeof(HapInfo));
+            EXPECT_EQ(sprintf_s(hapInfo.packageName, sizeof(hapInfo.packageName), "%s", "sample") > 0, true);
+            EXPECT_EQ(sprintf_s(hapInfo.hapPath, sizeof(hapInfo.hapPath), "%s", "test") > 0, true);
+            EXPECT_EQ(sprintf_s(hapInfo.abi, sizeof(hapInfo.abi), "%s", "system64") > 0, true);
+            hapInfo.isSideloadApp = true;
+            ret = NativeInstallHnp("10000", "./hnp_out/", &hapInfo, 1, 1);
+            if (installEnable) {
+                EXPECT_EQ(ret, 0);
+                EXPECT_EQ(access(HNP_BASE_PATH"/hnp/sample/bin/outt", F_OK), 0);
+                EXPECT_EQ(access(HNP_BASE_PATH"/hnp/sample/bin/out2", F_OK), 0);
+            } else {
+                GTEST_LOG_(INFO) << "hnp install enable false";
+                EXPECT_EQ(ret, HNP_API_ERRNO_HNP_INSTALL_DISABLED);
+            }
+        }
+    }
+
+    HnpDeleteFolder(HNP_BASE_PATH);
+    HnpPackWithCfgDelete();
+    RemoveUidCfg(TEST_HNP_UID);
+}
+
+/**
 * @tc.name: Hnp_RelPath_API_001
 * @tc.desc:  Verify HnpRelPath succeed.
 * @tc.type: FUNC

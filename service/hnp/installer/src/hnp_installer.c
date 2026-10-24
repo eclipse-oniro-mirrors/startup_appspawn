@@ -793,7 +793,7 @@ static int HnpInstallHnpFileCountGet(char *hnpPath, int *count)
     return 0;
 }
 
-static int HnpInstallHapFileCountGet(const char *root, int *count)
+static int HnpInstallHapFileCountGet(const char *root, int *count, bool isSideloadApp)
 {
     struct dirent *entry;
     char hnpPath[MAX_FILE_PATH_LEN];
@@ -820,11 +820,18 @@ static int HnpInstallHapFileCountGet(const char *root, int *count)
             return HNP_ERRNO_BASE_SPRINTF_FAILED;
         }
 
-        int ret = HnpInstallHnpFileCountGet(hnpPath, count);
+        int subCount = 0;
+        int ret = HnpInstallHnpFileCountGet(hnpPath, &subCount);
         if (ret != 0) {
             closedir(dir);
             return ret;
         }
+        *count += subCount;
+        /* 侧载应用禁止安装公有hnp包(含独立签名hnp)，检测到立即终止 */
+        HNP_ERROR_CHECK(!(isSideloadApp && (strcmp(entry->d_name, "public") == 0) && (subCount > 0)),
+            closedir(dir);
+            return HNP_ERRNO_INSTALLER_SIDELOAD_PUBLIC_FORBIDDEN,
+            "sideload app can not install public hnp, path=%{public}s", hnpPath);
     }
 
     closedir(dir);
@@ -976,7 +983,8 @@ static int HnpInstallPre(HapInstallInfo *installInfo)
 #endif
     int ret;
     HNP_ONLY_EXPER((ret = CheckInstallPath(dstPath, installInfo)) != 0 ||
-        (ret = HnpInstallHapFileCountGet(installInfo->hnpRootPath, &count)) != 0, return ret);
+        (ret = HnpInstallHapFileCountGet(installInfo->hnpRootPath, &count, installInfo->isSideloadApp)) != 0,
+        return ret);
     if (count > 0) {
         hnpSignMapInfos = (HnpSignMapInfo *)malloc(sizeof(HnpSignMapInfo) * count);
         HNP_ONLY_EXPER(hnpSignMapInfos == NULL, return HNP_ERRNO_NOMEM);
@@ -987,10 +995,8 @@ static int HnpInstallPre(HapInstallInfo *installInfo)
 #ifdef CODE_SIGNATURE_ENABLE
     if ((ret == 0) && (count > 0)) {
         data.entries = malloc(sizeof(struct EntryMapEntry) * count);
-        if (data.entries == NULL) {
-            free(hnpSignMapInfos);
-            return HNP_ERRNO_NOMEM;
-        }
+        HNP_ERROR_CHECK(data.entries != NULL, free(hnpSignMapInfos);
+            return HNP_ERRNO_NOMEM, "hnp install malloc entries failed %{public}d", errno);
         int exeFileCount = 0;
         for (i = 0; i < count; i++) {
             data.entries[i].key = hnpSignMapInfos[i].key;
@@ -998,14 +1004,13 @@ static int HnpInstallPre(HapInstallInfo *installInfo)
             exeFileCount += (hnpSignMapInfos[i].isExec ? 1 : 0);
         }
         data.count = count;
-        ret = EnforceCodeSignForApp(installInfo->hapPath, &data, FILE_ENTRY_ONLY);
+        uint32_t signFlag = installInfo->isSideloadApp ? IS_SIDE_LOADING_APP : 0;
+        ret = EnforceCodeSignForAppWithFlag(installInfo->hapPath, &data, FILE_ENTRY_ONLY, signFlag);
         HNP_LOGI("sign end ret=%{public}d,last key[%{public}s],value[%{public}s]", ret, data.entries[i - 1].key,
             data.entries[i - 1].value);
         free(data.entries);
-        if (ret != 0) {
-            HnpUnInstall(installInfo->uid, installInfo->hapPackageName);
-            ret = HNP_ERRNO_INSTALLER_CODE_SIGN_APP_FAILED;
-        }
+        HNP_ONLY_EXPER(ret != 0, HnpUnInstall(installInfo->uid, installInfo->hapPackageName);
+            ret = HNP_ERRNO_INSTALLER_CODE_SIGN_APP_FAILED);
         HNP_ONLY_EXPER(ret == 0 && installInfo->appIdentifier != NULL && exeFileCount > 0,
             ret = BssInstall(hnpSignMapInfos, count, installInfo, exeFileCount));
         HNP_ERROR_CHECK(ret == 0 || ret == HNP_ERRNO_INSTALLER_CODE_SIGN_APP_FAILED,
@@ -1058,13 +1063,21 @@ static int HandleSignParameter(HapInstallInfo *installInfo, const char *signHnp)
     return 0;
 }
 
+static int HnpInstallerArgsCheck(const HapInstallInfo *installInfo)
+{
+    HNP_ERROR_CHECK(installInfo->uid != -1 && installInfo->hnpRootPath != NULL && installInfo->hapPath != NULL &&
+        installInfo->abi != NULL && installInfo->hapPackageName != NULL,
+        return HNP_ERRNO_OPERATOR_ARGV_MISS, "argv params is missing.");
+    return 0;
+}
+
 static int ParseInstallArgs(int argc, char *argv[], HapInstallInfo *installInfo)
 {
     int ret;
     int ch;
 
     optind = 1; // 从头开始遍历参数
-    while ((ch = getopt_long(argc, argv, "hu:p:i:s:a:S:I:x:f", NULL, NULL)) != -1) {
+    while ((ch = getopt_long(argc, argv, "hu:p:i:s:a:S:I:x:fd", NULL, NULL)) != -1) {
         switch (ch) {
             case 'h' :
                 return HNP_ERRNO_OPERATOR_ARGV_MISS;
@@ -1087,6 +1100,9 @@ static int ParseInstallArgs(int argc, char *argv[], HapInstallInfo *installInfo)
             case 'f': // is force
                 installInfo->isForce = true;
                 break;
+            case 'd': // is sideload app
+                installInfo->isSideloadApp = true;
+                break;
             case 'S':
                 ret = HandleSignParameter(installInfo, optarg);
                 HNP_ERROR_CHECK(ret == 0, return ret, "handle sign param failed %{public}s", optarg);
@@ -1103,13 +1119,7 @@ static int ParseInstallArgs(int argc, char *argv[], HapInstallInfo *installInfo)
         }
     }
 
-    if ((installInfo->uid == -1) || (installInfo->hnpRootPath == NULL) || (installInfo->hapPath == NULL) ||
-        (installInfo->abi == NULL) || (installInfo->hapPackageName == NULL)) {
-        HNP_LOGE("argv params is missing.");
-        return HNP_ERRNO_OPERATOR_ARGV_MISS;
-    }
-
-    return 0;
+    return HnpInstallerArgsCheck(installInfo);
 }
 
 /*
