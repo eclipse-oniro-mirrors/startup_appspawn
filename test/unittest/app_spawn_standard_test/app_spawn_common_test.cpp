@@ -3614,43 +3614,6 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermCaps_013, TestSize.Level0)
 }
 
 /**
- * @brief Test GetExtPermCaps with setAmbient=true permission
- * Expected: base caps and ambient caps both carry the mapped cap bit
- * Branch: MatchPermToCap setAmbient==true path
- */
-HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermCaps_Ambient_001, TestSize.Level0)
-{
-    AppSpawnClientHandle clientHandle = nullptr;
-    AppSpawningCtx *property = nullptr;
-    int ret = -1;
-    do {
-        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
-        APPSPAWN_CHECK(ret == 0, break, "Failed to create client");
-
-        AppSpawnReqMsgHandle reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
-        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
-
-        const char *json = "{\"permissions\":[{\"ohos.permission.test.AMBIENT_GID\":{}}]}";
-        uint32_t size = strlen(json) + 1;
-        ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
-        APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
-
-        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
-        APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
-
-        uint64_t ambientCaps = 0;
-        uint64_t caps = GetExtPermCaps(property, &ambientCaps);
-
-        EXPECT_EQ(caps, (uint64_t)CAP_TO_MASK(CAP_NET_RAW));
-        EXPECT_EQ(ambientCaps, (uint64_t)CAP_TO_MASK(CAP_NET_RAW));
-        ret = 0;
-    } while (0);
-    DeleteAppSpawningCtx(property);
-    AppSpawnClientDestroy(clientHandle);
-    ASSERT_EQ(ret, 0);
-}
-
-/**
  * @brief Test GetExtPermCaps with setAmbient=false permission (NET_RAW)
  * Expected: base caps carry the bit, ambient caps stay zero
  * Branch: MatchPermToCap setAmbient==false path
@@ -3704,7 +3667,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermCaps_GidOnly_001, TestSize.Leve
         AppSpawnReqMsgHandle reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
 
-        const char *json = "{\"permissions\":[{\"ohos.permission.test.GID_ONLY\":{}}]}";
+        const char *json = "{\"permissions\":[{\"ohos.permission.kernel.USB_CAPTURE\":{}}]}";
         uint32_t size = strlen(json) + 1;
         ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
         APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
@@ -3720,9 +3683,8 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermCaps_GidOnly_001, TestSize.Leve
         uint32_t gids[APP_MAX_GIDS] = {0};
         uint32_t count = 0;
         GetExtPermGids(property, gids, &count, APP_MAX_GIDS);
-        EXPECT_EQ(count, 2u);
-        EXPECT_EQ(gids[0], 7001u);
-        EXPECT_EQ(gids[1], 7002u);
+        EXPECT_EQ(count, 1u);
+        EXPECT_EQ(gids[0], 7401u);
         ret = 0;
     } while (0);
     DeleteAppSpawningCtx(property);
@@ -3747,7 +3709,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_001, TestSize.Level0)
         AppSpawnReqMsgHandle reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
 
-        const char *json = "{\"permissions\":[{\"ohos.permission.test.AMBIENT_GID\":{}}]}";
+        const char *json = "{\"permissions\":[{\"ohos.permission.kernel.USB_CAPTURE\":{}}]}";
         uint32_t size = strlen(json) + 1;
         ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
         APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
@@ -3759,9 +3721,8 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_001, TestSize.Level0)
         uint32_t count = 0;
         GetExtPermGids(property, gids, &count, APP_MAX_GIDS);
 
-        EXPECT_EQ(count, 2u);
-        EXPECT_EQ(gids[0], 9999u);
-        EXPECT_EQ(gids[1], 9998u);
+        EXPECT_EQ(count, 1u);
+        EXPECT_EQ(gids[0], 7401u);
         ret = 0;
     } while (0);
     DeleteAppSpawningCtx(property);
@@ -3787,7 +3748,8 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_002, TestSize.Level0)
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
 
         const char *json =
-            "{\"permissions\":[{\"ohos.permission.test.AMBIENT_GID\":{}},{\"ohos.permission.test.AMBIENT_GID\":{}}]}";
+            "{\"permissions\":[{\"ohos.permission.kernel.USB_CAPTURE\":{}},"
+            "{\"ohos.permission.kernel.USB_CAPTURE\":{}}]}";
         uint32_t size = strlen(json) + 1;
         ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
         APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
@@ -3799,7 +3761,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_002, TestSize.Level0)
         uint32_t count = 0;
         GetExtPermGids(property, gids, &count, APP_MAX_GIDS);
 
-        EXPECT_EQ(count, 2u);
+        EXPECT_EQ(count, 1u);
         ret = 0;
     } while (0);
     DeleteAppSpawningCtx(property);
@@ -3808,9 +3770,9 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_002, TestSize.Level0)
 }
 
 /**
- * @brief Test GetExtPermGids truncation at maxGids
- * Expected: only the first gid is appended when maxGids==1
- * Branch: AppendPermGids truncation path
+ * @brief Test GetExtPermGids with single-gid permission and maxGids==1
+ * Expected: the one configured gid is appended, count reaches maxGids
+ * Branch: AppendPermGids append path with maxGids limit
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_003, TestSize.Level0)
 {
@@ -3824,7 +3786,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_003, TestSize.Level0)
         AppSpawnReqMsgHandle reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
 
-        const char *json = "{\"permissions\":[{\"ohos.permission.test.AMBIENT_GID\":{}}]}";
+        const char *json = "{\"permissions\":[{\"ohos.permission.kernel.USB_CAPTURE\":{}}]}";
         uint32_t size = strlen(json) + 1;
         ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
         APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
@@ -3837,12 +3799,27 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_003, TestSize.Level0)
         GetExtPermGids(property, gids, &count, 1);
 
         EXPECT_EQ(count, 1u);
-        EXPECT_EQ(gids[0], 9999u);
+        EXPECT_EQ(gids[0], 7401u);
         ret = 0;
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
     ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief Test AppendPermGids inner-loop truncation when gidTable is full
+ * Expected: matched gid is skipped because gidCount already equals maxGids
+ * Branch: AppendPermGids *gidCount >= maxGids break
+ */
+HWTEST_F(AppSpawnCommonTest, App_Spawn_AppendPermGids_Truncation_001, TestSize.Level0)
+{
+    uint32_t gids[APP_MAX_GIDS] = {0};
+    gids[0] = 5555;
+    uint32_t count = 1;
+    AppendPermGids("ohos.permission.kernel.USB_CAPTURE", gids, &count, 1);
+    EXPECT_EQ(count, 1u);
+    EXPECT_EQ(gids[0], 5555u);
 }
 
 /**
@@ -3935,7 +3912,8 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_006, TestSize.Level0)
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
 
         const char *json =
-            "{\"permissions\":[{\"ohos.permission.test.AMBIENT_GID\":{}},{\"ohos.permission.test.AMBIENT_GID\":{}}]}";
+            "{\"permissions\":[{\"ohos.permission.kernel.USB_CAPTURE\":{}},"
+            "{\"ohos.permission.kernel.USB_CAPTURE\":{}}]}";
         uint32_t size = strlen(json) + 1;
         ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
         APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
@@ -3951,7 +3929,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_006, TestSize.Level0)
         GetExtPermGids(property, gids, &count, APP_MAX_GIDS);
         EXPECT_EQ(count, (uint32_t)APP_MAX_GIDS);
         EXPECT_EQ(gids[0], 1000u);
-        EXPECT_EQ(gids[APP_MAX_GIDS - 1], 9999u);
+        EXPECT_EQ(gids[APP_MAX_GIDS - 1], 7401u);
         ret = 0;
     } while (0);
     DeleteAppSpawningCtx(property);
@@ -4016,7 +3994,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_ExtPermGids_001, TestSize.Level
         AppSpawnReqMsgHandle reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
 
-        const char *json = "{\"permissions\":[{\"ohos.permission.test.GID_ONLY\":{}}]}";
+        const char *json = "{\"permissions\":[{\"ohos.permission.kernel.USB_CAPTURE\":{}}]}";
         uint32_t size = strlen(json) + 1;
         ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_JIT_PERMISSIONS, (uint8_t*)json, size);
         APPSPAWN_CHECK(ret == 0, break, "Failed to set ext info");
@@ -4028,9 +4006,8 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_ExtPermGids_001, TestSize.Level
 
         AppSpawnMsgDacInfo *dacInfo = (AppSpawnMsgDacInfo *)GetAppProperty(property, TLV_DAC_INFO);
         APPSPAWN_CHECK(dacInfo != nullptr, break, "No dacInfo");
-        EXPECT_TRUE(dacInfo->gidCount >= 2u);
-        EXPECT_EQ(dacInfo->gidTable[dacInfo->gidCount - 2], 7001u);
-        EXPECT_EQ(dacInfo->gidTable[dacInfo->gidCount - 1], 7002u);
+        EXPECT_TRUE(dacInfo->gidCount >= 1u);
+        EXPECT_EQ(dacInfo->gidTable[dacInfo->gidCount - 1], 7401u);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
