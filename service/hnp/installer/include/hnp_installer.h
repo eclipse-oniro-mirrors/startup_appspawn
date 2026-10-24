@@ -46,6 +46,9 @@ extern "C" {
 // 0x801308 安装命令参数sessionId错误
 #define HNP_ERRNO_INSTALLER_ARGV_SESSIONID_INVALID         HNP_ERRNO_COMMON(HNP_MID_INSTALLER, 0x8)
 
+// 0x801309 侧载应用禁止安装公有hnp包
+#define HNP_ERRNO_INSTALLER_SIDELOAD_PUBLIC_FORBIDDEN      HNP_ERRNO_COMMON(HNP_MID_INSTALLER, 0x9)
+
 #define HNP_DEFAULT_INSTALL_ROOT_PATH APPSPAWN_BASE_DIR "/data/app/el1/bundle"
 #define HNP_SANDBOX_BASE_PATH "/data/service/hnp"
 
@@ -61,6 +64,7 @@ typedef struct HapInstallInfoStru {
     char **signHnpPaths;                      // 独立签名hnp包路径
     char *appIdentifier;
     int32_t sessionId;
+    bool isSideloadApp;                       // 是否侧载应用
 } HapInstallInfo;
 
 /* hnp安装信息 */
