@@ -80,6 +80,12 @@
 #define MIN_VALID_APP_UID 10000
 #define MIN_VALID_APP_GID 10000
 #define APP_SIGN_TYPE_DEFAULT "none"
+#define XPM_DEV_PATH "/dev/xpm"
+#define XPM_SET_JITFORT_ENABLE _IOW('x', 0x3, unsigned long)
+#ifdef CODE_SIGNATURE_ENABLE
+#define INVALID_XPM_FD (-1)
+static int g_xpmFd = INVALID_XPM_FD;
+#endif
 
 typedef struct {
     const char *permissionName;
@@ -370,6 +376,48 @@ static char *GetXpmDefaultInfo(const AppSpawningCtx *property, const char *name,
     }
     return value;
 }
+
+APPSPAWN_STATIC int PreOpenXpmFd(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    if (IsNWebSpawnMode(content)) {
+        if (g_xpmFd >= 0) {
+            close(g_xpmFd);
+            g_xpmFd = INVALID_XPM_FD;
+        }
+        g_xpmFd = open(XPM_DEV_PATH, O_RDWR);
+        if (g_xpmFd < 0) {
+            APPSPAWN_LOGE("PreOpenXpmFd: failed to open %{public}s, err=%{public}d", XPM_DEV_PATH, errno);
+        }
+    }
+    return 0;
+}
+
+APPSPAWN_STATIC int CloseXpmFdArgs(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    if (g_xpmFd >= 0) {
+        close(g_xpmFd);
+        g_xpmFd = INVALID_XPM_FD;
+    }
+    return 0;
+}
+
+APPSPAWN_STATIC int SetNWebXpmConfig(void)
+{
+    int fd = g_xpmFd;
+    g_xpmFd = INVALID_XPM_FD;
+    if (fd < 0) {
+        APPSPAWN_LOGE("SetXpmConfig: invalid xpm fd=%{public}d", fd);
+        return 0;
+    }
+    unsigned long jitfortEnable = 1;
+    int ret = ioctl(fd, XPM_SET_JITFORT_ENABLE, &jitfortEnable);
+    if (ret < 0) {
+        APPSPAWN_LOGE("SetXpmConfig: ioctl XPM_SET_JITFORT_ENABLE failed, ret=%{public}d err=%{public}d",
+                      ret, errno);
+    }
+    close(fd);
+    return 0;
+}
 #endif
 
 APPSPAWN_STATIC int SetXpmConfig(const AppSpawnMgr *content, const AppSpawningCtx *property)
@@ -377,7 +425,7 @@ APPSPAWN_STATIC int SetXpmConfig(const AppSpawnMgr *content, const AppSpawningCt
 #ifdef CODE_SIGNATURE_ENABLE
     // nwebspawn no permission set xpm config
     if (IsNWebSpawnMode(content)) {
-        return 0;
+        return SetNWebXpmConfig();
     }
 
     uint32_t len = 0;
@@ -934,6 +982,10 @@ MODULE_CONSTRUCTOR(void)
     AddPreloadHook(HOOK_PRIO_COMMON, SpawnLoadSeLinuxConfig);
 
     AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_HIGHEST, SpawnGetSpawningFlag);
+#ifdef CODE_SIGNATURE_ENABLE
+    AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_COMMON, PreOpenXpmFd);
+    AddAppSpawnHook(STAGE_SERVER_EXIT, HOOK_PRIO_HIGHEST, CloseXpmFdArgs);
+#endif
     AddAppSpawnHook(STAGE_CHILD_PRE_COLDBOOT, HOOK_PRIO_HIGHEST, SpawnInitSpawningEnv);
     AddAppSpawnHook(STAGE_CHILD_PRE_COLDBOOT, HOOK_PRIO_COMMON + 1, SpawnSetAppEnv);
     AddAppSpawnHook(STAGE_CHILD_EXECUTE, HOOK_PRIO_HIGHEST, SpawnEnableCache);
