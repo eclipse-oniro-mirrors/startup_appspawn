@@ -1342,5 +1342,32 @@ HWTEST_F(AppSpawnClientTest, App_Spawn_SleepRetryTime_002, TestSize.Level0)
     EXPECT_NE(ret, 0);
     AppSpawnClientDestroy(clientHandle);
 }
+
+/**
+ * @brief CheckAppSpawnMsg passes validation for a complete message
+ */
+HWTEST_F(AppSpawnClientTest, App_Client_CheckMsg_Full_001, TestSize.Level0)
+{
+    int ret = 0;
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawningCtx *property = nullptr;
+    do {
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create reqMgr %{public}s", APPSPAWN_SERVER_NAME);
+ 
+        AppSpawnReqMsgHandle reqHandle = g_testHelper.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create req %{public}s", APPSPAWN_SERVER_NAME);
+ 
+        property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+ 
+        ret = CheckAppSpawnMsg(property->message);
+        APPSPAWN_CHECK(ret == 0, break, "CheckAppSpawnMsg failed %{public}d", ret);
+    } while (0);
+ 
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    ASSERT_EQ(ret, 0);
+}
 }  // namespace OHOS
 
