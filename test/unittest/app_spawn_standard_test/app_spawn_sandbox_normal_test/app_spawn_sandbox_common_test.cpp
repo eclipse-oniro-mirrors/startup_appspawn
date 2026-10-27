@@ -1500,4 +1500,116 @@ HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_ConvertToRealPath_In
     DeleteAppSpawningCtx(ctx);
 }
 
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_01
+ * @tc.desc: Test IsNeededCheckPathStatus returns true for el1 bundle/public directory
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_01, TestSize.Level0)
+{
+    const char *path = "/data/app/el1/100/bundle/public/com.example.test";
+    bool ret = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(nullptr, path);
+    EXPECT_TRUE(ret);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_02
+ * @tc.desc: Test IsNeededCheckPathStatus returns true for el1 base directory
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_02, TestSize.Level0)
+{
+    const char *path = "/data/app/el1/100/base/com.example.test";
+    bool ret = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(nullptr, path);
+    EXPECT_TRUE(ret);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_03
+ * @tc.desc: Test IsNeededCheckPathStatus returns false for el1 directory without bundle/public or base
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_03, TestSize.Level0)
+{
+    const char *path = "/data/app/el1/100/cache/data";
+    bool ret = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(nullptr, path);
+    EXPECT_FALSE(ret);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_04
+ * @tc.desc: Test IsNeededCheckPathStatus returns true for el2 path
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_04, TestSize.Level0)
+{
+    const char *path = "/data/app/el2/100/base/com.example.test";
+    bool ret = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(nullptr, path);
+    EXPECT_TRUE(ret);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_05
+ * @tc.desc: Test IsNeededCheckPathStatus returns false for el3 path when device is locked
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_05, TestSize.Level0)
+{
+    AppSpawningCtx *ctx = AppSpawn::GetTestAppPropertyCore();
+    ASSERT_NE(ctx, nullptr);
+    const char *path = "/data/app/el3/100/database/com.example.test";
+    bool ret = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(ctx, path);
+    DeleteAppSpawningCtx(ctx);
+    EXPECT_FALSE(ret);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_06
+ * @tc.desc: Test IsNeededCheckPathStatus returns true for el3 path when device is unlocked
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_06, TestSize.Level0)
+{
+    AppSpawningCtx *ctx = AppSpawn::GetTestAppPropertyCore();
+    ASSERT_NE(ctx, nullptr);
+    int ret = SetAppSpawnMsgFlag(ctx->message, TLV_MSG_FLAGS, APP_FLAGS_UNLOCKED_STATUS);
+    ASSERT_EQ(ret, 0);
+    const char *path = "/data/app/el3/100/database/com.example.test";
+    bool needCheck = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(ctx, path);
+    DeleteAppSpawningCtx(ctx);
+    EXPECT_TRUE(needCheck);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_07
+ * @tc.desc: Test IsNeededCheckPathStatus returns true for el4/el5 path when device is unlocked
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_07, TestSize.Level0)
+{
+    AppSpawningCtx *ctx = AppSpawn::GetTestAppPropertyCore();
+    ASSERT_NE(ctx, nullptr);
+    int ret = SetAppSpawnMsgFlag(ctx->message, TLV_MSG_FLAGS, APP_FLAGS_UNLOCKED_STATUS);
+    ASSERT_EQ(ret, 0);
+    const char *el4Path = "/data/app/el4/100/database/com.example.test";
+    const char *el5Path = "/data/app/el5/100/database/com.example.test";
+    bool needCheckEl4 = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(ctx, el4Path);
+    bool needCheckEl5 = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(ctx, el5Path);
+    DeleteAppSpawningCtx(ctx);
+    EXPECT_TRUE(needCheckEl4);
+    EXPECT_TRUE(needCheckEl5);
+}
+
+/**
+ * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_08
+ * @tc.desc: Test IsNeededCheckPathStatus returns false for unrelated path
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_IsNeededCheckPathStatus_08, TestSize.Level0)
+{
+    const char *path = "/mnt/sandbox/com.example.test/data";
+    bool ret = AppSpawn::SandboxCommon::IsNeededCheckPathStatus(nullptr, path);
+    EXPECT_FALSE(ret);
+}
+
 }  // namespace OHOS
