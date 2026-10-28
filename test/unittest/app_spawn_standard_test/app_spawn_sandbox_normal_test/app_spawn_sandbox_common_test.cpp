@@ -1501,6 +1501,28 @@ HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_ConvertToRealPath_In
 }
 
 /**
+ * @tc.name: App_Spawn_SandboxCommon_ConvertFlagStr_03
+ * @tc.desc: Test ConvertFlagStr with HMDFS_REDUCED_MOUNT flag
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_ConvertFlagStr_03, TestSize.Level0)
+{
+    uint32_t result = AppSpawn::SandboxCommon::ConvertFlagStr("HMDFS_REDUCED_MOUNT");
+    EXPECT_EQ(result, APP_FLAGS_HMDFS_REDUCED_MOUNT);
+}
+ 
+/**
+ * @tc.name: App_Spawn_SandboxCommon_ConvertFlagStr_04
+ * @tc.desc: Test ConvertFlagStr with HMDFS_FULL_MOUNT flag
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_ConvertFlagStr_04, TestSize.Level0)
+{
+    uint32_t result = AppSpawn::SandboxCommon::ConvertFlagStr("HMDFS_FULL_MOUNT");
+    EXPECT_EQ(result, APP_FLAGS_HMDFS_FULL_MOUNT);
+}
+
+/**
  * @tc.name: App_Spawn_SandboxCommon_IsNeededCheckPathStatus_01
  * @tc.desc: Test IsNeededCheckPathStatus returns true for el1 bundle/public directory
  * @tc.type: FUNC
