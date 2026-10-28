@@ -142,6 +142,33 @@ int32_t SandboxCore::UpdatePointFlags(AppSpawningCtx *appProperty)
     return 0;
 }
 
+int32_t SandboxCore::UpdateHmdfsFlags(AppSpawnMgr *content, AppSpawningCtx *appProperty)
+{
+    APPSPAWN_CHECK(content != nullptr, return -1, "Invalid appspawn content");
+    bool noShareFs = IsNoShareFsEnable();
+    if (!noShareFs) {
+        uint32_t hmdfs = !content->content.isLinux ?
+            APP_FLAGS_HMDFS_REDUCED_MOUNT : APP_FLAGS_HMDFS_FULL_MOUNT;
+        return SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, hmdfs);
+    }
+
+    if (CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CUSTOM_SANDBOX) != 0) {
+        return SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, APP_FLAGS_HMDFS_REDUCED_MOUNT);
+    }
+
+    int32_t fileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    if (fileMgrIndex != -1 && CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(fileMgrIndex)) != 0) {
+        return SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, APP_FLAGS_HMDFS_REDUCED_MOUNT);
+    }
+
+    int32_t userFileIndex = GetPermissionIndex(nullptr, SandboxCommonDef::READ_WRITE_USER_FILE_MODE.c_str());
+    if (userFileIndex != -1 && CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(userFileIndex)) != 0) {
+        return SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, APP_FLAGS_HMDFS_REDUCED_MOUNT);
+    }
+
+    return SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, APP_FLAGS_HMDFS_FULL_MOUNT);
+}
+
 std::string SandboxCore::GetSandboxPath(const AppSpawningCtx *appProperty, cJSON *mntPoint,
     const std::string &section, std::string sandboxRoot)
 {
@@ -1469,6 +1496,7 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     FinishAppspawnTrace();
     APPSPAWN_CHECK(rc == 0, return rc, "Enable new namespace failed for %{public}s", bundleName.c_str());
     APPSPAWN_CHECK(UpdatePointFlags(appProperty) == 0, return -1, "Set app permission flag fail.");
+    APPSPAWN_CHECK(UpdateHmdfsFlags(content, appProperty) == 0, return -1, "Set app hmdfs flag fail.");
 
     UpdateMsgFlagsWithPermission(appProperty, SandboxCommonDef::GET_ALL_PROCESSES_MODE, APP_FLAGS_GET_ALL_PROCESSES);
     UpdateMsgFlagsWithPermission(appProperty, SandboxCommonDef::APP_ALLOW_IOURING, APP_FLAGS_ALLOW_IOURING);

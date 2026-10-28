@@ -401,7 +401,9 @@ uint32_t SandboxCommon::ConvertFlagStr(const std::string &flagStr)
         {"FILE_ACCESS_COMMON_DIR", APP_FLAGS_FILE_ACCESS_COMMON_DIR},
         {"CLOUD_FILE_SYNC_ENABLED", APP_FLAGS_CLOUD_FILE_SYNC_ENABLED},
         {"APP_SKILLS_ENABLED", APP_FLAGS_SKILLS},
-        {"DEBUGSERVER", APP_FLAGS_DEBUGSERVER}};
+        {"DEBUGSERVER", APP_FLAGS_DEBUGSERVER},
+        {"HMDFS_REDUCED_MOUNT", APP_FLAGS_HMDFS_REDUCED_MOUNT},
+        {"HMDFS_FULL_MOUNT", APP_FLAGS_HMDFS_FULL_MOUNT}};
 
     if (flagsMap.count(flagStr)) {
         return flagsMap.at(flagStr);
