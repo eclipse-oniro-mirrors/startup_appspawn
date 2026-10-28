@@ -1516,7 +1516,8 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_002, TestSize.Level0)
         node = node->next;
     }
     ASSERT_NE(diedApp, nullptr);
-    EXPECT_EQ(diedApp->killReason, REASON_SIGNAL_KILL);
+    EXPECT_EQ(diedApp->killReason.reason, REASON_SIGNAL_KILL);
+    EXPECT_EQ(diedApp->killReason.errorCause, SIGKILL);
     DeleteAppSpawnMgr(mgr);
 }
 
@@ -1550,7 +1551,76 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_003, TestSize.Level0)
         node = node->next;
     }
     ASSERT_NE(diedApp, nullptr);
-    EXPECT_EQ(diedApp->killReason, REASON_SIGNAL_EXIT);
+    EXPECT_EQ(diedApp->killReason.reason, REASON_SIGNAL_EXIT);
+    EXPECT_EQ(diedApp->killReason.errorCause, 1);  // WEXITSTATUS(1 << 8) == 1
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+ * @brief HandleDiedPid with SIGSEGV but isSystemHap=false: HandleSigsegvCrash returns false,
+ *        process is cleaned up normally via TerminateSpawnedProcess
+ * @note 预期结果：非系统HAP的SIGSEGV进程走正常清理路径，不触发StopAppSpawn
+ */
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_004, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
+    EXPECT_EQ(mgr != nullptr, 1);
+
+    // isSystemHap=false, so HandleSigsegvCrash returns false at first guard
+    AppSpawnedProcess *app = AddSpawnedProcess(424270, "died.sigsegv.nonhap", 0, false, 0);
+    EXPECT_EQ(app != nullptr, 1);
+
+    int status = SIGSEGV;
+    HandleDiedPid(424270, 0, status);
+    EXPECT_EQ(GetSpawnedProcess(424270), nullptr);
+
+    AppSpawnedProcess *diedApp = nullptr;
+    ListNode *node = mgr->diedQueue.next;
+    while (node != &mgr->diedQueue) {
+        AppSpawnedProcess *info = ListEntry(node, AppSpawnedProcess, node);
+        if (info->pid == 424270) {
+            diedApp = info;
+            break;
+        }
+        node = node->next;
+    }
+    ASSERT_NE(diedApp, nullptr);
+    EXPECT_EQ(diedApp->killReason.reason, REASON_SIGNAL_KILL);
+    EXPECT_EQ(diedApp->killReason.errorCause, SIGSEGV);
+
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+ * @brief HandleDiedPid with SIGSEGV and isSystemHap=true: HandleSigsegvCrash returns false
+ *        when EnableFutCrash is not active, process is cleaned up normally
+ * @note 预期结果：系统HAP的SIGSEGV进程在未启用FutCrash时走正常清理路径，
+ *                 killReason仍为REASON_SIGNAL_KILL
+ */
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_005, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
+    EXPECT_EQ(mgr != nullptr, 1);
+    AppSpawnedProcess *app = AddSpawnedProcess(424281, "died.sigsegv.syshap", 0, true, 0);
+    EXPECT_EQ(app != nullptr, 1);
+    int status = SIGSEGV;
+    HandleDiedPid(424281, 0, status);
+    EXPECT_EQ(GetSpawnedProcess(424281), nullptr);
+
+    AppSpawnedProcess *diedApp = nullptr;
+    ListNode *node = mgr->diedQueue.next;
+    while (node != &mgr->diedQueue) {
+        AppSpawnedProcess *info = ListEntry(node, AppSpawnedProcess, node);
+        if (info->pid == 424281) {
+            diedApp = info;
+            break;
+        }
+        node = node->next;
+    }
+    ASSERT_NE(diedApp, nullptr);
+    EXPECT_EQ(diedApp->killReason.reason, REASON_SIGNAL_KILL);
+    EXPECT_EQ(diedApp->killReason.errorCause, SIGSEGV);
+
     DeleteAppSpawnMgr(mgr);
 }
 
