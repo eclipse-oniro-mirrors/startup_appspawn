@@ -67,13 +67,12 @@ constexpr const char *g_appBase = "app-base";
 constexpr const char *g_appResources = "app-resources";
 constexpr const char *g_appNocheck = "app-nocheck";
 constexpr const char *g_flagsPoint = "flags-point";
-constexpr const char *g_createOnDaemon = "create-on-daemon";
 constexpr const char *g_srcPathInfo = "src-path-info";
 constexpr const char *g_srcPathUid = "uid";
 constexpr const char *g_srcPathGid = "gid";
 constexpr const char *g_srcPathMode = "mode";
-constexpr const char *g_createOnlyOnDaemon = "create-only-on-daemon";
-constexpr const char *g_createOnlyPath = "path";
+constexpr const char *g_createOnlyOnDemand = "create-only-on-demand";
+constexpr const char *g_createOnlyPath = "paths";
 constexpr const char *g_restorecon = "restorecon";
 const std::string g_internal = "__internal__";
 const std::string g_mntTmpRoot = "/mnt/debugtmp/";
@@ -181,11 +180,6 @@ constexpr const char *g_debughap = "debug";
 /* 分割符 */
 constexpr const char *g_fileSeparator = "/";
 constexpr const char *g_overlayDecollator = "|";
-
-/* system/etc */
-constexpr const char *g_hostsPrefix = "/system/etc/hosts";
-constexpr const char *g_profilePrefix = "/system/etc/profile";
-constexpr const char *SUDOERS_PREFIX = "/system/etc/sudoers";
 
 /* 权限名 */
 const std::string FILE_CROSS_APP_MODE = "ohos.permission.FILE_CROSS_APP";
