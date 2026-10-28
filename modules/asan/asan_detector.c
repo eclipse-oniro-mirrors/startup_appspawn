@@ -48,7 +48,7 @@ static const EnvConfig g_configTable[] = {
     { APP_FLAGS_UBSAN_ENABLED, NULL, NULL, NULL, UBSAN_OPTIONS, NULL },
 };
 
-static bool IsInRenderProcess(const AppSpawningCtx *property)
+APPSPAWN_STATIC bool IsInRenderProcess(const AppSpawningCtx *property)
 {
     static bool isRender = false;
     static bool firstIn = true;
@@ -67,7 +67,7 @@ static bool IsInRenderProcess(const AppSpawningCtx *property)
     return isRender;
 }
 
-static int SetAsanEnabledEnv(const AppSpawnMgr *content, const AppSpawningCtx *property)
+APPSPAWN_STATIC int SetAsanEnabledEnv(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     size_t configTableSize = sizeof(g_configTable) / sizeof(g_configTable[0]);
     for (size_t i = 0; i < configTableSize; ++i) {
@@ -133,7 +133,7 @@ APPSPAWN_STATIC bool RegisterFfrtStackFunc()
     return true;
 }
 
-static void SetGwpAsanEnabled(const AppSpawnMgr *content, const AppSpawningCtx *property)
+APPSPAWN_STATIC void SetGwpAsanEnabled(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     int enforce = CheckAppMsgFlagsSet(property, APP_FLAGS_GWP_ENABLED_FORCE);
     APPSPAWN_LOGV("SetGwpAsanEnabled with flags: %{public}d", enforce);
@@ -144,7 +144,7 @@ static void SetGwpAsanEnabled(const AppSpawnMgr *content, const AppSpawningCtx *
 }
 
 #define WRAP_VALUE_MAX_LENGTH 96
-static int CheckSupportColdStart(const char *bundleName)
+APPSPAWN_STATIC int CheckSupportColdStart(const char *bundleName)
 {
     char wrapBundleNameKey[WRAP_VALUE_MAX_LENGTH] = {0};
     char wrapBundleNameValue[WRAP_VALUE_MAX_LENGTH] = {0};
@@ -206,7 +206,7 @@ static void SetHWAsanOptions(const AppSpawningCtx *property)
 }
 #endif
 
-static int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *property)
+APPSPAWN_STATIC int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Prepare spawn app %{public}s", GetProcessName(property));
 #ifdef ASAN_DETECTOR
@@ -239,7 +239,7 @@ static int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *proper
     return 0;
 }
 
-static int AsanSpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
+APPSPAWN_STATIC int AsanSpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     if (GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS) {
         return 0;

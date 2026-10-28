@@ -28,12 +28,14 @@
 #include "appspawn_manager.h"
 #include "appspawn_modulemgr.h"
 #include "appspawn_server.h"
+#include "appspawn_service.h"
 #include "json_utils.h"
 #include "parameter.h"
 #include "securec.h"
 
 #include "app_spawn_stub.h"
 #include "app_spawn_test_helper.h"
+#include "arkweb_utils.h"
 
 using namespace testing;
 using namespace testing::ext;
@@ -48,12 +50,8 @@ int ParseRenderIpcFds(const AppSpawnMsgNode *message,
 int DupRenderIpcFds(const struct RenderIpcFds &origFds);
 int GetRenderIpcFdsFromEnv(struct RenderIpcFds &fds);
 int DupNwebRenderFdsBeforeRunHook(AppSpawnMgr *content, AppSpawningCtx *property);
-
-struct RenderIpcFds {
-    int32_t ipcFd;
-    int32_t sharedFd;
-    int32_t crashFd;
-};
+bool SetSeccompPolicyForRenderer(void *nwebRenderHandle);
+OHOS::ArkWeb::ArkWebEngineVersion UpdateAppWebEngineVersion(std::string& renderCmd);
 
 extern "C" void SetDlsymResult(uint32_t flags, bool success);
 extern "C" uint32_t g_dlsymResultFlags;
@@ -264,7 +262,7 @@ HWTEST_F(NWebAdapterBranchTest, RunChild_DlsymNWebRenderMainNull, TestSize.Level
     AppSpawnClient *client = reinterpret_cast<AppSpawnClient *>(spawningCtx);
 
     int result = RunChildProcessor(nullptr, client);
-    EXPECT_EQ(result, 0);
+    EXPECT_EQ(result, -1);
     AppSpawnClientDestroy(clientHandle);
     DeleteAppSpawnMgr(mgr);
     SetDlsymResult(DLSYM_FAIL_NWEB_MAIN, true);
@@ -1298,6 +1296,81 @@ HWTEST_F(NWebAdapterBranchTest, DupNwebRenderFds_NullMessage, TestSize.Level0)
     EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
     DeleteAppSpawningCtx(property);
     DeleteAppSpawnMgr(mgr);
+}
+
+// ==================== UpdateAppWebEngineVersion branch tests ====================
+
+/**
+ * @brief UpdateAppWebEngineVersion - prefix not found
+ *        Covers: posLeft == std::string::npos -> return SYSTEM_DEFAULT
+ */
+HWTEST_F(NWebAdapterBranchTest, UpdateAppWebEngineVersion_NoPrefix, TestSize.Level0)
+{
+    GTEST_LOG_(INFO) << "UpdateAppWebEngineVersion_NoPrefix start";
+    std::string cmd = "/system/bin/sh ls -l";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::SYSTEM_DEFAULT);
+}
+
+/**
+ * @brief UpdateAppWebEngineVersion - invalid (non-numeric) version value
+ *        Covers: *end != '\0' -> return SYSTEM_DEFAULT
+ */
+HWTEST_F(NWebAdapterBranchTest, UpdateAppWebEngineVersion_InvalidValue, TestSize.Level0)
+{
+    GTEST_LOG_(INFO) << "UpdateAppWebEngineVersion_InvalidValue start";
+    std::string cmd = "render#--appEngineVersion=abc#other";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::SYSTEM_DEFAULT);
+}
+
+/**
+ * @brief UpdateAppWebEngineVersion - negative version value
+ *        Covers: v < 0 -> return SYSTEM_DEFAULT
+ */
+HWTEST_F(NWebAdapterBranchTest, UpdateAppWebEngineVersion_NegativeValue, TestSize.Level0)
+{
+    GTEST_LOG_(INFO) << "UpdateAppWebEngineVersion_NegativeValue start";
+    std::string cmd = "render#--appEngineVersion=-1#other";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::SYSTEM_DEFAULT);
+}
+
+/**
+ * @brief UpdateAppWebEngineVersion - version in middle of cmd (trailing #)
+ *        Covers: posEnd != std::string::npos branch, substr with length
+ */
+HWTEST_F(NWebAdapterBranchTest, UpdateAppWebEngineVersion_VersionInMiddle, TestSize.Level0)
+{
+    GTEST_LOG_(INFO) << "UpdateAppWebEngineVersion_VersionInMiddle start";
+    std::string cmd = "render#--appEngineVersion=1#more";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::M114);
+}
+
+/**
+ * @brief UpdateAppWebEngineVersion - version at end of cmd (no trailing #)
+ *        Covers: posEnd == std::string::npos branch, substr to end
+ */
+HWTEST_F(NWebAdapterBranchTest, UpdateAppWebEngineVersion_VersionAtEnd, TestSize.Level0)
+{
+    GTEST_LOG_(INFO) << "UpdateAppWebEngineVersion_VersionAtEnd start";
+    std::string cmd = "render#--appEngineVersion=1";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::M114);
+}
+
+// ==================== SetSeccompPolicyForRenderer branch tests ====================
+
+/**
+ * @brief SetSeccompPolicyForRenderer - nullptr handle
+ *        Covers: WITH_SECCOMP not defined -> return true
+ */
+HWTEST_F(NWebAdapterBranchTest, SetSeccompPolicyForRenderer_NullHandle, TestSize.Level0)
+{
+    GTEST_LOG_(INFO) << "SetSeccompPolicyForRenderer_NullHandle start";
+    bool ret = SetSeccompPolicyForRenderer(nullptr);
+    EXPECT_TRUE(ret);
 }
 
 }  // namespace OHOS

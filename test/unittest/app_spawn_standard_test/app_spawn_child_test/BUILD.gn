@@ -31,6 +31,7 @@ if (!defined(ohos_lite)) {
       "APPSPAWN_BASE_DIR=\"/data/appspawn_ut\"",
       "APPSPAWN_LABEL=\"APPSPAWN_UT\"",
       "APPSPAWN_TEST",
+      "APPSPAWN_EXIT_TEST",
       "APPSPAWN_CLIENT",
       "APPSPAWN_DEBUG",
     ]

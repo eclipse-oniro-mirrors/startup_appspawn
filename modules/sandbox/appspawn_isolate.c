@@ -56,7 +56,7 @@ APPSPAWN_STATIC SandboxPathMarkConfig *GetSandboxPathMarkConfig(const AppSpawnMg
     return (SandboxPathMarkConfig *)ListEntry(node, SandboxPathMarkConfig, extData);
 }
 
-static void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config)
+APPSPAWN_STATIC void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config)
 {
     APPSPAWN_CHECK_ONLY_EXPER(config != NULL, return);
     if (config->mounts != NULL) {
@@ -220,7 +220,7 @@ void SetConstraintPaths(PathInfo *paths, uint32_t count)
     close(fd);
 }
 
-static void SetMark(MountInfo *mounts, uint32_t count)
+APPSPAWN_STATIC void SetMark(MountInfo *mounts, uint32_t count)
 {
     APPSPAWN_CHECK(mounts != NULL && count != 0, return, "Invalid parameters for SetMark");
     int fd = open(DEV_DEC, O_RDWR);
@@ -237,7 +237,7 @@ static void SetMark(MountInfo *mounts, uint32_t count)
     close(fd);
 }
 
-static int SpawnSetPathMark(AppSpawnMgr *content, AppSpawningCtx *property)
+APPSPAWN_STATIC int SpawnSetPathMark(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     if (IsNWebSpawnMode(content) || GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS) {
         return APPSPAWN_OK;

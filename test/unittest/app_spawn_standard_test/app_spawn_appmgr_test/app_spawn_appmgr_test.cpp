@@ -16,6 +16,8 @@
 #include "appmgr_test_helper.h"
 
 #include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <sys/signalfd.h>
 #include <sys/stat.h>
@@ -31,6 +33,7 @@
 #include "appspawn_hook.h"
 #include "appspawn_manager.h"
 #include "appspawn_modulemgr.h"
+#include "appspawn_msg.h"
 #include "appspawn_utils.h"
 
 #include "appspawn_server.h"
@@ -39,6 +42,11 @@
 
 using namespace testing;
 using namespace testing::ext;
+
+extern "C" {
+APPSPAWN_STATIC int GetProcessTerminationStatus(pid_t pid);
+APPSPAWN_STATIC int DumpExtData(ListNode *node, void *data);
+}
 
 //CloseFdArgsFromConnection is declared APPSPAWN_STATIC in appspawn_service.c, only visible
 //to the test binary (APPSPAWN_TEST strips static ). Forward-declare here for UT access.
@@ -70,18 +78,8 @@ class AppSpawnAppMgrTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
     static void TearDownTestCase() {}
-    void SetUp()
-    {
-        const TestInfo *info = UnitTest::GetInstance()->current_test_info();
-        GTEST_LOG_(INFO) << info->test_suite_name() << "." << info->name() << " start";
-        APPSPAWN_LOGI("%{public}s.%{public}s start", info->test_suite_name(), info->name());
-    }
-    void TearDown()
-    {
-        const TestInfo *info = UnitTest::GetInstance()->current_test_info();
-        GTEST_LOG_(INFO) << info->test_suite_name() << "." << info->name() << " end";
-        APPSPAWN_LOGI("%{public}s.%{public}s end", info->test_suite_name(), info->name());
-    }
+    void SetUp() {}
+    void TearDown() {}
 };
 
 typedef struct TagAppSpawnedProcess AppSpawnedProcessInfo;
@@ -2353,61 +2351,32 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearPipeFd_001, TestSize.Level0)
 }
 
 /**
- * @brief ClearPipeFd：length 为 0 时无操作
- *
+ * @brief ClearPipeFd(0), ClearMMAP, ClearPreforkInfo, WritePreforkMsg null checks
  */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearPipeFd_002, TestSize.Level0)
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearAndWritePrefork_NullChecks, TestSize.Level0)
 {
-    int fds[2] = {10, 20};  // 占位值，length=0 不应被修改
+    int fds[2] = {10, 20};
     ClearPipeFd(fds, 0);
     EXPECT_EQ(10, fds[0]);
     EXPECT_EQ(20, fds[1]);
-}
 
-/**
- * @brief ClearMMAP：无 mgr / propertyBuffer 为空时不崩溃
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearMMAP_001, TestSize.Level0)
-{
-    ClearMMAP(424242, 4096);  // 无 mgr
+    ClearMMAP(424242, 4096);
+    ClearPreforkInfo(nullptr);
+    EXPECT_EQ(-1, WritePreforkMsg(nullptr, 4096));
 
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
     ASSERT_NE(mgr, nullptr);
-    ClearMMAP(424242, 4096);  // propertyBuffer 为空
-    DeleteAppSpawnMgr(mgr);
-}
-
-/**
- * @brief ClearPreforkInfo：property 为空 / childMsg 为空时不崩溃
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearPreforkInfo_001, TestSize.Level0)
-{
-    ClearPreforkInfo(nullptr);  // property 为空
-
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
-    ASSERT_NE(mgr, nullptr);
+    ClearMMAP(424242, 4096);
     AppSpawningCtx *property = CreateAppSpawningCtx();
     ASSERT_NE(nullptr, property);
-    ClearPreforkInfo(property);  // childMsg 为空
-
+    ClearPreforkInfo(property);
     DeleteAppSpawningCtx(property);
     DeleteAppSpawnMgr(mgr);
-}
 
-/**
- * @brief WritePreforkMsg：无 mgr / propertyBuffer 为空返回 -1
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WritePreforkMsg_001, TestSize.Level0)
-{
-    EXPECT_EQ(-1, WritePreforkMsg(nullptr, 4096));  // 无 mgr，content 为空
-
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
-    ASSERT_NE(mgr, nullptr);
-    EXPECT_EQ(-1, WritePreforkMsg(nullptr, 4096));  // propertyBuffer 为空
-    DeleteAppSpawnMgr(mgr);
+    AppSpawnMgr *mgr2 = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr2, nullptr);
+    EXPECT_EQ(-1, WritePreforkMsg(nullptr, 4096));
+    DeleteAppSpawnMgr(mgr2);
 }
 
 /**
@@ -2601,5 +2570,152 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnColdStartApp_001, TestSize.Level0
 
     DeleteAppSpawningCtx(property);
     DeleteAppSpawnMgr(mgr);
+}
+
+// ==================== GetProcessTerminationStatus tests ====================
+
+/**
+ * @brief GetProcessTerminationStatus with pid <= 0
+ *        Covers: line 273-274 (pid <= 0 -> return 0)
+ */
+HWTEST_F(AppSpawnAppMgrTest, GetProcessTerminationStatus_ZeroPid_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    int ret = GetProcessTerminationStatus(0);
+    EXPECT_EQ(ret, 0);
+    ret = GetProcessTerminationStatus(-1);
+    EXPECT_EQ(ret, 0);
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+ * @brief GetProcessTerminationStatus with non-existent pid
+ *        Covers: line 269-292 (pid not in diedQueue, GetSpawnedProcess returns NULL -> return -1)
+ *        pid 1 (init) is not in appspawn's process queue, so GetSpawnedProcess returns NULL
+ *        and the function returns -1 without reaching the kill path.
+ */
+HWTEST_F(AppSpawnAppMgrTest, GetProcessTerminationStatus_KillPath_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    // pid 1 (init) is not a spawned app, GetSpawnedProcess returns NULL -> return -1
+    int ret = GetProcessTerminationStatus(1);
+    EXPECT_EQ(ret, -1);
+    DeleteAppSpawnMgr(mgr);
+}
+
+// ==================== DeleteAppSpawningCtx coldRunPath tests ====================
+
+/**
+ * @brief DeleteAppSpawningCtx with coldRunPath set
+ *        Covers: line 354-356 (free coldRunPath)
+ */
+HWTEST_F(AppSpawnAppMgrTest, DeleteAppSpawningCtx_ColdRunPath_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    AppSpawningCtx *property = CreateAppSpawningCtx();
+    ASSERT_NE(property, nullptr);
+    property->forkCtx.coldRunPath = strdup("/tmp/test_coldrun_path");
+    EXPECT_NE(property->forkCtx.coldRunPath, nullptr);
+    DeleteAppSpawningCtx(property);
+    DeleteAppSpawnMgr(mgr);
+}
+
+// ==================== ProcessAppSpawnDumpMsg tests ====================
+
+/**
+ * @brief ProcessAppSpawnDumpMsg with pty-name ext info
+ *        Covers: line 438-448 (ptyName != NULL, realpath, fopen, SetDumpToStream)
+ *        Constructs a message with a "pty-name" TLV ext info pointing to a temp file,
+ *        so the pty-name branch (not the early-return nullptr branch) is exercised.
+ */
+HWTEST_F(AppSpawnAppMgrTest, ProcessAppSpawnDumpMsg_PtyName_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    // Create a temp file to use as the pty-name target
+    char ptyPath[] = "/tmp/appspawn_pty_test_XXXXXX";
+    int fd = mkstemp(ptyPath);
+    ASSERT_GE(fd, 0);
+    close(fd);
+
+    // Build a minimal AppSpawnMsgNode with a "pty-name" TLV ext entry.
+    // Layout in buffer: AppSpawnTlvExt header + ptyName string.
+    // GetAppSpawnMsgExtInfo scans entries with tlvType == TLV_MAX and matches tlvName.
+    const char *extName = "pty-name";
+    size_t nameLen = strlen(extName) + 1;
+    size_t extHeaderSize = sizeof(AppSpawnTlvExt);
+    size_t dataSize = strlen(ptyPath) + 1;
+    size_t totalEntrySize = APPSPAWN_ALIGN(extHeaderSize + dataSize);
+
+    uint8_t *buffer = (uint8_t *)calloc(1, totalEntrySize);
+    ASSERT_NE(buffer, nullptr);
+
+    AppSpawnTlvExt *tlv = (AppSpawnTlvExt *)buffer;
+    tlv->tlvLen = (uint16_t)totalEntrySize;
+    tlv->tlvType = TLV_MAX;  // ext info type
+    tlv->dataLen = (uint16_t)dataSize;
+    tlv->dataType = 0;
+    errno_t ret = strncpy_s(tlv->tlvName, APPSPAWN_TLV_NAME_LEN, extName, nameLen);
+    ASSERT_EQ(ret, EOK);
+    uint8_t *dataPtr = buffer + extHeaderSize;
+    ret = strncpy_s((char *)dataPtr, dataSize, ptyPath, dataSize);
+    ASSERT_EQ(ret, EOK);
+
+    // tlvOffset[TLV_MAX] = offset of our ext entry (=0, it's at buffer start)
+    uint32_t tlvOffset[TLV_MAX + 1];
+    for (uint32_t i = 0; i <= TLV_MAX; i++) {
+        tlvOffset[i] = INVALID_OFFSET;
+    }
+    tlvOffset[TLV_MAX] = 0;  // our ext entry at offset 0
+
+    AppSpawnMsgNode msgNode;
+    msgNode.connection = nullptr;
+    msgNode.tlvCount = 1;
+    msgNode.buffer = buffer;
+    msgNode.tlvOffset = tlvOffset;
+
+    // Call with the constructed message; should enter pty-name branch, open file, set stream
+    ProcessAppSpawnDumpMsg(&msgNode);
+
+    free(buffer);
+    unlink(ptyPath);
+    DeleteAppSpawnMgr(mgr);
+}
+
+// ==================== DumpExtData tests ====================
+
+/**
+ * @brief DumpExtData with dumpNode set
+ *        Covers: line 427-428 (extData->dumpNode != NULL -> call dumpNode)
+ */
+HWTEST_F(AppSpawnAppMgrTest, DumpExtData_WithDumpNode_001, TestSize.Level0)
+{
+    // Create a fake extData with dumpNode
+    AppSpawnExtData extData = {};
+    OH_ListInit(&extData.node);
+    extData.dataId = 0;
+    extData.dumpNode = [](AppSpawnExtData *data) { (void)data; };
+
+    int ret = DumpExtData(&extData.node, nullptr);
+    EXPECT_EQ(ret, 0);
+}
+
+/**
+ * @brief DumpExtData with dumpNode NULL
+ *        Covers: line 427 (extData->dumpNode == NULL -> skip)
+ */
+HWTEST_F(AppSpawnAppMgrTest, DumpExtData_NullDumpNode_001, TestSize.Level0)
+{
+    AppSpawnExtData extData = {};
+    OH_ListInit(&extData.node);
+    extData.dataId = 0;
+    extData.dumpNode = nullptr;
+
+    int ret = DumpExtData(&extData.node, nullptr);
+    EXPECT_EQ(ret, 0);
 }
 }  // namespace OHOS

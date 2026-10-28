@@ -38,12 +38,6 @@
 #include "arkweb_utils.h"
 #include "arkweb_preload_common.h"
 
-struct RenderIpcFds {
-    int32_t ipcFd;
-    int32_t sharedFd;
-    int32_t crashFd;
-};
-
 namespace {
 const std::string ARK_WEB_ENGINE_LIB_NAME = "libarkweb_engine.so";
 const std::string ARK_WEB_RENDER_LIB_NAME = "libarkweb_render.so";
@@ -53,7 +47,7 @@ const std::string RENDER_CRASH_FD_SUFFIX = "#--crash-fd=";
 static RenderIpcFds g_renderIpcFds = {-1, -1, -1};
 }  // namespace
 
-static bool SetSeccompPolicyForRenderer(void *nwebRenderHandle)
+APPSPAWN_STATIC bool SetSeccompPolicyForRenderer(void *nwebRenderHandle)
 {
 #ifdef WITH_SECCOMP
     if (IsEnableSeccomp()) {
@@ -70,7 +64,7 @@ static bool SetSeccompPolicyForRenderer(void *nwebRenderHandle)
     return true;
 }
 
-static OHOS::ArkWeb::ArkWebEngineVersion UpdateAppWebEngineVersion(std::string& renderCmd)
+APPSPAWN_STATIC OHOS::ArkWeb::ArkWebEngineVersion UpdateAppWebEngineVersion(std::string& renderCmd)
 {
     size_t posLeft = renderCmd.rfind(APP_ENGINE_VERSION_PREFIX);
     if (posLeft == std::string::npos) {

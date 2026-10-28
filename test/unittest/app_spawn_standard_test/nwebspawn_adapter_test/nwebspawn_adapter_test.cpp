@@ -29,20 +29,7 @@
 #include "app_spawn_stub.h"
 #include "arkweb_utils.h"
 
-// RenderIpcFds is defined in anonymous namespace in nwebspawn_adapter.cpp.
-// Under APPSPAWN_TEST, APPSPAWN_STATIC is empty so the functions are externally
-// visible. We must provide a matching struct definition here for the function
-// signatures that reference RenderIpcFds by value/reference.
-struct RenderIpcFds {
-    int32_t ipcFd;
-    int32_t sharedFd;
-    int32_t crashFd;
-};
-
 // C++ function declarations (use std::string or OHOS::ArkWeb, cannot be in extern "C")
-// Note: UpdateAppWebEngineVersion is declared as plain "static" in the source file
-// (not APPSPAWN_STATIC), so it cannot be linked externally. Test it indirectly
-// through DupNwebRenderFdsBeforeRunHook.
 APPSPAWN_STATIC void EraseAppWebEngineVersionFromCmd(std::string& renderCmd);
 APPSPAWN_STATIC void AddRenderIpcFdsToCmd(std::string& renderCmd);
 APPSPAWN_STATIC int ParseRenderIpcFds(const AppSpawnMsgNode *message,
@@ -52,6 +39,8 @@ APPSPAWN_STATIC int GetRenderIpcFdsFromEnv(RenderIpcFds &fds);
 APPSPAWN_STATIC int DupNwebRenderFdsBeforeRunHook(AppSpawnMgr *content, AppSpawningCtx *property);
 APPSPAWN_STATIC int RunChildProcessor(AppSpawnContent *content, AppSpawnClient *client);
 APPSPAWN_STATIC int PreLoadNwebSpawn(AppSpawnMgr *content);
+APPSPAWN_STATIC bool SetSeccompPolicyForRenderer(void *nwebRenderHandle);
+APPSPAWN_STATIC OHOS::ArkWeb::ArkWebEngineVersion UpdateAppWebEngineVersion(std::string& renderCmd);
 
 using namespace testing;
 using namespace testing::ext;
@@ -929,6 +918,53 @@ HWTEST_F(NwebspawnAdapterTest, ParseRenderIpcFds_AllThreeFds_001, TestSize.Level
     close(pipeFds2[1]);
     close(pipeFds3[0]);
     close(pipeFds3[1]);
+}
+
+// ==================== UpdateAppWebEngineVersion tests ====================
+
+/**
+ * @brief Test UpdateAppWebEngineVersion with valid M114 version
+ * @note 验证版本号为1时返回M114
+ */
+HWTEST_F(NwebspawnAdapterTest, UpdateAppWebEngineVersion_M114_001, TestSize.Level0)
+{
+    std::string cmd = "render#--appEngineVersion=1#other";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::M114);
+}
+
+/**
+ * @brief Test UpdateAppWebEngineVersion with SYSTEM_DEFAULT version (0)
+ * @note 验证版本号为0时返回SYSTEM_DEFAULT
+ */
+HWTEST_F(NwebspawnAdapterTest, UpdateAppWebEngineVersion_SystemDefault_001, TestSize.Level0)
+{
+    std::string cmd = "render#--appEngineVersion=0#other";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::SYSTEM_DEFAULT);
+}
+
+/**
+ * @brief Test UpdateAppWebEngineVersion with version at end of cmd
+ * @note 验证版本号在命令末尾时正确解析
+ */
+HWTEST_F(NwebspawnAdapterTest, UpdateAppWebEngineVersion_AtEnd_001, TestSize.Level0)
+{
+    std::string cmd = "render#--appEngineVersion=1";
+    auto version = UpdateAppWebEngineVersion(cmd);
+    EXPECT_EQ(version, OHOS::ArkWeb::ArkWebEngineVersion::M114);
+}
+
+// ==================== SetSeccompPolicyForRenderer tests ====================
+
+/**
+ * @brief Test SetSeccompPolicyForRenderer with nullptr handle
+ * @note 验证无WITH_SECCOMP时直接返回true
+ */
+HWTEST_F(NwebspawnAdapterTest, SetSeccompPolicyForRenderer_NullHandle_001, TestSize.Level0)
+{
+    bool ret = SetSeccompPolicyForRenderer(nullptr);
+    EXPECT_TRUE(ret);
 }
 
 }  // namespace OHOS

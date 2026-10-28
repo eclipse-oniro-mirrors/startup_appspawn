@@ -136,7 +136,7 @@ int AppSpawnChild(AppSpawnContent *content, AppSpawnClient *client)
     return 0;
 }
 
-static int CloneAppSpawn(void *arg)
+APPSPAWN_STATIC int CloneAppSpawn(void *arg)
 {
     APPSPAWN_CHECK(arg != NULL, return -1, "Invalid content for appspawn");
     APPSPAWN_DUMPI("CloneNwebSpawn done");

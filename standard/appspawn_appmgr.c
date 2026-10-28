@@ -266,7 +266,7 @@ int KillAndWaitStatus(pid_t pid, int sig, int *exitStatus)
     return -1;
 }
 
-static int GetProcessTerminationStatus(pid_t pid)
+APPSPAWN_STATIC int GetProcessTerminationStatus(pid_t pid)
 {
     APPSPAWN_CHECK_ONLY_EXPER(g_appSpawnMgr != NULL, return -1);
     APPSPAWN_LOGV("GetProcessTerminationStatus pid: %{public}d ", pid);
@@ -421,7 +421,7 @@ static int DumpAppQueue(ListNode *node, void *data)
     return 0;
 }
 
-static int DumpExtData(ListNode *node, void *data)
+APPSPAWN_STATIC int DumpExtData(ListNode *node, void *data)
 {
     AppSpawnExtData *extData = ListEntry(node, AppSpawnExtData, node);
     if (extData->dumpNode) {

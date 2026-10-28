@@ -271,8 +271,8 @@ bool SetSandboxPathShared(const std::string &sandboxPath)
     return true;
 }
 
-static int MountSharedMapItem(const AppSpawningCtx *property, const AppDacInfo *info, const char *varBundleName,
-                              const char *sandboxPathItem)
+APPSPAWN_STATIC int MountSharedMapItem(const AppSpawningCtx *property, const AppDacInfo *info,
+    const char *varBundleName, const char *sandboxPathItem)
 {
     /* /mnt/sandbox/<currentUserId>/<varBundleName>/data/storage/el<x> */
     char sandboxPath[PATH_MAX_LEN] = {0};
@@ -310,7 +310,7 @@ static int MountSharedMapItem(const AppSpawningCtx *property, const AppDacInfo *
     return ret;
 }
 
-static void MountSharedMap(const AppSpawningCtx *property, const AppDacInfo *info, const char *varBundleName)
+APPSPAWN_STATIC void MountSharedMap(const AppSpawningCtx *property, const AppDacInfo *info, const char *varBundleName)
 {
     int length = sizeof(MOUNT_SHARED_MAP) / sizeof(MOUNT_SHARED_MAP[0]);
     for (int i = 0; i < length; i++) {
@@ -327,12 +327,12 @@ static void MountSharedMap(const AppSpawningCtx *property, const AppDacInfo *inf
     APPSPAWN_DUMPI("mount shared map success");
 }
 
-static inline bool CheckPath(const std::string& name)
+APPSPAWN_STATIC bool CheckPath(const std::string& name)
 {
     return !name.empty() && name != "." && name != ".." && name.find("/") == std::string::npos;
 }
 
-static int DataGroupCtxNodeCompare(ListNode *node, void *data)
+APPSPAWN_STATIC int DataGroupCtxNodeCompare(ListNode *node, void *data)
 {
     DataGroupCtx *existingNode = (DataGroupCtx *)ListEntry(node, DataGroupCtx, node);
     DataGroupCtx *newNode = (DataGroupCtx *)data;
@@ -343,13 +343,14 @@ static int DataGroupCtxNodeCompare(ListNode *node, void *data)
 
     // compare src path and sandbox path
     bool isSrcPathEqual = (strcmp(existingNode->srcPath.path, newNode->srcPath.path) == 0);
-    bool isDestPathEqual = (strcmp(existingNode->destPath.path, newNode->destPath.path) == 0);
+    bool isDestPathEqual =
+        (strcmp(existingNode->destPath.path, newNode->destPath.path) == 0);
 
     return (isSrcPathEqual && isDestPathEqual) ? 0 : 1;
 }
 
-static int AddDataGroupItemToQueue(AppSpawnMgr *content, const std::string &srcPath, const std::string &destPath,
-                                   const std::string &dataGroupUuid)
+APPSPAWN_STATIC int AddDataGroupItemToQueue(AppSpawnMgr *content, const std::string &srcPath,
+    const std::string &destPath, const std::string &dataGroupUuid)
 {
     DataGroupCtx *dataGroupNode = (DataGroupCtx *)calloc(1, sizeof(DataGroupCtx));
     APPSPAWN_CHECK(dataGroupNode != nullptr, return APPSPAWN_ERROR_UTILS_MEM_FAIL, "Calloc dataGroupNode failed");
@@ -374,7 +375,7 @@ static int AddDataGroupItemToQueue(AppSpawnMgr *content, const std::string &srcP
     return 0;
 }
 
-static void DumpDataGroupCtxQueue(const ListNode *front)
+APPSPAWN_STATIC void DumpDataGroupCtxQueue(const ListNode *front)
 {
     if (front == nullptr) {
         return;
@@ -393,7 +394,7 @@ static void DumpDataGroupCtxQueue(const ListNode *front)
     }
 }
 
-static inline cJSON *GetJsonObjFromExtInfo(const AppSpawningCtx *property, const char *name)
+APPSPAWN_STATIC inline cJSON *GetJsonObjFromExtInfo(const AppSpawningCtx *property, const char *name)
 {
     uint32_t size = 0;
     char *extInfo = (char *)(GetAppSpawnMsgExtInfo(property->message, name, &size));
@@ -406,8 +407,8 @@ static inline cJSON *GetJsonObjFromExtInfo(const AppSpawningCtx *property, const
     return extInfoJson;
 }
 
-static int ParseDataGroupList(AppSpawnMgr *content, const AppSpawningCtx *property, AppDacInfo *info,
-                              const char *varBundleName)
+APPSPAWN_STATIC int ParseDataGroupList(AppSpawnMgr *content, const AppSpawningCtx *property,
+    AppDacInfo *info, const char *varBundleName)
 {
     int ret = 0;
     cJSON *dataGroupList = GetJsonObjFromExtInfo(property, DATA_GROUP_SOCKET_TYPE);

@@ -15,12 +15,18 @@
 
 #include "app_spawn_hisysevent_stub.h"
 #include "appspawn_utils.h"
+#include "appspawn_hook.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 int CreateHisysTimerLoop(AppSpawnHisyseventInfo *hisyseventInfo)
+{
+    return 0;
+}
+
+int AddProcessMgrHook(AppSpawnHookStage stage, int prio, ProcessChangeHook hook)
 {
     return 0;
 }

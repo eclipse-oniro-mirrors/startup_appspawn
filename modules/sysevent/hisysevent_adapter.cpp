@@ -293,7 +293,7 @@ void ReportUnlockMountAppFail(int32_t uid, const char *bundleName,
     APPSPAWN_CHECK_ONLY_LOG(ret == 0, "ReportUnlockMountAppFail error, ret: %{public}d", ret);
 }
 
-static bool CheckNeedUpdateReport()
+APPSPAWN_STATIC bool CheckNeedUpdateReport()
 {
     char buffer[PARAM_BUFFER_LEN] = {0};
     int ret = GetParameter(PARAM_APPSPAWN_TIME_MOUNTINFO, "0", buffer, PARAM_BUFFER_LEN);
@@ -310,7 +310,7 @@ static bool CheckNeedUpdateReport()
     return false;
 }
 
-static void UpdateLastReportTime()
+APPSPAWN_STATIC void UpdateLastReportTime()
 {
     struct timespec ts;
     clock_gettime(CLOCK_MONOTONIC, &ts);

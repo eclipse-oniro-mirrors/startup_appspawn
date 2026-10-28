@@ -32,6 +32,10 @@ if (!defined(ohos_lite)) {
       "APPSPAWN_LABEL=\"APPSPAWN_UT\"",
       "APPSPAWN_TEST",
       "APPSPAWN_CLIENT",
+      "dlopen=DlopenStub",
+      "dlopen_ns=DlopenNsStub",
+      "dlsym=DlsymStub",
+      "dlclose=DlcloseStub",
     ]
 
     include_dirs = [
