@@ -1,4 +1,21 @@
 {
+    "create-only-on-demand" : [{
+        "paths" : [{
+            "src-path" : "/data/service/el1/public/cert_manager_service/certificates/user_open/<currentUserId>",
+            "src-path-info": {
+                "uid" : 3515,
+                "gid" : 3515,
+                "mode" : 453
+            }
+        }, {
+            "src-path" : "/data/service/el1/public/cert_manager_service/certificates/user_open/0",
+            "src-path-info": {
+                "uid" : 3515,
+                "gid" : 3515,
+                "mode" : 453
+            }
+        }]
+    }],
     "common" : [{
         "top-sandbox-switch": "ON",
         "app-base" : [{
@@ -204,6 +221,16 @@
                     "sandbox-flags" : [ "bind", "rec" ],
                     "check-action-status": "false",
                     "controlled-fuse-path": "/data/service/el1/public/dlp_credential_service/mounts/storage_fuse"
+                }, {
+                    "src-path" : "/data/service/el1/public/cert_manager_service/certificates/user_open/<currentUserId>",
+                    "sandbox-path" : "/data/certificates/user_cacerts/<currentUserId>",
+                    "sandbox-flags" : [ "bind", "rec" ],
+                    "check-action-status" : "false"
+                }, {
+                    "src-path" : "/data/service/el1/public/cert_manager_service/certificates/user_open/0",
+                    "sandbox-path" : "/data/certificates/user_cacerts/0",
+                    "sandbox-flags" : [ "bind", "rec" ],
+                    "check-action-status" : "false"
                 }
             ],
             "symbol-links" : [{
@@ -460,31 +487,6 @@
             ]}],
             "symbol-links" : []
         }],
-        "create-on-daemon" : [
-            {
-                "mount-paths" : [{
-                    "src-path" : "/data/service/el1/public/cert_manager_service/certificates/user_open/<currentUserId>",
-                    "sandbox-path" : "/data/certificates/user_cacerts/<currentUserId>",
-                    "sandbox-flags" : [ "bind", "rec" ],
-                    "check-action-status" : "false",
-                    "src-path-info": {
-                        "uid" : 3515,
-                        "gid" : 3515,
-                        "mode" : 453
-                    }
-                }, {
-                    "src-path" : "/data/service/el1/public/cert_manager_service/certificates/user_open/0",
-                    "sandbox-path" : "/data/certificates/user_cacerts/0",
-                    "sandbox-flags" : [ "bind", "rec" ],
-                    "check-action-status" : "false",
-                    "src-path-info": {
-                        "uid" : 3515,
-                        "gid" : 3515,
-                        "mode" : 453
-                    }
-                }]
-            }
-        ],
         "app-nocheck" : [{
             "mount-paths" : [{
                     "src-path" : "/system/data",

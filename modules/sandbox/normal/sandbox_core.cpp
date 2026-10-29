@@ -441,9 +441,9 @@ cJSON *SandboxCore::GetFirstSubConfig(cJSON *parent, const char *key)
 
 int32_t SandboxCore::DoSandboxFileCommonBind(const AppSpawningCtx *appProperty, cJSON *wholeConfig)
 {
-    cJSON *createOnlyConfig = GetFirstCommonConfig(wholeConfig, SandboxCommonDef::g_createOnlyOnDaemon);
+    cJSON *createOnlyConfig = GetFirstCommonConfig(wholeConfig, SandboxCommonDef::g_createOnlyOnDemand);
     if (createOnlyConfig) {
-        int ret = DoAllCreateOnlyOnDaemon(appProperty, createOnlyConfig);
+        int ret = DoAllCreateOnlyOnDemand(appProperty, createOnlyConfig);
         APPSPAWN_ONLY_EXPER(ret, return ret);
     }
 
@@ -471,12 +471,6 @@ int32_t SandboxCore::DoSandboxFileCommonBind(const AppSpawningCtx *appProperty, 
         return ret;
     }
     
-    cJSON *createOnDaemonConfig = GetFirstSubConfig(firstCommon, SandboxCommonDef::g_createOnDaemon);
-    if (!createOnDaemonConfig) {
-        return 0;
-    }
-    ret = DoAllCreateOnDaemonMount(appProperty, createOnDaemonConfig);
-    APPSPAWN_ONLY_EXPER(ret, return ret);
     cJSON *appNocheckConfig = GetFirstSubConfig(firstCommon, SandboxCommonDef::g_appNocheck);
     if (!appNocheckConfig) {
         return 0;
@@ -955,90 +949,14 @@ int32_t SandboxCore::MountIPCGroup(const AppSpawningCtx *appProperty, std::strin
     return ret;
 }
 
-int32_t SandboxCore::ProcessCreateOnDaemonMount(cJSON *mntPoint, const MountPointProcessParams &params)
-{
-    const char *srcPathChr = GetStringFromJsonObj(mntPoint, SandboxCommonDef::g_srcPath);
-    if (srcPathChr == nullptr) {
-        APPSPAWN_LOGI("path info config is not found");
-        return 0;
-    }
-    std::string srcPath(srcPathChr);
-    srcPath = SandboxCommon::ConvertToRealPath(params.appProperty, srcPath);
-
-    uid_t uid = 0;
-    gid_t gid = 0;
-    mode_t mode = SandboxCommonDef::FILE_MODE;
-    cJSON *pathInfoPoints = cJSON_GetObjectItemCaseSensitive(mntPoint, SandboxCommonDef::g_srcPathInfo);
-    APPSPAWN_CHECK(pathInfoPoints != nullptr, return 0, "Invalid json object");
-    cJSON *item = cJSON_GetObjectItemCaseSensitive(pathInfoPoints, SandboxCommonDef::g_srcPathUid);
-    APPSPAWN_CHECK(item != nullptr, return 0, "Invalid json object");
-    if (cJSON_IsNumber(item)) {
-        uid = (uid_t)cJSON_GetNumberValue(item);
-    }
-
-    item = cJSON_GetObjectItemCaseSensitive(pathInfoPoints, SandboxCommonDef::g_srcPathGid);
-    APPSPAWN_CHECK(item != nullptr, return 0, "Invalid json object");
-    if (cJSON_IsNumber(item)) {
-        gid = (gid_t)cJSON_GetNumberValue(item);
-    }
-
-    item = cJSON_GetObjectItemCaseSensitive(pathInfoPoints, SandboxCommonDef::g_srcPathMode);
-    APPSPAWN_CHECK(item != nullptr, return 0, "Invalid json object");
-    if (cJSON_IsNumber(item)) {
-        mode = (mode_t)cJSON_GetNumberValue(item);
-    }
-
-    APPSPAWN_CHECK_ONLY_EXPER(EnsureDirWithMode(srcPath, uid, gid, mode) == 0, return 0);
-    return ProcessMountPoint(mntPoint, params);
-}
-
-int32_t SandboxCore::DoAllCreateOnDaemonMount(const char *key, cJSON *appConfig, const MountPointProcessParams &params)
-{
-    cJSON *mountPoints = cJSON_GetObjectItemCaseSensitive(appConfig, key);
-    if (mountPoints == nullptr || !cJSON_IsArray(mountPoints)) {
-        APPSPAWN_LOGI("mount config %{public}s is not found in %{public}s, app name is %{public}s", key,
-            params.section.c_str(), params.bundleName.c_str());
-        return 0;
-    }
-
-    auto processor = [&params](cJSON *mntPoint) { return ProcessCreateOnDaemonMount(mntPoint, params); };
-
-    return SandboxCommon::HandleArrayForeach(mountPoints, processor);
-}
-
-int32_t SandboxCore::DoAllCreateOnDaemonMount(const AppSpawningCtx *appProperty, cJSON *appConfig,
-                                              const std::string &section)
-{
-    const char *bundleNameChar = GetBundleName(appProperty);
-    std::string bundleName = (bundleNameChar != nullptr) ? std::string(bundleNameChar) : "";
-    MountPointProcessParams mountPointParams = {
-        .appProperty = appProperty,
-        .checkFlag = CheckMountFlag(appProperty, bundleName, appConfig),
-        .isControlledApp = CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CONTROLLED_APP),
-        .section = section,
-        .sandboxRoot = SandboxCommon::GetSandboxRootPath(appProperty, appConfig),
-        .bundleName = bundleName
-    };
-
-    mountPointParams.pathType = SANDBOX_DIR_PATH;
-    int ret = DoAllCreateOnDaemonMount(SandboxCommonDef::g_mountPrefix, appConfig, mountPointParams);
-    APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
-
-    mountPointParams.pathType = SANDBOX_FILE_PATH;
-    ret = DoAllCreateOnDaemonMount(SandboxCommonDef::g_mountFiles, appConfig, mountPointParams);
-    APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
-
-    return 0;
-}
-
-int32_t SandboxCore::DoAllCreateOnlyOnDaemon(const AppSpawningCtx *appProperty, cJSON *appConfig,
+int32_t SandboxCore::DoAllCreateOnlyOnDemand(const AppSpawningCtx *appProperty, cJSON *appConfig,
                                              const std::string &section)
 {
     const char *bundleNameChar = GetBundleName(appProperty);
     std::string bundleName = (bundleNameChar != nullptr) ? std::string(bundleNameChar) : "";
     cJSON *paths = cJSON_GetObjectItemCaseSensitive(appConfig, SandboxCommonDef::g_createOnlyPath);
     if (paths == nullptr || !cJSON_IsArray(paths)) {
-        APPSPAWN_LOGE("DoAllCreateOnlyOnDaemon: path config is not found in %{public}s, app name is %{public}s",
+        APPSPAWN_LOGE("DoAllCreateOnlyOnDemand: path config is not found in %{public}s, app name is %{public}s",
                       section.c_str(), bundleName.c_str());
         return 0;
     }
@@ -1052,7 +970,7 @@ int32_t SandboxCore::DoAllCreateOnlyOnDaemon(const AppSpawningCtx *appProperty, 
         .bundleName = bundleName
     };
     auto processor = [&mountPointParams](cJSON *pathItem) {
-        return ProcessCreateOnlyOnDaemon(pathItem, mountPointParams);
+        return ProcessCreateOnlyOnDemand(pathItem, mountPointParams);
     };
     int ret = SandboxCommon::HandleArrayForeach(paths, processor);
     return ret;
@@ -1094,11 +1012,11 @@ static bool ParseSrcPathInfo(cJSON *item, uid_t &uid, gid_t &gid, mode_t &mode, 
     return true;
 }
 
-int32_t SandboxCore::ProcessCreateOnlyOnDaemon(cJSON *pathItem, const MountPointProcessParams &params)
+int32_t SandboxCore::ProcessCreateOnlyOnDemand(cJSON *pathItem, const MountPointProcessParams &params)
 {
     const char *srcPathChr = GetStringFromJsonObj(pathItem, SandboxCommonDef::g_srcPath);
     if (srcPathChr == nullptr) {
-        APPSPAWN_LOGE("ProcessCreateOnlyOnDaemon: create-only-on-daemon: src-path is not found");
+        APPSPAWN_LOGE("ProcessCreateOnlyOnDemand: create-only-on-demand: src-path is not found");
         return 0;
     }
     std::string srcPath(srcPathChr);
@@ -1109,7 +1027,7 @@ int32_t SandboxCore::ProcessCreateOnlyOnDaemon(cJSON *pathItem, const MountPoint
     mode_t mode = SandboxCommonDef::FILE_MODE;
     bool restorecon = false;
     APPSPAWN_CHECK(ParseSrcPathInfo(pathItem, uid, gid, mode, restorecon), return 0,
-        "ProcessCreateOnlyOnDaemon: Invalid json object");
+        "ProcessCreateOnlyOnDemand: Invalid json object");
 
     (void)EnsureDirWithMode(srcPath, uid, gid, mode, restorecon);
     return 0;

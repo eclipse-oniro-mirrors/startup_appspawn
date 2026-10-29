@@ -47,10 +47,8 @@ public:
     static int32_t SetBundleResourceAppSandboxProperty(const AppSpawningCtx *appProperty,
                                                        std::string &sandboxPackagePath);
     static bool NeedNetworkIsolated(AppSpawningCtx *property);
-    static int32_t DoAllCreateOnDaemonMount(const AppSpawningCtx *appProperty, cJSON *appConfig,
-        const std::string &section = "create-on-daemon");
-    static int32_t DoAllCreateOnlyOnDaemon(const AppSpawningCtx *appProperty, cJSON *appConfig,
-        const std::string &section = "create-only-on-daemon");
+    static int32_t DoAllCreateOnlyOnDemand(const AppSpawningCtx *appProperty, cJSON *appConfig,
+        const std::string &section = "create-only-on-demand");
 
     // 处理应用沙箱挂载
     static int32_t SetCommonAppSandboxProperty(const AppSpawningCtx *appProperty, std::string &sandboxPackagePath);
@@ -106,7 +104,6 @@ private:
     // 沙箱挂载公共逻辑
     static int32_t DoAllMntPointsMount(const char *key, cJSON *appConfig, const MountPointProcessParams &params);
     static int32_t DoAllMntPointsMountNocheck(const char *key, cJSON *appConfig, const MountPointProcessParams &params);
-    static int32_t DoAllCreateOnDaemonMount(const char *key, cJSON *appConfig, const MountPointProcessParams &params);
 
     // 处理应用私有挂载
     static cJSON *GetPrivateJsonInfo(const AppSpawningCtx *appProperty, cJSON *wholeConfig);
@@ -138,8 +135,7 @@ private:
 
     // 沙箱回调函数
     static int32_t ProcessMountPoint(cJSON *mntPoint, const MountPointProcessParams &params);
-    static int32_t ProcessCreateOnDaemonMount(cJSON *mntPoint, const MountPointProcessParams &params);
-    static int32_t ProcessCreateOnlyOnDaemon(cJSON *pathItem, const MountPointProcessParams &params);
+    static int32_t ProcessCreateOnlyOnDemand(cJSON *pathItem, const MountPointProcessParams &params);
     static int32_t ProcessMountPointNocheck(cJSON *mntPoint, const MountPointProcessParams &params);
     static int32_t ProcessMountPointCommmon(cJSON *mntPoint, const MountPointProcessParams &params, bool eableLogging);
 
