@@ -15,6 +15,7 @@
 
 #ifndef HNP_API_H
 #define HNP_API_H
+#include <stdbool.h>
 #include "hilog/log.h"
 
 #ifdef __cplusplus
@@ -84,6 +85,7 @@ typedef struct HapInfo {
     char appIdentifier[APP_IDENTIFIER_LEN];     // appIdentifier
     int count;                                  // independentSignHnpPaths counts
     char **independentSignHnpPaths;             // independentSign Hnp Paths
+    bool isSideloadApp;                         // whether the hap is sideloaded app
 } HapInfo;
 
 typedef struct HnpResult {

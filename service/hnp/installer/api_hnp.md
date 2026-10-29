@@ -26,7 +26,8 @@ NA.
 ### NativeInstallHnp
 
 ```
-int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo *hapInfo, int installOptions);
+int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo *hapInfo,
+    int installOptions, int32_t sessionId);
 ```
 
 **描述**
@@ -54,6 +55,7 @@ int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo 
         char appIdentifier[APP_IDENTIFIER_LEN];     // 应用唯一标识appIdentifier
         int count;                                  // 独立签名hnp包数量
         char **independentSignHnpPaths;             // 独立签名hnp包相对hapPath路径
+        bool isSideloadApp;                         // 是否侧载应用
     } HapInfo;
   ```
 
@@ -65,6 +67,8 @@ int NativeInstallHnp(const char *userId, const char *hnpRootPath, const HapInfo 
         OPTION_INDEX_BUTT
     } HnpInstallOptionIndex;
 ```
+
+  sessionId：会话ID。
 
 **返回：**
  

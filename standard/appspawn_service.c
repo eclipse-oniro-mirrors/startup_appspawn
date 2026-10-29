@@ -94,9 +94,10 @@ static void AppQueueDestroyProc(const AppSpawnMgr *mgr, AppSpawnedProcess *appIn
 {
     pid_t pid = appInfo->pid;
     APPSPAWN_LOGI("kill %{public}s pid: %{public}d", appInfo->name, appInfo->pid);
-    appInfo->killReason = REASON_APPSPAWN_STOP;
+    appInfo->killReason.reason = REASON_APPSPAWN_STOP;
+    appInfo->killReason.errorCause = 0;
     APPSPAWN_LOGI("AppQueueDestroyProc: set killReason=%{public}d for pid:%{public}d",
-        appInfo->killReason, appInfo->pid);
+        appInfo->killReason.reason, appInfo->pid);
     // notify child proess died,clean sandbox info
     ProcessMgrHookExecute(STAGE_SERVER_APP_DIED, GetAppSpawnContent(), appInfo);
     ProcessMgrHookExecute(STAGE_SERVER_APP_CLEANUP, GetAppSpawnContent(), appInfo);
@@ -173,6 +174,24 @@ APPSPAWN_STATIC void WriteSignalInfoToFd(AppSpawnedProcess *appInfo, AppSpawnCon
     free(jsonString);
 }
 
+// Map the waitpid status to a DFX kill reason: killed by a signal (WIFSIGNALED) ->
+// REASON_SIGNAL_KILL with the signal number, exited normally via exit()/return (WIFEXITED) ->
+// REASON_SIGNAL_EXIT with the exit code.
+APPSPAWN_STATIC void SetKillReasonFromStatus(AppSpawnedProcess *appInfo, int status)
+{
+    appInfo->exitStatus = status;
+    if (WIFSIGNALED(status)) {
+        appInfo->killReason.reason = REASON_SIGNAL_KILL;
+        appInfo->killReason.errorCause = WTERMSIG(status);
+    } else if (WIFEXITED(status)) {
+        appInfo->killReason.reason = REASON_SIGNAL_EXIT;
+        appInfo->killReason.errorCause = WEXITSTATUS(status);
+    } else {
+        appInfo->killReason.reason = 0;
+        appInfo->killReason.errorCause = 0;
+    }
+}
+
 APPSPAWN_STATIC void HandleDiedPid(pid_t pid, uid_t uid, int status)
 {
     AppSpawnContent *content = GetAppSpawnContent();
@@ -193,10 +212,7 @@ APPSPAWN_STATIC void HandleDiedPid(pid_t pid, uid_t uid, int status)
         return;
     }
 
-    appInfo->exitStatus = status;
-    // Map the waitpid status to a DFX kill reason: killed by a signal (WIFSIGNALED) ->
-    // REASON_SIGNAL_KILL, exited normally via exit()/return (WIFEXITED) -> REASON_SIGNAL_EXIT.
-    appInfo->killReason = WIFSIGNALED(status) ? REASON_SIGNAL_KILL : (WIFEXITED(status) ? REASON_SIGNAL_EXIT : 0);
+    SetKillReasonFromStatus(appInfo, status);
     APPSPAWN_CHECK_ONLY_LOG(appInfo->uid == uid, "Invalid uid %{public}u %{public}u", appInfo->uid, uid);
     DumpStatus(appInfo->name, pid, status, &signal);
     WriteSignalInfoToFd(appInfo, content, signal);

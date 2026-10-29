@@ -216,4 +216,37 @@ HWTEST_F(AppSpawnCodeSignTest, App_Spawn_SetXpmConfig_007, TestSize.Level0)
         ASSERT_EQ(RunSetXpmConfigTest(AddStringInfoConfigs, &appSignAndDistributionTypeList), 0);
     }
 }
+
+
+/**
+ * @brief Test SetXpmConfig in nwebspawn mode with default g_xpmFd (-1).
+ *        Covers the SetNWebXpmConfig path where fd < 0 triggers error log
+ *        and returns 0.
+ */
+HWTEST_F(AppSpawnCodeSignTest, App_Spawn_SetXpmConfig_NWeb_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnMgr *mgr = nullptr;
+    int ret = -1;
+    do {
+        mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
+        EXPECT_EQ(mgr != nullptr, 1);
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create reqMgr %{public}s", APPSPAWN_SERVER_NAME);
+        reqHandle = g_testHelper.CodeSignTestCreateSendMsg(clientHandle, MSG_APP_SPAWN);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create req %{public}s", APPSPAWN_SERVER_NAME);
+
+        property = g_testHelper.CodeSignTestGetAppProperty(clientHandle, reqHandle);
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+        // g_xpmFd is -1 by default, SetNWebXpmConfig should return 0 via fd < 0 branch
+        ret = SetXpmConfig(mgr, property);
+        EXPECT_EQ(ret, 0);
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnClientDestroy(clientHandle);
+    DeleteAppSpawnMgr(mgr);
+    ASSERT_EQ(ret, 0);
+}
 }  // namespace OHOS

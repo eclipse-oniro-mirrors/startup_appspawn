@@ -19,7 +19,7 @@ if (!defined(ohos_lite)) {
   ohos_unittest("AppSpawn_Sandbox_Normal_Test") {
     module_out_path = "appspawn/appspawn"
     cflags = [ "-Dprivate=public" ]
-    ldflags = [ "-Wl,--wrap=calloc" ]
+    ldflags = [ "-Wl,--wrap=calloc", "-Wl,--wrap=GetPermissionIndex" ]
 
     if (appspawn_unittest_coverage) {
       cflags += [ "--coverage" ]

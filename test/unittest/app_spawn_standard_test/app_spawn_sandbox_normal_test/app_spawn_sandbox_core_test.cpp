@@ -40,6 +40,51 @@ using namespace OHOS::AppSpawn;
 namespace OHOS {
 AppSpawnTestHelper g_testHelperCore;
 
+// 可控的 GetPermissionIndex 桩（通过 -Wl,--wrap=GetPermissionIndex 接入），
+// 用于覆盖 UpdateHmdfsFlags 中权限未注册/已注册分支
+static bool g_overrideFileMgrIndex = false;
+static int32_t g_overrideFileMgrValue = -1;
+static bool g_overrideUserFileIndex = false;
+static int32_t g_overrideUserFileValue = -1;
+
+extern "C" int32_t __real_GetPermissionIndex(AppSpawnClientHandle handle, const char *permission);
+
+extern "C" int32_t __wrap_GetPermissionIndex(AppSpawnClientHandle handle, const char *permission)
+{
+    if (permission == nullptr) {
+        return __real_GetPermissionIndex(handle, permission);
+    }
+    if (g_overrideFileMgrIndex &&
+        strcmp(permission, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str()) == 0) {
+        return g_overrideFileMgrValue;
+    }
+    if (g_overrideUserFileIndex &&
+        strcmp(permission, SandboxCommonDef::READ_WRITE_USER_FILE_MODE.c_str()) == 0) {
+        return g_overrideUserFileValue;
+    }
+    return __real_GetPermissionIndex(handle, permission);
+}
+
+static void ResetPermissionIndexWrap()
+{
+    g_overrideFileMgrIndex = false;
+    g_overrideFileMgrValue = -1;
+    g_overrideUserFileIndex = false;
+    g_overrideUserFileValue = -1;
+}
+
+// 返回一个有效且不等于 fileMgrIndex 的权限索引，用于模拟 READ_WRITE_USER_FILE 已注册
+static uint32_t GetValidUserFileIndex(int32_t fileMgrIndex)
+{
+    uint32_t maxCount = static_cast<uint32_t>(GetPermissionMaxCount());
+    uint32_t units = (maxCount + 31) / 32;  // 与 CalcFlagsUnits 一致
+    uint32_t validMax = units * 32 - 1;  // 权限 flags 数组中最后一个有效位
+    if (validMax == static_cast<uint32_t>(fileMgrIndex)) {
+        return static_cast<uint32_t>(fileMgrIndex) - 1;
+    }
+    return validMax;
+}
+
 class AppSpawnSandboxCoreTest : public testing::Test {
 public:
     static void SetUpTestCase();
@@ -57,6 +102,8 @@ void AppSpawnSandboxCoreTest::SetUp()
     const TestInfo *info = UnitTest::GetInstance()->current_test_info();
     GTEST_LOG_(INFO) << info->test_suite_name() << "." << info->name() << " start";
     APPSPAWN_LOGI("%{public}s.%{public}s start", info->test_suite_name(), info->name());
+
+    ResetPermissionIndexWrap();
 
     std::vector<cJSON *> &appVec =
         AppSpawn::SandboxCommon::GetCJsonConfig(SandboxCommonDef::SANDBOX_APP_JSON_CONFIG);
@@ -2017,6 +2064,349 @@ HWTEST_F(AppSpawnSandboxCoreTest, DoUninstallDebugInvertedPermissionPoints_03, T
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(debugJson);
+}
+
+// ==================== HMDFS 挂载标志相关测试 ====================
+
+/**
+ * @tc.name: UpdateHmdfsFlags_01
+ * @tc.desc: Test UpdateHmdfsFlags with null content, should return -1
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_01, TestSize.Level0)
+{
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+
+    int ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(nullptr, appProperty);
+    EXPECT_EQ(ret, -1);
+
+    DeleteAppSpawningCtx(appProperty);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_02
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is disabled and kernel is not Linux
+ *           (isLinux=false), should set APP_FLAGS_HMDFS_REDUCED_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_02, TestSize.Level0)
+{
+    SetNoShareFsEnable(false);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    mgr->content.isLinux = false;
+
+    int ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_03
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is disabled and kernel is Linux
+ *           (isLinux=true), should set APP_FLAGS_HMDFS_FULL_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_03, TestSize.Level0)
+{
+    SetNoShareFsEnable(false);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    mgr->content.isLinux = true;
+
+    int ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_04
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is enabled and app has FILE_ACCESS_MANAGER
+ *           permission, should set APP_FLAGS_HMDFS_REDUCED_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_04, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int fileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    ASSERT_GE(fileMgrIndex, 0);
+    // 在解码后的 message 上显式授予 FILE_ACCESS_MANAGER 权限，保证权限位已置位
+    int ret = SetAppPermissionFlags(appProperty, static_cast<uint32_t>(fileMgrIndex));
+    ASSERT_EQ(ret, 0);
+    ASSERT_NE(CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(fileMgrIndex)), 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_05
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is enabled and app has no file permission,
+ *           should set APP_FLAGS_HMDFS_FULL_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_05, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int fileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    ASSERT_GE(fileMgrIndex, 0);
+    EXPECT_EQ(CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(fileMgrIndex)), 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    int ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_06
+ * @tc.desc: Test SetAppSandboxProperty calls UpdateHmdfsFlags to set HMDFS flag for app with
+ *           FILE_ACCESS_MANAGER and noShareFs enabled, should set APP_FLAGS_HMDFS_REDUCED_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_06, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int fileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    ASSERT_GE(fileMgrIndex, 0);
+    // 在解码后的 message 上显式授予 FILE_ACCESS_MANAGER 权限
+    int ret = SetAppPermissionFlags(appProperty, static_cast<uint32_t>(fileMgrIndex));
+    ASSERT_EQ(ret, 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    (void)AppSpawn::SandboxCore::SetAppSandboxProperty(mgr, appProperty, CLONE_NEWPID);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_07
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is enabled and FILE_ACCESS_MANAGER is not
+ *           registered (GetPermissionIndex returns -1), should set APP_FLAGS_HMDFS_FULL_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_07, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    int realFileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    ASSERT_GE(realFileMgrIndex, 0);  // 真实环境中 FILE_ACCESS_MANAGER 已注册
+    g_overrideFileMgrIndex = true;
+    g_overrideFileMgrValue = -1;  // 模拟 FILE_ACCESS_MANAGER 未注册
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    int ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    ResetPermissionIndexWrap();
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_08
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is enabled, READ_WRITE_USER_FILE is registered
+ *           and app has the permission, should set APP_FLAGS_HMDFS_REDUCED_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_08, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int fileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    ASSERT_GE(fileMgrIndex, 0);
+    EXPECT_EQ(CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(fileMgrIndex)), 0);
+
+    uint32_t userFileValue = GetValidUserFileIndex(fileMgrIndex);
+    g_overrideUserFileIndex = true;
+    g_overrideUserFileValue = static_cast<int32_t>(userFileValue);
+    int ret = SetAppPermissionFlags(appProperty, userFileValue);  // app 拥有 READ_WRITE_USER_FILE
+    ASSERT_EQ(ret, 0);
+    EXPECT_NE(CheckAppPermissionFlagSet(appProperty, userFileValue), 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    ResetPermissionIndexWrap();
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_09
+ * @tc.desc: Test UpdateHmdfsFlags when noShareFs is enabled, READ_WRITE_USER_FILE is registered
+ *           but app does not have the permission, should set APP_FLAGS_HMDFS_FULL_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_09, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int fileMgrIndex = GetPermissionIndex(nullptr, SandboxCommonDef::FILE_ACCESS_MANAGER_MODE.c_str());
+    ASSERT_GE(fileMgrIndex, 0);
+    uint32_t userFileValue = GetValidUserFileIndex(fileMgrIndex);
+    g_overrideUserFileIndex = true;
+    g_overrideUserFileValue = static_cast<int32_t>(userFileValue);
+    EXPECT_EQ(CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(fileMgrIndex)), 0);
+    EXPECT_EQ(CheckAppPermissionFlagSet(appProperty, userFileValue), 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    int ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    ResetPermissionIndexWrap();
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_10
+ * @tc.desc: Test UpdateHmdfsFlags when app is weak sandbox (APP_FLAGS_CUSTOM_SANDBOX) with
+ *           noShareFs enabled and no file permission, weak sandbox check placed before
+ *           permission checks, should set APP_FLAGS_HMDFS_REDUCED_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_10, TestSize.Level0)
+{
+    SetNoShareFsEnable(true);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int ret = SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, APP_FLAGS_CUSTOM_SANDBOX);
+    ASSERT_EQ(ret, 0);
+    ASSERT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CUSTOM_SANDBOX), 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+
+    ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
+}
+
+/**
+ * @tc.name: UpdateHmdfsFlags_11
+ * @tc.desc: Test UpdateHmdfsFlags when app is weak sandbox (APP_FLAGS_CUSTOM_SANDBOX) with
+ *           noShareFs disabled and isLinux=true, weak sandbox check not in this path,
+ *           should set APP_FLAGS_HMDFS_FULL_MOUNT
+ * @tc.type: FUNC
+ * @tc.require: issueI5NTX6
+ */
+HWTEST_F(AppSpawnSandboxCoreTest, UpdateHmdfsFlags_11, TestSize.Level0)
+{
+    SetNoShareFsEnable(false);
+    g_testHelperCore.SetProcessName("com.ohos.test.app");
+    g_testHelperCore.GetPermissions().clear();
+
+    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
+    ASSERT_NE(appProperty, nullptr);
+    int ret = SetAppSpawnMsgFlag(appProperty->message, TLV_MSG_FLAGS, APP_FLAGS_CUSTOM_SANDBOX);
+    ASSERT_EQ(ret, 0);
+    ASSERT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CUSTOM_SANDBOX), 0);
+
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    mgr->content.isLinux = true;
+
+    ret = AppSpawn::SandboxCore::UpdateHmdfsFlags(mgr, appProperty);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_FULL_MOUNT), 0);
+    EXPECT_EQ(CheckAppMsgFlagsSet(appProperty, APP_FLAGS_HMDFS_REDUCED_MOUNT), 0);
+
+    DeleteAppSpawningCtx(appProperty);
+    SetNoShareFsEnable(true);
 }
 
 } // namespace OHOS

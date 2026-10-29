@@ -99,6 +99,14 @@ typedef struct TagAppSpawningCtx {
     char *lockPath;           // Sandbox root path for _preunlock directory (set by MountDirToShared)
 } AppSpawningCtx;
 
+// Kill reason for process exit reporting.
+// reason: enum value (0=none, REASON_APPSPAWN_STOP, REASON_KILL_CGROUP, REASON_SIGNAL_KILL, REASON_SIGNAL_EXIT)
+// errorCause: specific signal number (when killed by signal) or exit code (when exited normally); 0 otherwise.
+typedef struct {
+    int reason;
+    int errorCause;
+} AppSpawnKillReason;
+
 typedef struct TagAppSpawnedProcess {
     struct ListNode node;
     uid_t uid;
@@ -118,7 +126,7 @@ typedef struct TagAppSpawnedProcess {
     uint8_t spmRefAdded;  // Bitmap: which SPM refcounts have been incremented
                           //   bit0 (0x01): tokenid refcount
                           //   bit1 (0x02): uid refcount
-    int killReason;       // Kill reason for process exit reporting (0=none, REASON_APPSPAWN_STOP, REASON_KILL_CGROUP)
+    AppSpawnKillReason killReason;  // Kill reason for process exit reporting
     char name[0];
 } AppSpawnedProcess;
 

@@ -27,8 +27,8 @@ from scripts.util import build_utils  # noqa: E402
 
 APP_SANDBOX_DEFAULT = '''
 {
-    "create-only-on-daemon" : [{
-        "path" : []
+    "create-only-on-demand" : [{
+        "paths" : []
     }],
     "common" : [{
         "top-sandbox-switch": "ON",
@@ -40,12 +40,6 @@ APP_SANDBOX_DEFAULT = '''
             "flags-point" : []
         }],
         "app-resources" : [{
-            "sandbox-root" : "/mnt/sandbox/<currentUserId>/<PackageName>",
-            "mount-paths" : [],
-            "flags-point" : [],
-            "symbol-links" : []
-        }],
-        "create-on-daemon" : [{
             "sandbox-root" : "/mnt/sandbox/<currentUserId>/<PackageName>",
             "mount-paths" : [],
             "flags-point" : [],
@@ -214,12 +208,6 @@ def _merge_scope_common(origin, new):
         _merge_scope_app(origin.get("app-resources"), app)
         pass
 
-    # 处理 create-on-daemon
-    app = new.get("create-on-daemon")
-    if app is not None and len(app) > 0:
-        _merge_scope_app(origin.get("create-on-daemon"), app)
-        pass
-
     # 处理 app-nocheck
     app = new.get("app-nocheck")
     if app is not None and len(app) > 0:
@@ -277,10 +265,10 @@ def fix_sandbox_config_file(options):
     origin_json = json.loads(APP_SANDBOX_DEFAULT)
 
     for data in data_list:
-        # 处理 create-only-on-daemon
-        createOnly = data.get("create-only-on-daemon")
+        # 处理 create-only-on-demand
+        createOnly = data.get("create-only-on-demand")
         if createOnly is not None and len(createOnly) > 0:
-            _merge_scope_create_only(origin_json.get("create-only-on-daemon")[0], createOnly[0])
+            _merge_scope_create_only(origin_json.get("create-only-on-demand")[0], createOnly[0])
 
         # 处理common
         common = data.get("common")

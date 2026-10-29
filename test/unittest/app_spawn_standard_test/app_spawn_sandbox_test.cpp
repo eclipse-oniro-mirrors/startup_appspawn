@@ -1575,7 +1575,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_49, TestSize.Level0)
     g_testHelper.SetTestApl("system_basic");
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, nullptr);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, nullptr);
     EXPECT_EQ(ret, 0);
 
     std::string mJsconfig1 = "{ \
@@ -1583,7 +1583,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_49, TestSize.Level0)
     }";
     cJSON *j_config1 = cJSON_Parse(mJsconfig1.c_str());
     ASSERT_NE(j_config1, nullptr);
-    ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, j_config1);
+    ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     std::string mJsconfig2 = "{ \
@@ -1595,7 +1595,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_49, TestSize.Level0)
     }";
     cJSON *j_config2 = cJSON_Parse(mJsconfig2.c_str());
     ASSERT_NE(j_config2, nullptr);
-    ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, j_config2);
+    ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config2);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -1621,7 +1621,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_50, TestSize.Level0)
     }";
     cJSON *j_config1 = cJSON_Parse(mJsconfig1.c_str());
     ASSERT_NE(j_config1, nullptr);
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -1647,7 +1647,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_51, TestSize.Level0)
     }";
     cJSON *j_config1 = cJSON_Parse(mJsconfig1.c_str());
     ASSERT_NE(j_config1, nullptr);
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -1664,21 +1664,24 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_52, TestSize.Level0)
 
     std::string mJsconfig1 = "{ \
         \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\", \
-        \"mount-paths\" : [{ \
+        \"paths\" : [{ \
             \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
-            \"sandbox-path\" : \"/dev/shm\", \
-            \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
-            \"check-action-status\": \"false\", \
             \"src-path-info\": { \
                 \"uid\": \"0\", \
                 \"gid\": \"0\", \
                 \"mode\": \"1023\" \
             } \
+        }], \
+        \"mount-paths\" : [{ \
+            \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
+            \"sandbox-path\" : \"/dev/shm\", \
+            \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
+            \"check-action-status\": \"false\" \
         }] \
     }";
     cJSON *j_config1 = cJSON_Parse(mJsconfig1.c_str());
     ASSERT_NE(j_config1, nullptr);
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -1695,21 +1698,24 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_53, TestSize.Level0)
 
     std::string mJsconfig1 = "{ \
         \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\", \
-        \"mount-paths\" : [{ \
+        \"paths\" : [{ \
             \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
-            \"sandbox-path\" : \"/dev/shm\", \
-            \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
-            \"check-action-status\": \"false\", \
             \"src-path-info\": { \
                 \"uid\": 0, \
                 \"gid\": 0, \
                 \"mode\": 1023 \
             } \
+        }], \
+        \"mount-paths\" : [{ \
+            \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
+            \"sandbox-path\" : \"/dev/shm\", \
+            \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
+            \"check-action-status\": \"false\" \
         }] \
     }";
     cJSON *j_config1 = cJSON_Parse(mJsconfig1.c_str());
     ASSERT_NE(j_config1, nullptr);
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnDaemonMount(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -1725,6 +1731,16 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_54, TestSize.Level0)
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
     std::string mJsconfig1 = "{ \
+        \"create-only-on-demand\":[{ \
+            \"paths\" : [{ \
+                \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
+                \"src-path-info\": { \
+                    \"uid\": \"0\", \
+                    \"gid\": \"0\", \
+                    \"mode\": \"1023\" \
+                } \
+            }] \
+        }], \
         \"common\":[{ \
             \"app-base\" : [{ \
                 \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\", \
@@ -1733,30 +1749,6 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_54, TestSize.Level0)
                     \"sandbox-path\" : \"/data/storage/el2/base\", \
                     \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
                     \"check-action-status\": \"false\" \
-                }] \
-            }], \
-            \"app-resources\" : [{ \
-                \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\", \
-                \"mount-paths\" : [{ \
-                    \"src-path\" : \"/data/app/el2/<currentUserId>/base/<PackageName_index>\", \
-                    \"sandbox-path\" : \"/data/storage/el2/base\", \
-                    \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
-                    \"check-action-status\": \"false\" \
-                }], \
-                \"symbol-links\" : [] \
-            }], \
-            \"create-on-daemon\" : [{ \
-                \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\", \
-                \"mount-paths\" : [{ \
-                    \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
-                    \"sandbox-path\" : \"/dev/shm\", \
-                    \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
-                    \"check-action-status\": \"false\", \
-                    \"src-path-info\": { \
-                        \"uid\": 0, \
-                        \"gid\": 0, \
-                        \"mode\": 1023 \
-                    } \
                 }] \
             }] \
         }] \
@@ -1771,6 +1763,45 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_54, TestSize.Level0)
 }
 
 HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_55, TestSize.Level0)
+{
+    g_testHelper.SetTestUid(1000);  // 1000 test
+    g_testHelper.SetTestGid(1000);  // 1000 test
+    g_testHelper.SetProcessName("com.example.myapplication");
+    g_testHelper.SetTestApl("system_basic");
+    AppSpawningCtx *appProperty = GetTestAppProperty();
+
+    std::string mJsconfig1 = "{ \
+        \"common\":[{ \
+            \"app-resources\" : [{ \
+                \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\", \
+                \"mount-paths\" : [{ \
+                    \"src-path\" : \"/data/app/el2/<currentUserId>/base/<PackageName_index>\", \
+                    \"sandbox-path\" : \"/data/storage/el2/base\", \
+                    \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
+                    \"check-action-status\": \"false\" \
+                }], \
+                \"symbol-links\" : [] \
+            }], \
+            \"app-nocheck\" : [{ \
+                \"mount-paths\" : [{ \
+                    \"src-path\" : \"/mnt/sandbox/shm/<currentUserId>/app/<variablePackageName>\", \
+                    \"sandbox-path\" : \"/dev/shm\", \
+                    \"sandbox-flags\" : [ \"bind\", \"rec\" ], \
+                    \"check-action-status\": \"false\" \
+                }] \
+            }] \
+        }] \
+    }";
+    cJSON *j_config1 = cJSON_Parse(mJsconfig1.c_str());
+    ASSERT_NE(j_config1, nullptr);
+    int32_t ret = AppSpawn::SandboxCore::DoSandboxFileCommonBind(appProperty, j_config1);
+    EXPECT_EQ(ret, 0);
+
+    cJSON_Delete(j_config1);
+    DeleteAppSpawningCtx(appProperty);
+}
+
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_56, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -1810,7 +1841,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_55, TestSize.Level0)
     DeleteAppSpawningCtx(appProperty);
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_56, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_57, TestSize.Level0)
 {
     g_testHelper.SetProcessName("com.//ohos.dlpmanager");
     g_testHelper.SetTestApl("normal");
@@ -1822,7 +1853,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_56, TestSize.Level0)
     g_testHelper.SetProcessName("com.example.myapplication");
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_57, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_58, TestSize.Level0)
 {
     g_testHelper.SetProcessName("com.ohos.dlpmanager");
     g_testHelper.SetTestApl("normal");
@@ -1834,7 +1865,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_57, TestSize.Level0)
     g_testHelper.SetProcessName("com.example.myapplication");
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_58, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_59, TestSize.Level0)
 {
     g_testHelper.SetProcessName("");
     g_testHelper.SetTestApl("normal");
@@ -1846,7 +1877,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_58, TestSize.Level0)
     g_testHelper.SetProcessName("com.example.myapplication");
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_59, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_60, TestSize.Level0)
 {
     int32_t ret = 0;
     ret = AppSpawn::SandboxCommon::DoAppSandboxMountOnceNocheck(nullptr, nullptr);
@@ -1902,7 +1933,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_59, TestSize.Level0)
     EXPECT_EQ(ret, 0);
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_60, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_61, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -1922,9 +1953,6 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_60, TestSize.Level0)
                 }] \
             }], \
             \"app-resources\" : [{ \
-                \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\" \
-            }], \
-            \"create-on-daemon\" : [{ \
                 \"sandbox-root\" : \"/mnt/sandbox/<currentUserId>/<PackageName>\" \
             }], \
             \"app-nocheck\" : [{ \
@@ -1952,7 +1980,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_60, TestSize.Level0)
     DeleteAppSpawningCtx(appProperty);
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_61, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_62, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -1985,7 +2013,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_61, TestSize.Level0)
     DeleteAppSpawningCtx(appProperty);
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_62, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_63, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -2014,7 +2042,7 @@ HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_62, TestSize.Level0)
     DeleteAppSpawningCtx(appProperty);
 }
 
-HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_63, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, App_Spawn_Sandbox_64, TestSize.Level0)
 {
     int32_t ret = 0;
     SharedMountArgs arg = {
@@ -3957,11 +3985,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_Root_Path_Folder_Create_Test_02, TestSize.
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_01
- * @tc.desc: Test DoAllCreateOnlyOnDaemon with nullptr, empty path, and path without src-path-info.
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_01
+ * @tc.desc: Test DoAllCreateOnlyOnDemand with nullptr, empty path, and path without src-path-info.
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_01, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_01, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -3970,27 +3998,27 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_01, TestSize.Level
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
     // nullptr config
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, nullptr);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, nullptr);
     EXPECT_EQ(ret, 0);
 
     // empty path array
     char config1[] = R"({
-        "path" : ""
+        "paths" : ""
     })";
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
-    ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     // path without src-path-info (APPSPAWN_CHECK fails, return 0)
     char config2[] = R"({
-        "path" : [{
+        "paths" : [{
             "src-path" : "/data/service/el1/<currentUserId>/fhsmgr/tmp"
         }]
     })";
     cJSON *j_config2 = cJSON_Parse(config2);
     ASSERT_NE(j_config2, nullptr);
-    ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config2);
+    ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config2);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -3999,11 +4027,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_01, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_02
- * @tc.desc: Test DoAllCreateOnlyOnDaemon with valid path + src-path-info (uid/gid/mode as numbers).
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_02
+ * @tc.desc: Test DoAllCreateOnlyOnDemand with valid path + src-path-info (uid/gid/mode as numbers).
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_02, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_02, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4012,7 +4040,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_02, TestSize.Level
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
     char config1[] = R"({
-        "path" : [{
+        "paths" : [{
             "src-path" : "/data/service/el1/<currentUserId>/fhsmgr/tmp",
             "src-path-info" : {
                 "uid" : 0,
@@ -4024,7 +4052,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_02, TestSize.Level
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -4032,11 +4060,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_02, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_03
- * @tc.desc: Test DoAllCreateOnlyOnDaemon with src-path-info as strings (invalid type, should use defaults).
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_03
+ * @tc.desc: Test DoAllCreateOnlyOnDemand with src-path-info as strings (invalid type, should use defaults).
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_03, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_03, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4045,7 +4073,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_03, TestSize.Level
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
     char config1[] = R"({
-        "path" : [{
+        "paths" : [{
             "src-path" : "/data/service/el1/<currentUserId>/fhsmgr/tmp",
             "src-path-info" : {
                 "uid" : "0",
@@ -4057,7 +4085,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_03, TestSize.Level
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -4065,11 +4093,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_03, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_04
- * @tc.desc: Test DoAllCreateOnlyOnDaemon with restorecon=true.
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_04
+ * @tc.desc: Test DoAllCreateOnlyOnDemand with restorecon=true.
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_04, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_04, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4078,7 +4106,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_04, TestSize.Level
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
     char config1[] = R"({
-        "path" : [{
+        "paths" : [{
             "src-path" : "/data/service/el1/<currentUserId>/fhsmgr/tmp",
             "src-path-info" : {
                 "uid" : 0,
@@ -4091,7 +4119,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_04, TestSize.Level
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -4099,11 +4127,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_04, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_05
- * @tc.desc: Test DoSandboxFileCommonBind with create-only-on-daemon before common, plus bind mount in app-base.
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_05
+ * @tc.desc: Test DoSandboxFileCommonBind with create-only-on-demand before common, plus bind mount in app-base.
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_5, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_5, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4112,8 +4140,8 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_5, TestSize.Level0
     AppSpawningCtx *appProperty = GetTestAppProperty();
 
     char config1[] = R"({
-        "create-only-on-daemon" : [{
-            "path" : [{
+        "create-only-on-demand" : [{
+            "paths" : [{
                 "src-path" : "/data/service/el1/<currentUserId>/fhsmgr/tmp",
                 "src-path-info" : {
                     "uid" : 0,
@@ -4135,9 +4163,6 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_5, TestSize.Level0
             }],
             "app-resources" : [{
                 "sandbox-root" : "/mnt/sandbox/<currentUserId>/<PackageName>"
-            }],
-            "create-on-daemon" : [{
-                "sandbox-root" : "/mnt/sandbox/<currentUserId>/<PackageName>"
             }]
         }]
     })";
@@ -4152,11 +4177,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_5, TestSize.Level0
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_06
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_06
  * @tc.desc: Test ParseSrcPathInfo missing-field branches and src-path missing branch (no FS side effects).
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_06, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_06, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4167,7 +4192,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_06, TestSize.Level
     // path items that make ParseSrcPathInfo return false (missing uid / gid / mode)
     // and one item missing src-path (srcPathChr == nullptr)
     char config1[] = R"({
-        "path" : [{
+        "paths" : [{
             "src-path" : "/tmp/appspawn_co_06_a",
             "src-path-info" : {}
         }, {
@@ -4183,7 +4208,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_06, TestSize.Level
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -4191,11 +4216,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_06, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_07
- * @tc.desc: Test ProcessCreateOnlyOnDaemon: pre-created dir matches uid/gid/mode, skip create block; restorecon:false.
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_07
+ * @tc.desc: Test ProcessCreateOnlyOnDemand: pre-created dir matches uid/gid/mode, skip create block; restorecon:false.
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_07, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_07, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4210,13 +4235,13 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_07, TestSize.Level
 
     char config1[256];
     int n = snprintf_s(config1, sizeof(config1), sizeof(config1) - 1,
-        R"({"path":[{"src-path":"%s","src-path-info":{"uid":%u,"gid":%u,"mode":1023,"restorecon":false}}]})",
+        R"({"paths":[{"src-path":"%s","src-path-info":{"uid":%u,"gid":%u,"mode":1023,"restorecon":false}}]})",
         dir, static_cast<unsigned int>(getuid()), static_cast<unsigned int>(getgid()));
     ASSERT_GT(n, 0);
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -4225,11 +4250,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_07, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_08
- * @tc.desc: Test ProcessCreateOnlyOnDaemon: stat succeeds but mode mismatch, mkdir EEXIST, chmod/chown success.
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_08
+ * @tc.desc: Test ProcessCreateOnlyOnDemand: stat succeeds but mode mismatch, mkdir EEXIST, chmod/chown success.
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_08, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_08, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4244,13 +4269,13 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_08, TestSize.Level
 
     char config1[256];
     int n = snprintf_s(config1, sizeof(config1), sizeof(config1) - 1,
-        R"({"path":[{"src-path":"%s","src-path-info":{"uid":%u,"gid":%u,"mode":1023,"restorecon":true}}]})",
+        R"({"paths":[{"src-path":"%s","src-path-info":{"uid":%u,"gid":%u,"mode":1023,"restorecon":true}}]})",
         dir, static_cast<unsigned int>(getuid()), static_cast<unsigned int>(getgid()));
     ASSERT_GT(n, 0);
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);
@@ -4259,11 +4284,11 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_08, TestSize.Level
 }
 
 /**
- * @tc.name: Sandbox_CreateOnlyOnDaemon_Test_09
- * @tc.desc: Test ProcessCreateOnlyOnDaemon: empty src-path -> stat fails and CreateDirRecursive returns -1 (return 0).
+ * @tc.name: Sandbox_CreateOnlyOnDemand_Test_09
+ * @tc.desc: Test ProcessCreateOnlyOnDemand: empty src-path -> stat fails and CreateDirRecursive returns -1 (return 0).
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_09, TestSize.Level0)
+HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDemand_Test_09, TestSize.Level0)
 {
     g_testHelper.SetTestUid(1000);  // 1000 test
     g_testHelper.SetTestGid(1000);  // 1000 test
@@ -4273,7 +4298,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_09, TestSize.Level
 
     // empty src-path: stat fails and CreateDirRecursive returns -1, APPSPAWN_CHECK return 0
     char config1[] = R"({
-        "path" : [{
+        "paths" : [{
             "src-path" : "",
             "src-path-info" : { "uid" : 0, "gid" : 0, "mode" : 1023 }
         }]
@@ -4281,7 +4306,7 @@ HWTEST_F(AppSpawnSandboxTest, Sandbox_CreateOnlyOnDaemon_Test_09, TestSize.Level
     cJSON *j_config1 = cJSON_Parse(config1);
     ASSERT_NE(j_config1, nullptr);
 
-    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDaemon(appProperty, j_config1);
+    int32_t ret = AppSpawn::SandboxCore::DoAllCreateOnlyOnDemand(appProperty, j_config1);
     EXPECT_EQ(ret, 0);
 
     cJSON_Delete(j_config1);

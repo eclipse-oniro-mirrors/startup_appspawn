@@ -42,7 +42,7 @@ void DumpSpawnStack(pid_t pid);
 #define REASON_SIGNAL_EXIT 1009
 #define DEV_SYSLOAD "/dev/sysload"
 
-void SetKillReason(const AppSpawnMgr *mgr, pid_t pid, uid_t uid, int reason);
+void SetKillReason(const AppSpawnMgr *mgr, pid_t pid, uid_t uid, int reason, int errorCause);
 
 #ifdef __cplusplus
 }

@@ -157,14 +157,15 @@ static void KillProcessesByCGroup(const char *path, AppSpawnMgr *content, const 
             continue;
         }
         APPSPAWN_LOGI("Kill app pid %{public}d now ...", pid);
-        int reason = appInfo->killReason != 0 ? appInfo->killReason : REASON_KILL_CGROUP;
+        int reason = appInfo->killReason.reason != 0 ? appInfo->killReason.reason : REASON_KILL_CGROUP;
+        int errorCause = appInfo->killReason.reason != 0 ? appInfo->killReason.errorCause : 0;
         APPSPAWN_LOGI("KillProcessesByCGroup: pid:%{public}d uid:%{public}d reason:%{public}d",
             pid, appInfo->uid, reason);
 #ifndef APPSPAWN_TEST
         if (kill(pid, SIGKILL) != 0) {
             APPSPAWN_LOGE("unable to kill process, pid: %{public}d ret %{public}d", pid, errno);
         } else {
-            SetKillReason(content, pid, appInfo->uid, reason);
+            SetKillReason(content, pid, appInfo->uid, reason, errorCause);
         }
 #endif
     }
