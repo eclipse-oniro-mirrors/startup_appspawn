@@ -1445,19 +1445,24 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_002, TestSize.Level0)
     HandleDiedPid(424253, 0, 1 << 8);
     EXPECT_EQ(GetSpawnedProcess(424253), nullptr);
 
+    AppSpawnedProcess *diedKilledApp = nullptr;
+    AppSpawnedProcess *diedExitedApp = nullptr;
     ListNode *node = mgr->diedQueue.next;
     while (node != &mgr->diedQueue) {
         AppSpawnedProcess *info = ListEntry(node, AppSpawnedProcess, node);
         if (info->pid == 424252) {
-            EXPECT_EQ(info->killReason, REASON_SIGNAL_KILL);
+            diedKilledApp = info;
         } else if (info->pid == 424253) {
-            EXPECT_EQ(info->killReason, REASON_SIGNAL_EXIT);
+            diedExitedApp = info;
         }
         node = node->next;
     }
-    ASSERT_NE(diedApp, nullptr);
-    EXPECT_EQ(diedApp->killReason.reason, REASON_SIGNAL_KILL);
-    EXPECT_EQ(diedApp->killReason.errorCause, SIGKILL);
+    ASSERT_NE(diedKilledApp, nullptr);
+    EXPECT_EQ(diedKilledApp->killReason.reason, REASON_SIGNAL_KILL);
+    EXPECT_EQ(diedKilledApp->killReason.errorCause, SIGKILL);
+    ASSERT_NE(diedExitedApp, nullptr);
+    EXPECT_EQ(diedExitedApp->killReason.reason, REASON_SIGNAL_EXIT);
+    EXPECT_EQ(diedExitedApp->killReason.errorCause, 1);  // WEXITSTATUS(1 << 8) == 1
     DeleteAppSpawnMgr(mgr);
 }
 
