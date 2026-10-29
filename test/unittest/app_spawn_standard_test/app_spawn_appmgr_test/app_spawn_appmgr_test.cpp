@@ -3,9 +3,7 @@
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
- *
  *     http://www.apache.org/licenses/LICENSE-2.0
- *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -86,7 +84,6 @@ typedef struct TagAppSpawnedProcess AppSpawnedProcessInfo;
 
 /**
  * @brief AppSpawnMgr
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMgr_001, TestSize.Level0)
 {
@@ -98,36 +95,12 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMgr_001, TestSize.Level0)
         EXPECT_EQ(content != nullptr, 1);
         EXPECT_EQ(content->mode == static_cast<RunMode>(i), 1);
 
-        if (i == MODE_FOR_APP_SPAWN || i == MODE_FOR_APP_COLD_RUN) {
-            EXPECT_EQ(1, IsAppSpawnMode(mgr));  //  true
-        } else {
-            EXPECT_EQ(0, IsAppSpawnMode(mgr));  //  false
-        }
-
-        if (i == MODE_FOR_NWEB_SPAWN || i == MODE_FOR_NWEB_COLD_RUN) {
-            EXPECT_EQ(1, IsNWebSpawnMode(mgr)); //  true
-        } else {
-            EXPECT_EQ(0, IsNWebSpawnMode(mgr)); //  false
-        }
-
-        if (i == MODE_FOR_NATIVE_SPAWN || i == MODE_FOR_NATIVE_COLD_RUN) {
-            EXPECT_EQ(1, IsNativeSpawnMode(mgr));   //  true
-        } else {
-            EXPECT_EQ(0, IsNativeSpawnMode(mgr));   //  false
-        }
-
-        if (i == MODE_FOR_HYBRID_SPAWN || i == MODE_FOR_HYBRID_COLD_RUN) {
-            EXPECT_EQ(1, IsHybridSpawnMode(mgr));   //  true
-        } else {
-            EXPECT_EQ(0, IsHybridSpawnMode(mgr));   //  false
-        }
-
-        if (i == MODE_FOR_APP_COLD_RUN || i == MODE_FOR_NWEB_COLD_RUN || i == MODE_FOR_HYBRID_COLD_RUN ||
-            i == MODE_FOR_CJAPP_COLD_RUN || i == MODE_FOR_NATIVE_COLD_RUN) {
-            EXPECT_EQ(1, IsColdRunMode(mgr));   //  true
-        } else {
-            EXPECT_EQ(0, IsColdRunMode(mgr));   //  false
-        }
+        EXPECT_EQ(i == MODE_FOR_APP_SPAWN || i == MODE_FOR_APP_COLD_RUN, IsAppSpawnMode(mgr));
+        EXPECT_EQ(i == MODE_FOR_NWEB_SPAWN || i == MODE_FOR_NWEB_COLD_RUN, IsNWebSpawnMode(mgr));
+        EXPECT_EQ(i == MODE_FOR_NATIVE_SPAWN || i == MODE_FOR_NATIVE_COLD_RUN, IsNativeSpawnMode(mgr));
+        EXPECT_EQ(i == MODE_FOR_HYBRID_SPAWN || i == MODE_FOR_HYBRID_COLD_RUN, IsHybridSpawnMode(mgr));
+        EXPECT_EQ(i == MODE_FOR_APP_COLD_RUN || i == MODE_FOR_NWEB_COLD_RUN || i == MODE_FOR_HYBRID_COLD_RUN ||
+            i == MODE_FOR_CJAPP_COLD_RUN || i == MODE_FOR_NATIVE_COLD_RUN, IsColdRunMode(mgr));
 
         // get
         mgr = GetAppSpawnMgr();
@@ -136,28 +109,21 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMgr_001, TestSize.Level0)
         // delete
         DeleteAppSpawnMgr(mgr);
 
-        // get not exist
         mgr = GetAppSpawnMgr();
-        EXPECT_EQ(mgr == nullptr, 1);
-
-        // get not exist
+        EXPECT_EQ(mgr, nullptr);
         content = GetAppSpawnContent();
-        EXPECT_EQ(content == nullptr, 1);
-
-        EXPECT_EQ(0, IsColdRunMode(mgr));   //  false
-        EXPECT_EQ(0, IsAppSpawnMode(mgr));  //  false
-        EXPECT_EQ(0, IsNWebSpawnMode(mgr)); //  false
-        EXPECT_EQ(0, IsNativeSpawnMode(mgr));   //  false
-        EXPECT_EQ(0, IsHybridSpawnMode(mgr));   //  false
-
-        // delete not exist
+        EXPECT_EQ(content, nullptr);
+        EXPECT_FALSE(IsColdRunMode(mgr));
+        EXPECT_FALSE(IsAppSpawnMode(mgr));
+        EXPECT_FALSE(IsNWebSpawnMode(mgr));
+        EXPECT_FALSE(IsNativeSpawnMode(mgr));
+        EXPECT_FALSE(IsHybridSpawnMode(mgr));
         DeleteAppSpawnMgr(mgr);
     }
 }
 
 /**
  * @brief AppSpawnedProcess
- *
  */
 static void TestAppTraversal(const AppSpawnMgr *mgr, AppSpawnedProcess *appInfo, void *data)
 {
@@ -271,7 +237,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnedProcess_003, TestSize.Level0)
 
 /**
  * @brief AppSpawningCtx
- *
  */
 static void TestProcessTraversal(const AppSpawnMgr *mgr, AppSpawningCtx *ctx, void *data)
 {
@@ -348,7 +313,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawningCtx_002, TestSize.Level0)
 
 /**
  * @brief AppSpawnMsgNode
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsgNode_001, TestSize.Level0)
 {
@@ -690,7 +654,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsgNode_009, TestSize.Level0)
 
 /**
  * @brief 消息内容操作接口
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsg_001, TestSize.Level0)
 {
@@ -875,13 +838,11 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsg_004, TestSize.Level0)
 /**
 * @brief DumpFailedAppspawnMsg tlvOffset NULL boundary
 * @note 预期结果：message 非空但 tlvOffset 为 NULL 时，打印 msgHeader 后返回，不发生崩溃
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_002, TestSize.Level0)
 {
     AppSpawnMsgNode *msg = CreateAppSpawnMsg();
-    EXPECT_EQ(msg != nullptr, 1);
-    //CreateAppSpawnMsg creates message with tlvOffset=NULL, buffer=NULL
+    ASSERT_NE(msg, nullptr);
     DumpFailedAppspawnMsg(msg, 0);
     DumpFailedAppspawnMsg(msg, -1);
     DeleteAppSpawnMsg(&msg);
@@ -890,7 +851,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_002, TestSize.Level
 /**
 * @brief DumpFailedAppspawnMsg normal message with base TLV, ret = 0
 * @note 预期结果：能正确打印 msgHeader 和扩展 TLV 信息（包含 base tlv 但无 ext tlv）
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_003, TestSize.Level0)
 {
@@ -921,7 +881,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_003, TestSize.Level
 /**
 * @brief DumpFailedAppspawnMsg normal message with error ret
 * @note 预期结果：ret 为错误码（< 0）时也能正确打印失败诊断信息
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_004, TestSize.Level0)
 {
@@ -954,7 +913,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_004, TestSize.Level
 /**
 * @brief DumpFailedAppspawnMsg message with string ext TLV
 * @note 预期结果：包含 dataType=DATA_TYPE_STRING 的 ext tlv 时，正确打印 key=value 信息
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_005, TestSize.Level0)
 {
@@ -1016,7 +974,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_005, TestSize.Level
 /**
 * @brief DumpFailedAppspawnMsg message with non-string ext TLV
 * @note 预期结果：包含 dataType!=DATA_TYPE_STRING 的 ext tlv 时，正确打印 key+len+type 信息
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_006, TestSize.Level0)
 {
@@ -1074,7 +1031,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DumpFailedAppspawnMsg_006, TestSize.Level
 /**
 * @brief CloseFdArgsFromConnection empty fd list (fdCount <= 0)
 * @note 预期结果：fdCount = 0时直接驳回，不关闭任何 fd
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_002, TestSize.Level0)
 {
@@ -1092,7 +1048,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_002, TestSize.L
 /**
 * @brief CloseFdArgsFromConnection closes valid fds and resets fdCount
 * @note 预期结果：fdCount > 0 时关闭所有 >0 的fd，并将 fdCount 置0
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_003, TestSize.Level0)
 {
@@ -1126,7 +1081,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_003, TestSize.L
 * @brief CloseFdArgsFromConnection skips non-positive fds
 * @note 预期结果：fd[i] <= 0 的项被跳过（不调用 close），但仍将其设为 -1，
 *                 最后 fdCount 重置为 0
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_004, TestSize.Level0)
 {
@@ -1155,7 +1109,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_004, TestSize.L
 /**
 * @brief CloseFdArgsFromConnection idempotency after prior close
 * @note 预期结果：第二次调用时 fdCount 已为 0，直接返回（无副作用）
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CloseFdArgsFromConnection_005, TestSize.Level0)
 {
@@ -1187,7 +1140,6 @@ extern "C" void HandleDiedPid(pid_t pid, uid_t uid, int status);
 * @brief RegisterSpawningFds with invalid and valid reg info
 * @note 预期结果：mgr/regInfo 为空、type 非法、count 为 0、fds 为空、count 超上限时
 *                 返回 NULL；合法输入注册成功且 type/count/pid/fd 拷贝正确、可被查找
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_RegisterSpawningFds_001, TestSize.Level0)
 {
@@ -1236,7 +1188,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_RegisterSpawningFds_001, TestSize.Level0)
 * @note 预期结果：mgr 为空或节点不存在时返回 APPSPAWN_ARG_INVALID；
 *                 成功后 fd 被关闭、
 *                 节点被移除，再次注销返回 APPSPAWN_ARG_INVALID
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_UnregisterSpawningFdsByPid_001, TestSize.Level0)
 {
@@ -1265,7 +1216,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_UnregisterSpawningFdsByPid_001, TestSize.
 * @brief RemoveSpawningFdsByPid and DeleteSpawningFds keep fds open
 * @note 预期结果：按 pid 移除或按指针删除节点时 fd 不被关闭（所有权转移），
 *                 pipe 仍然可用；DeleteSpawningFds 对空指针安全
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_RemoveSpawningFdsByPid_001, TestSize.Level0)
 {
@@ -1305,7 +1255,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_RemoveSpawningFdsByPid_001, TestSize.Leve
 * @brief CleanupSpawningFdsByPid cleans all nodes of target pid
 * @note 预期结果：仅清理目标 pid 的全部节点并关闭 fd，其他 pid 的节点保留；
 *                 GetSpawningFdsStats/DumpSpawningFds 统计与打印正确
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CleanupSpawningFdsByPid_001, TestSize.Level0)
 {
@@ -1362,7 +1311,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CleanupSpawningFdsByPid_001, TestSize.Lev
 * @brief OnConnectionUserCheck with allowed and denied uids
 * @note 预期结果：白名单 uid（root 0/app_fwk_update 3350/foundation 5523/
 *                 storage_manager 1090）允许连接，其余 uid 拒绝
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_OnConnectionUserCheck_001, TestSize.Level0)
 {
@@ -1382,7 +1330,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_OnConnectionUserCheck_001, TestSize.Level
 /**
 * @brief GetSpawnNameByRunMode for all run modes
 * @note 预期结果：每种运行模式映射到对应的服务名，非法模式返回空串
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_GetSpawnNameByRunMode_001, TestSize.Level0)
 {
@@ -1406,7 +1353,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_GetSpawnNameByRunMode_001, TestSize.Level
 * @brief WriteSignalInfoToFd with invalid args and normal json write
 * @note 预期结果：signalFd/pid/uid 非法时直接返回不写 fd；合法时向 signalFd 写入
 *                 包含 pid/uid/signal/bundleName 的 json 信息
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteSignalInfoToFd_001, TestSize.Level0)
 {
@@ -1456,7 +1402,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteSignalInfoToFd_001, TestSize.Level0)
 * @brief HandleDiedPid with no mgr, unknown pid and tracked process
 * @note 预期结果：无 mgr 或 pid 未注册时仅打印状态不崩溃；已注册进程被移入死亡队列，
 *                 reservedPid 命中时被清零
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_001, TestSize.Level0)
 {
@@ -1485,70 +1430,31 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_001, TestSize.Level0)
 }
 
 /**
- * @brief HandleDiedPid sets killReason=REASON_SIGNAL_KILL before STAGE_SERVER_APP_CLEANUP
- * @note 预期结果：进程被信号杀死（WIFSIGNALED）时，移入 diedQueue 的进程
- *                 killReason 被置为 REASON_SIGNAL_KILL
- *
+ * @brief HandleDiedPid killReason: SIGNAL_KILL and SIGNAL_EXIT
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_002, TestSize.Level0)
 {
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
-    EXPECT_EQ(mgr != nullptr, 1);
+    ASSERT_NE(mgr, nullptr);
 
-    AppSpawnedProcess *app = AddSpawnedProcess(424252, "died.signal.app", 0, false, 0);
-    EXPECT_EQ(app != nullptr, 1);
-
-    // waitpid status: WIFSIGNALED == true, WTERMSIG == SIGKILL(9)
-    int status = SIGKILL;
-    HandleDiedPid(424252, 0, status);
+    AddSpawnedProcess(424252, "died.signal.app", 0, false, 0);
+    HandleDiedPid(424252, 0, SIGKILL);
     EXPECT_EQ(GetSpawnedProcess(424252), nullptr);
 
-    AppSpawnedProcess *diedApp = nullptr;
+    AddSpawnedProcess(424253, "died.exit.app", 0, false, 0);
+    HandleDiedPid(424253, 0, 1 << 8);
+    EXPECT_EQ(GetSpawnedProcess(424253), nullptr);
+
     ListNode *node = mgr->diedQueue.next;
     while (node != &mgr->diedQueue) {
         AppSpawnedProcess *info = ListEntry(node, AppSpawnedProcess, node);
         if (info->pid == 424252) {
-            diedApp = info;
-            break;
+            EXPECT_EQ(info->killReason, REASON_SIGNAL_KILL);
+        } else if (info->pid == 424253) {
+            EXPECT_EQ(info->killReason, REASON_SIGNAL_EXIT);
         }
         node = node->next;
     }
-    ASSERT_NE(diedApp, nullptr);
-    EXPECT_EQ(diedApp->killReason, REASON_SIGNAL_KILL);
-    DeleteAppSpawnMgr(mgr);
-}
-
-/**
- * @brief HandleDiedPid sets killReason=REASON_SIGNAL_EXIT before STAGE_SERVER_APP_CLEANUP
- * @note 预期结果：进程正常退出（WIFEXITED）时，移入 diedQueue 的进程
- *                 killReason 被置为 REASON_SIGNAL_EXIT
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_003, TestSize.Level0)
-{
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
-    EXPECT_EQ(mgr != nullptr, 1);
-
-    AppSpawnedProcess *app = AddSpawnedProcess(424253, "died.exit.app", 0, false, 0);
-    EXPECT_EQ(app != nullptr, 1);
-
-    // waitpid status: WIFEXITED == true, WEXITSTATUS == 1
-    int status = 1 << 8;
-    HandleDiedPid(424253, 0, status);
-    EXPECT_EQ(GetSpawnedProcess(424253), nullptr);
-
-    AppSpawnedProcess *diedApp = nullptr;
-    ListNode *node = mgr->diedQueue.next;
-    while (node != &mgr->diedQueue) {
-        AppSpawnedProcess *info = ListEntry(node, AppSpawnedProcess, node);
-        if (info->pid == 424253) {
-            diedApp = info;
-            break;
-        }
-        node = node->next;
-    }
-    ASSERT_NE(diedApp, nullptr);
-    EXPECT_EQ(diedApp->killReason, REASON_SIGNAL_EXIT);
     DeleteAppSpawnMgr(mgr);
 }
 
@@ -1556,7 +1462,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_HandleDiedPid_003, TestSize.Level0)
 * @brief GetAppSpawnMsgFromBuffer with invalid msg header
 * @note 预期结果：magic 非法、msgLen 超上限或小于头长度、tlvCount 超上限或超过
 *                 msgLen 允许的上限时消息重建失败返回 -1
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsgNode_010, TestSize.Level0)
 {
@@ -1598,7 +1503,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnMsgNode_010, TestSize.Level0)
 /**
 * @brief DecodeAppSpawnMsg with invalid tlv length
 * @note 预期结果：tlvLen 为 0 或超出消息剩余长度时解码失败，返回 APPSPAWN_MSG_INVALID
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_001, TestSize.Level0)
 {
@@ -1646,7 +1550,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_001, TestSize.Level0)
 * @brief DecodeAppSpawnMsg with inconsistent ext tlv info
 * @note 预期结果：ext tlv 的 dataLen 大于 tlvLen 减去扩展头长度时校验失败，
 *                 解码返回 APPSPAWN_MSG_INVALID
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_002, TestSize.Level0)
 {
@@ -1698,7 +1601,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_002, TestSize.Level0)
 * @brief TerminateSpawnedProcess died queue eviction in nweb mode
 * @note 预期结果：nweb 模式下进程终止后移入死亡队列，队列最多保留
 *                 MAX_DIED_PROCESS_COUNT 个节点，超出后淘汰最老节点
-*
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_TerminateSpawnedProcess_001, TestSize.Level0)
 {
@@ -1724,7 +1626,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_TerminateSpawnedProcess_001, TestSize.Lev
 
 /**
  * @brief AppSpawningCtx AppSpawnMsg
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawningCtx_Msg_001, TestSize.Level0)
 {
@@ -2124,7 +2025,6 @@ static AppSpawnMsgNode *CreateDecodedTestMsg(uint32_t msgType)
 
 /**
  * @brief TraversalSpawnedProcess：无 mgr / 空队列 / 多 app 遍历计数
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_TraversalSpawnedProcess_001, TestSize.Level0)
 {
@@ -2151,7 +2051,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_TraversalSpawnedProcess_001, TestSize.Lev
 
 /**
  * @brief AppSpawningCtxTraversal：无 mgr / traversal 为空 / 有 ctx 遍历计数
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawningCtxTraversal_001, TestSize.Level0)
 {
@@ -2177,7 +2076,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawningCtxTraversal_001, TestSize.Lev
 
 /**
  * @brief ProcessAppSpawnDumpMsg：无 mgr / message 为空 / 空队列 dump 不崩溃
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessAppSpawnDumpMsg_001, TestSize.Level0)
 {
@@ -2198,7 +2096,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessAppSpawnDumpMsg_001, TestSize.Leve
 
 /**
  * @brief ProcessTerminationStatusMsg：无 mgr / 非 nweb / result 为空 / 无 pid TLV
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessTerminationStatusMsg_001, TestSize.Level0)
 {
@@ -2223,28 +2120,22 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessTerminationStatusMsg_001, TestSize
 }
 
 /**
- * @brief ProcessTerminationStatusMsg：nweb 模式 + message 无 render termination TLV
- *
+ * @brief ProcessTerminationStatusMsg nweb mode without render TLV
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessTerminationStatusMsg_002, TestSize.Level0)
 {
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
     ASSERT_NE(mgr, nullptr);
-
     AppSpawnMsgNode *msg = CreateDecodedTestMsg(MSG_GET_RENDER_TERMINATION_STATUS);
     ASSERT_NE(nullptr, msg);
-
     AppSpawnResult result = {0};
-    // 无 TLV_RENDER_TERMINATION_INFO，pid 读取失败
     EXPECT_EQ(-1, ProcessTerminationStatusMsg(msg, &result));
-
     DeleteAppSpawnMsg(&msg);
     DeleteAppSpawnMgr(mgr);
 }
 
 /**
  * @brief ProcessTerminationStatusMsg：nweb 模式 + render termination TLV 正路径
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessTerminationStatusMsg_003, TestSize.Level0)
 {
@@ -2280,38 +2171,26 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessTerminationStatusMsg_003, TestSize
 
 /**
  * @brief ProcessSignal：SIGCHLD（无子进程）与默认信号分支不崩溃
- *
  */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessSignal_001, TestSize.Level0)
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessSignal_WriteMsgToChild_001, TestSize.Level0)
 {
     struct signalfd_siginfo siginfo = {};
     siginfo.ssi_signo = SIGCHLD;
     siginfo.ssi_uid = 0;
     siginfo.ssi_pid = 0;
-    ProcessSignal(&siginfo);  // 无子进程，waitpid 返回 0，不进入回收集合
-
-    siginfo.ssi_signo = SIGUSR1;  // 默认分支
     ProcessSignal(&siginfo);
-}
+    siginfo.ssi_signo = SIGUSR1;
+    ProcessSignal(&siginfo);
 
-/**
- * @brief WriteMsgToChild：property 为空 / message 为空
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteMsgToChild_001, TestSize.Level0)
-{
     EXPECT_EQ(APPSPAWN_MSG_INVALID, WriteMsgToChild(nullptr, MODE_FOR_APP_SPAWN));
-
     AppSpawningCtx *property = CreateAppSpawningCtx();
     ASSERT_NE(nullptr, property);
-    EXPECT_EQ(APPSPAWN_MSG_INVALID, WriteMsgToChild(property, MODE_FOR_APP_SPAWN));  // message 为空
-
+    EXPECT_EQ(APPSPAWN_MSG_INVALID, WriteMsgToChild(property, MODE_FOR_APP_SPAWN));
     DeleteAppSpawningCtx(property);
 }
 
 /**
  * @brief SetPreforkProcessName：longProcName 有效时设置成功
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_SetPreforkProcessName_001, TestSize.Level0)
 {
@@ -2335,7 +2214,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_SetPreforkProcessName_001, TestSize.Level
 
 /**
  * @brief ClearPipeFd：正常 fd 关闭并置 -1，非正数 fd 不受影响
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearPipeFd_001, TestSize.Level0)
 {
@@ -2380,30 +2258,17 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ClearAndWritePrefork_NullChecks, TestSize
 }
 
 /**
- * @brief ProcessCheckpointReqMsg：连接/消息参数为空的提前返回分支
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessCheckpointReqMsg_001, TestSize.Level0)
-{
-    ProcessCheckpointReqMsg(nullptr, nullptr);  // 连接与消息均为空
-
-    AppSpawnConnection conn = {};
-    ProcessCheckpointReqMsg(&conn, nullptr);  // 消息为空
-}
-
-/**
  * @brief AppspawpnDevicedebugKill：args 为空 / signal 缺失 / 非数字
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppspawpnDevicedebugKill_001, TestSize.Level0)
 {
-    EXPECT_EQ(-1, AppspawpnDevicedebugKill(424242, nullptr));  // args 为空
+    EXPECT_EQ(-1, AppspawpnDevicedebugKill(424242, nullptr));
 
     cJSON *args = cJSON_CreateObject();
     ASSERT_NE(nullptr, args);
-    EXPECT_EQ(-1, AppspawpnDevicedebugKill(424242, args));  // 无 signal 字段
+    EXPECT_EQ(-1, AppspawpnDevicedebugKill(424242, args));
 
-    cJSON_AddStringToObject(args, "signal", "nine");  // signal 非数字
+    cJSON_AddStringToObject(args, "signal", "nine");
     EXPECT_EQ(-1, AppspawpnDevicedebugKill(424242, args));
 
     cJSON_Delete(args);
@@ -2411,7 +2276,6 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppspawpnDevicedebugKill_001, TestSize.Le
 
 /**
  * @brief AppspawpnDevicedebugKill：pid 未注册 / 进程不可调试
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppspawpnDevicedebugKill_002, TestSize.Level0)
 {
@@ -2433,23 +2297,7 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppspawpnDevicedebugKill_002, TestSize.Le
 }
 
 /**
- * @brief AppspawnDevicedebugDeal：非法 op 返回 -1
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppspawnDevicedebugDeal_001, TestSize.Level0)
-{
-    cJSON *args = cJSON_CreateObject();
-    ASSERT_NE(nullptr, args);
-
-    EXPECT_EQ(-1, AppspawnDevicedebugDeal("invalid-op", 424242, args));
-    EXPECT_EQ(-1, AppspawnDevicedebugDeal("kill", 424242, nullptr));  // 透传 args 为空
-
-    cJSON_Delete(args);
-}
-
-/**
  * @brief ProcessAppSpawnDeviceDebugMsg：消息为空 / 无 devicedebug 扩展信息
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessAppSpawnDeviceDebugMsg_001, TestSize.Level0)
 {
@@ -2467,107 +2315,73 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessAppSpawnDeviceDebugMsg_001, TestSi
 
 /**
  * @brief AppSpawnReqMsgFdGet：连接/消息/偏移数组为空的提前返回分支
- *
  */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnReqMsgFdGet_001, TestSize.Level0)
 {
     int fd = -1;
-    EXPECT_EQ(-1, AppSpawnReqMsgFdGet(nullptr, nullptr, "x", &fd));  // 连接为空
-
+    EXPECT_EQ(-1, AppSpawnReqMsgFdGet(nullptr, nullptr, "x", &fd));
     AppSpawnConnection conn = {};
-    EXPECT_EQ(-1, AppSpawnReqMsgFdGet(&conn, nullptr, "x", &fd));  // 消息为空
-
+    EXPECT_EQ(-1, AppSpawnReqMsgFdGet(&conn, nullptr, "x", &fd));
     AppSpawnMsgNode msg = {};
     uint8_t buf[16] = {0};
-    msg.buffer = buf;        // buffer 有效
-    msg.tlvOffset = nullptr; // tlvOffset 为空
+    msg.buffer = buf;
+    msg.tlvOffset = nullptr;
     EXPECT_EQ(-1, AppSpawnReqMsgFdGet(&conn, &msg, "x", &fd));
 }
 
 /**
  * @brief ProcessObserveProcessSignalMsg：消息为空直接返回
- *
  */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_ProcessObserveProcessSignalMsg_001, TestSize.Level0)
+/**
+ * @brief ProcessCheckpointReqMsg, ProcessObserveProcessSignalMsg, AppspawnDevicedebugDeal null checks
+ */
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_MsgNullChecks_001, TestSize.Level0)
 {
-    ProcessObserveProcessSignalMsg(nullptr, nullptr);  // 消息为空，直接返回
+    ProcessCheckpointReqMsg(nullptr, nullptr);
+    AppSpawnConnection conn = {};
+    ProcessCheckpointReqMsg(&conn, nullptr);
+    ProcessObserveProcessSignalMsg(nullptr, nullptr);
+
+    cJSON *args = cJSON_CreateObject();
+    ASSERT_NE(nullptr, args);
+    EXPECT_EQ(-1, AppspawnDevicedebugDeal("invalid-op", 424242, args));
+    EXPECT_EQ(-1, AppspawnDevicedebugDeal("kill", 424242, nullptr));
+    cJSON_Delete(args);
 }
 
 /**
- * @brief SendUnlockMsgToPrefork：content 为空 / 无 parent-child fd
- *
+ * @brief SendUnlockMsgToPrefork, SendPipeMsgToChild, CleanupPreforkChild null checks
  */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_SendUnlockMsgToPrefork_001, TestSize.Level0)
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_PreforkNullChecks_001, TestSize.Level0)
 {
-    EXPECT_EQ(APPSPAWN_ARG_INVALID, SendUnlockMsgToPrefork(nullptr, 100));  // content 为空
+    EXPECT_EQ(APPSPAWN_ARG_INVALID, SendUnlockMsgToPrefork(nullptr, 100));
 
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
     ASSERT_NE(mgr, nullptr);
     AppSpawnContent *content = GetAppSpawnContent();
     ASSERT_NE(content, nullptr);
-    EXPECT_EQ(APPSPAWN_ARG_INVALID, SendUnlockMsgToPrefork(content, 100));  // 无 parent-child fd
-    DeleteAppSpawnMgr(mgr);
-}
-
-/**
- * @brief SendPipeMsgToChild：无 parent-child fd 返回 ARG_INVALID
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_SendPipeMsgToChild_001, TestSize.Level0)
-{
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
-    ASSERT_NE(mgr, nullptr);
+    EXPECT_EQ(APPSPAWN_ARG_INVALID, SendUnlockMsgToPrefork(content, 100));
 
     AppSpawnPipeMsg pipeMsg = {};
-    EXPECT_EQ(APPSPAWN_ARG_INVALID, SendPipeMsgToChild(mgr, 424242, &pipeMsg));  // 无 fd
-    DeleteAppSpawnMgr(mgr);
-}
+    EXPECT_EQ(APPSPAWN_ARG_INVALID, SendPipeMsgToChild(mgr, 424242, &pipeMsg));
 
-/**
- * @brief CleanupPreforkChild：不存在的 pid 清理不崩溃
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_CleanupPreforkChild_001, TestSize.Level0)
-{
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
-    ASSERT_NE(mgr, nullptr);
-    CleanupPreforkChild(mgr, 424242);  // kill 失败被忽略 + 无 fd 可清理
+    CleanupPreforkChild(mgr, 424242);
     DeleteAppSpawnMgr(mgr);
 }
 
 /**
  * @brief TransferPreforkFdToForkCtx：无 child-parent fd 返回 ARG_INVALID
- *
  */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_TransferPreforkFdToForkCtx_001, TestSize.Level0)
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_PreforkForkColdStart_001, TestSize.Level0)
 {
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
     ASSERT_NE(mgr, nullptr);
-
     AppSpawningCtx *property = CreateAppSpawningCtx();
     ASSERT_NE(nullptr, property);
-    EXPECT_EQ(APPSPAWN_ARG_INVALID, TransferPreforkFdToForkCtx(mgr, 424242, property));  // 无 fd
-
-    DeleteAppSpawningCtx(property);
-    DeleteAppSpawnMgr(mgr);
-}
-
-/**
- * @brief AppSpawnColdStartApp：进程名为空返回 ARG_INVALID
- *
- */
-HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnColdStartApp_001, TestSize.Level0)
-{
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
-    ASSERT_NE(mgr, nullptr);
+    EXPECT_EQ(APPSPAWN_ARG_INVALID, TransferPreforkFdToForkCtx(mgr, 424242, property));
     AppSpawnContent *content = GetAppSpawnContent();
     ASSERT_NE(content, nullptr);
-
-    AppSpawningCtx *property = CreateAppSpawningCtx();
-    ASSERT_NE(nullptr, property);
-    // message 为空 -> GetProcessName 返回 NULL
     EXPECT_EQ(APPSPAWN_ARG_INVALID, AppSpawnColdStartApp(content, &property->client));
-
     DeleteAppSpawningCtx(property);
     DeleteAppSpawnMgr(mgr);
 }
@@ -2575,33 +2389,15 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_AppSpawnColdStartApp_001, TestSize.Level0
 // ==================== GetProcessTerminationStatus tests ====================
 
 /**
- * @brief GetProcessTerminationStatus with pid <= 0
- *        Covers: line 273-274 (pid <= 0 -> return 0)
+ * @brief GetProcessTerminationStatus with pid<=0 and non-existent pid
  */
-HWTEST_F(AppSpawnAppMgrTest, GetProcessTerminationStatus_ZeroPid_001, TestSize.Level0)
+HWTEST_F(AppSpawnAppMgrTest, GetProcessTerminationStatus_Combined_001, TestSize.Level0)
 {
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
     ASSERT_NE(mgr, nullptr);
-    int ret = GetProcessTerminationStatus(0);
-    EXPECT_EQ(ret, 0);
-    ret = GetProcessTerminationStatus(-1);
-    EXPECT_EQ(ret, 0);
-    DeleteAppSpawnMgr(mgr);
-}
-
-/**
- * @brief GetProcessTerminationStatus with non-existent pid
- *        Covers: line 269-292 (pid not in diedQueue, GetSpawnedProcess returns NULL -> return -1)
- *        pid 1 (init) is not in appspawn's process queue, so GetSpawnedProcess returns NULL
- *        and the function returns -1 without reaching the kill path.
- */
-HWTEST_F(AppSpawnAppMgrTest, GetProcessTerminationStatus_KillPath_001, TestSize.Level0)
-{
-    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
-    ASSERT_NE(mgr, nullptr);
-    // pid 1 (init) is not a spawned app, GetSpawnedProcess returns NULL -> return -1
-    int ret = GetProcessTerminationStatus(1);
-    EXPECT_EQ(ret, -1);
+    EXPECT_EQ(GetProcessTerminationStatus(0), 0);
+    EXPECT_EQ(GetProcessTerminationStatus(-1), 0);
+    EXPECT_EQ(GetProcessTerminationStatus(1), -1);
     DeleteAppSpawnMgr(mgr);
 }
 
@@ -2689,33 +2485,17 @@ HWTEST_F(AppSpawnAppMgrTest, ProcessAppSpawnDumpMsg_PtyName_001, TestSize.Level0
 // ==================== DumpExtData tests ====================
 
 /**
- * @brief DumpExtData with dumpNode set
- *        Covers: line 427-428 (extData->dumpNode != NULL -> call dumpNode)
+ * @brief DumpExtData with dumpNode set and NULL
  */
-HWTEST_F(AppSpawnAppMgrTest, DumpExtData_WithDumpNode_001, TestSize.Level0)
+HWTEST_F(AppSpawnAppMgrTest, DumpExtData_BothCases_001, TestSize.Level0)
 {
-    // Create a fake extData with dumpNode
     AppSpawnExtData extData = {};
     OH_ListInit(&extData.node);
     extData.dataId = 0;
     extData.dumpNode = [](AppSpawnExtData *data) { (void)data; };
+    EXPECT_EQ(DumpExtData(&extData.node, nullptr), 0);
 
-    int ret = DumpExtData(&extData.node, nullptr);
-    EXPECT_EQ(ret, 0);
-}
-
-/**
- * @brief DumpExtData with dumpNode NULL
- *        Covers: line 427 (extData->dumpNode == NULL -> skip)
- */
-HWTEST_F(AppSpawnAppMgrTest, DumpExtData_NullDumpNode_001, TestSize.Level0)
-{
-    AppSpawnExtData extData = {};
-    OH_ListInit(&extData.node);
-    extData.dataId = 0;
     extData.dumpNode = nullptr;
-
-    int ret = DumpExtData(&extData.node, nullptr);
-    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(DumpExtData(&extData.node, nullptr), 0);
 }
 }  // namespace OHOS
