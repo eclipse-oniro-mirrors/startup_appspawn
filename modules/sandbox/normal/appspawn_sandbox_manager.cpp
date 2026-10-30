@@ -19,9 +19,6 @@
 #include "appspawn_trace.h"
 #include "appspawn_utils.h"
 #include "sandbox_core.h"
-#ifdef WITH_CONTROLLED_APP
-#include "sandbox_controlled_app.h"
-#endif
 
 #define USER_ID_SIZE 16
 #define DIR_MODE 0711
@@ -81,14 +78,6 @@ static int UninstallDebugSandbox(AppSpawnMgr *content, AppSpawningCtx *property)
     return OHOS::AppSpawn::SandboxCore::UninstallDebugSandbox(content, property);
 }
 
-#ifdef WITH_CONTROLLED_APP
-static int LoadControlledAppList(AppSpawnMgr *content, AppSpawningCtx *property)
-{
-    int ret = OHOS::AppSpawn::ControlledAppCache::GetInstance().ComputeForSpawn(property);
-    return (ret < 0) ? -1 : 0;
-}
-#endif
-
 static int InstallDebugSandbox(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_CHECK(property != nullptr && content != nullptr, return -1,
@@ -102,9 +91,6 @@ MODULE_CONSTRUCTOR(void)
     (void)AddServerStageHook(STAGE_SERVER_PRELOAD, HOOK_PRIO_SANDBOX,
                              OHOS::AppSpawn::SandboxCommon::LoadAppSandboxConfigCJson);
     (void)AddPreloadHook(HOOK_PRIO_COMMON, OHOS::AppSpawn::SandboxCore::LoadCloneAppGrantDownloadConfig);
-#ifdef WITH_CONTROLLED_APP
-    (void)AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_SANDBOX, LoadControlledAppList);
-#endif
     (void)AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_COMMON, SpawnMountDirToShared);
     (void)AddAppSpawnHook(STAGE_CHILD_EXECUTE, HOOK_PRIO_SANDBOX, SetAppSandboxProperty);
     (void)AddAppSpawnHook(STAGE_PARENT_UNINSTALL, HOOK_PRIO_SANDBOX, UninstallDebugSandbox);

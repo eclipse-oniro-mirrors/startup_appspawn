@@ -16,8 +16,6 @@
 #ifndef SANDBOX_CONTROLLED_APP_H
 #define SANDBOX_CONTROLLED_APP_H
 
-#ifdef WITH_CONTROLLED_APP
-
 #include <atomic>
 #include <map>
 #include <set>
@@ -53,7 +51,5 @@ private:
 
 } // namespace AppSpawn
 } // namespace OHOS
-
-#endif // WITH_CONTROLLED_APP
 
 #endif

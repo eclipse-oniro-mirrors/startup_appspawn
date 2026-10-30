@@ -16,6 +16,7 @@
 #include "sandbox_controlled_app.h"
 
 #include <cstdlib>
+#include "appspawn_hook.h"
 #include "appspawn_manager.h"
 #include "appspawn_utils.h"
 #include "parameter.h"
@@ -178,3 +179,15 @@ int32_t ControlledAppCache::ComputeForSpawn(const AppSpawningCtx *property)
 
 } // namespace AppSpawn
 } // namespace OHOS
+
+static int LoadControlledAppList(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    int ret = OHOS::AppSpawn::ControlledAppCache::GetInstance().ComputeForSpawn(property);
+    return (ret < 0) ? -1 : 0;
+}
+
+MODULE_CONSTRUCTOR(void)
+{
+    APPSPAWN_LOGV("Register controlled app hook");
+    (void)AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_SANDBOX, LoadControlledAppList);
+}
