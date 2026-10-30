@@ -93,19 +93,9 @@ typedef struct {
     struct { const uint32_t *gids; uint32_t gidCount; } gid;
 } PermissionAttrMap;
 
-#ifdef APPSPAWN_TEST
-// test-only gid fixtures; never match a real SPM permission
-static const uint32_t g_testAmbientGids[] = { 9999, 9998 };   // AMBIENT_GID entry: ambient-raise + gid-append
-static const uint32_t g_testGidOnlyGids[] = { 7001, 7002 };   // GID_ONLY entry: CAP_NONE + gid-append
-#endif
-
 static const uint32_t GID_USBMONS[] = { 7401 };
 
 static const PermissionAttrMap g_permissionAttrMap[] = {
-#ifdef APPSPAWN_TEST
-    {"ohos.permission.test.AMBIENT_GID", {CAP_NET_RAW, true}, {g_testAmbientGids, ARRAY_LENGTH(g_testAmbientGids)}},
-    {"ohos.permission.test.GID_ONLY", {APPSPAWN_CAP_NONE, false}, {g_testGidOnlyGids, ARRAY_LENGTH(g_testGidOnlyGids)}},
-#endif
     {"ohos.permission.kernel.NET_RAW", {CAP_NET_RAW, false}, {NULL, 0}},
     {"ohos.permission.kernel.USB_CAPTURE", {APPSPAWN_CAP_NONE, false}, {GID_USBMONS, ARRAY_LENGTH(GID_USBMONS)}},
 };
@@ -246,6 +236,7 @@ APPSPAWN_STATIC int SetAmbientCapabilities(const AppSpawningCtx *property, uint6
     }
 
     // Raise ambient caps configured per-entry in g_permissionAttrMap.
+    // Currently a no-op: no map entry has setAmbient=true, so extAmbientCaps is always 0.
     // May overlap with CAP_KILL/CAP_FOWNER above; PR_CAP_AMBIENT raise is idempotent.
     for (int cap = 0; cap < (int)BITLEN32; cap++) {
         if ((extAmbientCaps & CAP_TO_MASK(cap)) == 0) {
