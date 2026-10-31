@@ -4046,7 +4046,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_001, TestSize.Leve
 
 /**
  * @brief Test SetAmbientCapabilities with CUSTOM_SANDBOX flag
- * Expected: Sets CAP_DAC_OVERRIDE and CAP_KILL
+ * Expected: Custom sandbox skips CAP_DAC_OVERRIDE and CAP_KILL
  * Branch: CheckAppMsgFlagsSet(CUSTOM_SANDBOX) == true
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_002, TestSize.Level0)
@@ -4106,7 +4106,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_003, TestSize.Leve
 
 /**
  * @brief Test SetAmbientCapabilities with both sandbox flags
- * Expected: Sets CAP_DAC_OVERRIDE, CAP_KILL, and CAP_FOWNER
+ * Expected: Custom sandbox preserves CAP_FOWNER only
  * Branch: Both flags set
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_004, TestSize.Level0)
@@ -4243,7 +4243,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_002, TestSize.Level0)
 
 /**
  * @brief Test SetCapabilities with CUSTOM_SANDBOX flag
- * Expected: CAP_KILL is added to baseCaps
+ * Expected: Custom sandbox excludes CAP_DAC_OVERRIDE and CAP_KILL from baseCaps
  * Branch: CheckAppMsgFlagsSet(CUSTOM_SANDBOX) == true
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_003, TestSize.Level0)
@@ -4313,7 +4313,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_004, TestSize.Level0)
 
 /**
  * @brief Test SetCapabilities with all flags and NET_RAW
- * Expected: All capabilities are combined
+ * Expected: Custom sandbox preserves FOWNER and NET_RAW, excluding DAC_OVERRIDE and KILL
  * Branch: All conditions true
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_005, TestSize.Level0)
