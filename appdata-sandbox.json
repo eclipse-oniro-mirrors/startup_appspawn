@@ -207,6 +207,11 @@
                     "sandbox-flags" : [ "bind", "rec" ],
                     "check-action-status": "false"
                 }, {
+                    "src-path" : "/mnt/data/<currentUserId>/udmf_fuse",
+                    "sandbox-path" : "/data/storage/el2/udmf",
+                    "sandbox-flags" : [ "bind", "rec" ],
+                    "check-action-status": "false"
+                }, {
                     "src-path" : "/vendor/etc/passthrough",
                     "sandbox-path" : "/vendor/etc/passthrough",
                     "sandbox-flags" : [ "bind", "rec" ],
