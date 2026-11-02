@@ -154,6 +154,9 @@ static bool g_startupPrelinkEnable = true;
 static bool g_enterpriseSpaceExist  = false;
 static constexpr uint32_t ENTERPRISE_SPACE_VALUE_LEN = 128;
 static char g_enterpriseSpaceValue[ENTERPRISE_SPACE_VALUE_LEN] = {0};
+static constexpr uint32_t PARAM_MOCK_VALUE_LEN = 128;
+static char g_cryptoStatus[PARAM_MOCK_VALUE_LEN] = {0};
+static char g_dlpErrorCode[PARAM_MOCK_VALUE_LEN] = {0};
 int SetParameter(const char *key, const char *value)
 {
     if (strcmp(key, "const.startup.prelink.enable") == 0) {
@@ -163,6 +166,12 @@ int SetParameter(const char *key, const char *value)
     if (strcmp(key, "persist.space_mgr_service.enterprise_space_enable") == 0) {
         g_enterpriseSpaceExist = strcpy_s(g_enterpriseSpaceValue, sizeof(g_enterpriseSpaceValue), value) == 0;
         return g_enterpriseSpaceExist ? 0 : -1;
+    }
+    if (strcmp(key, "security.dlp.transparent.crypto.status") == 0) {
+        return strcpy_s(g_cryptoStatus, sizeof(g_cryptoStatus), value) == 0 ? 0 : -1;
+    }
+    if (strcmp(key, "startup.appspawn.dlp_errorcode") == 0) {
+        return strcpy_s(g_dlpErrorCode, sizeof(g_dlpErrorCode), value) == 0 ? 0 : -1;
     }
 
     return 0;
@@ -239,7 +248,7 @@ static int GetParameterForEnterpriseSpace(char *value, uint32_t len)
     }
     return strcpy_s(value, len, g_enterpriseSpaceValue) == 0 ? strlen(g_enterpriseSpaceValue) : -1;
 }
- 
+
 static int GetParameterForReqMgrTimeout(uint32_t count, const char *def, char *value, uint32_t len)
 {
     const char *tmp = def;
@@ -251,6 +260,17 @@ static int GetParameterForReqMgrTimeout(uint32_t count, const char *def, char *v
         tmp = "5";
     }
     return strcpy_s(value, len, tmp) == 0 ? strlen(tmp) : -1;
+}
+
+static int GetParameterExt(const char *key, char *value, uint32_t len)
+{
+    if (strcmp(key, "security.dlp.transparent.crypto.status") == 0) {
+        return strcpy_s(value, len, g_cryptoStatus) == 0 ? strlen(g_cryptoStatus) : -1;
+    }
+    if (strcmp(key, "startup.appspawn.dlp_errorcode") == 0) {
+        return strcpy_s(value, len, g_dlpErrorCode) == 0 ? strlen(g_dlpErrorCode) : -1;
+    }
+    return -1;
 }
 
 int GetParameter(const char *key, const char *def, char *value, uint32_t len)
@@ -285,7 +305,7 @@ int GetParameter(const char *key, const char *def, char *value, uint32_t len)
     if (strcmp(key, "persist.space_mgr_service.enterprise_space_enable") == 0) {
         return GetParameterForEnterpriseSpace(value, len);
     }
-    return -1;
+    return GetParameterExt(key, value, len);
 }
 
 int InUpdaterMode(void)

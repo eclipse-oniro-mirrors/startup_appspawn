@@ -30,9 +30,6 @@
 #include "sandbox_def.h"
 #include "sandbox_clone_app.h"
 #include "config_policy_utils.h"
-#ifdef WITH_CONTROLLED_APP
-#include "sandbox_controlled_app.h"
-#endif
 #include "parameter.h"
 #include "tokenid_kit.h"
 #include "policycoreutils.h"

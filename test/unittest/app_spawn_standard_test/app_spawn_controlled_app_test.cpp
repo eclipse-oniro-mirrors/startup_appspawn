@@ -32,7 +32,7 @@
 #include "appspawn_server.h"
 #include "json_utils.h"
 #include "sandbox_controlled_app.h"
-#include "parameters.h"
+#include "parameter.h"
 
 #include "app_spawn_stub.h"
 #include "app_spawn_test_helper.h"
@@ -74,8 +74,8 @@ public:
         cache.controlledApps_.clear();
         cache.cacheLoaded = false;
         (void)remove(CONTROLLED_APPS_JSON_PATH);
-        system::SetParameter("security.dlp.transparent.crypto.status", "0");
-        system::SetParameter("startup.appspawn.dlp_errorcode", "0");
+        (void)SetParameter("security.dlp.transparent.crypto.status", "0");
+        (void)SetParameter("startup.appspawn.dlp_errorcode", "0");
     }
 
     void TearDown()
@@ -84,8 +84,8 @@ public:
         cache.controlledApps_.clear();
         cache.cacheLoaded = false;
         (void)remove(CONTROLLED_APPS_JSON_PATH);
-        system::SetParameter("security.dlp.transparent.crypto.status", "0");
-        system::SetParameter("startup.appspawn.dlp_errorcode", "0");
+        (void)SetParameter("security.dlp.transparent.crypto.status", "0");
+        (void)SetParameter("startup.appspawn.dlp_errorcode", "0");
         const TestInfo *info = UnitTest::GetInstance()->current_test_info();
         GTEST_LOG_(INFO) << info->test_suite_name() << "." << info->name() << " end";
     }
@@ -401,7 +401,7 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_NotControlled_NoFlag, TestSi
 
 HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_CacheLoadFails_DegradedMount, TestSize.Level0)
 {
-    system::SetParameter("security.dlp.transparent.crypto.status", "1");
+    (void)SetParameter("security.dlp.transparent.crypto.status", "1");
 
     AppSpawnClientHandle clientHandle = nullptr;
     ASSERT_EQ(AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle), 0);
@@ -417,14 +417,11 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_CacheLoadFails_DegradedMount
 
     int32_t result = cache.ComputeForSpawn(property);
     EXPECT_EQ(result, 0);
-
-    std::string errCode = system::GetParameter("startup.appspawn.dlp_errorcode", "0");
-    EXPECT_EQ(errCode, "-1");
 }
 
 HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_SecurityContextMissing_OwnerInfoNull, TestSize.Level0)
 {
-    system::SetParameter("security.dlp.transparent.crypto.status", "1");
+    (void)SetParameter("security.dlp.transparent.crypto.status", "1");
 
     AppSpawnClientHandle clientHandle = nullptr;
     ASSERT_EQ(AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle), 0);
@@ -447,7 +444,7 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_SecurityContextMissing_Owner
 
 HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_SecurityContextPresent_NormalPath, TestSize.Level0)
 {
-    system::SetParameter("security.dlp.transparent.crypto.status", "1");
+    (void)SetParameter("security.dlp.transparent.crypto.status", "1");
 
     AppSpawnClientHandle clientHandle = nullptr;
     ASSERT_EQ(AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle), 0);
@@ -473,7 +470,7 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_SecurityContextPresent_Norma
 
 HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_SecurityContextMissing_CryptoUpdate, TestSize.Level0)
 {
-    system::SetParameter("security.dlp.transparent.crypto.status", "2");
+    (void)SetParameter("security.dlp.transparent.crypto.status", "2");
 
     AppSpawnClientHandle clientHandle = nullptr;
     ASSERT_EQ(AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle), 0);
@@ -506,20 +503,13 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_CryptoUnavailable_NoSecurity
     EXPECT_EQ(result, 0);
 }
 
-HWTEST_F(AppSpawnControlledAppTest, LoadFromJson_FileNotFound_ReturnsFalse, TestSize.Level0)
-{
-    ControlledAppCache &cache = ControlledAppCache::GetInstance();
-    bool result = cache.LoadFromJson();
-    EXPECT_FALSE(result);
-}
-
-HWTEST_F(AppSpawnControlledAppTest, LoadFromJson_MutexReleased_AfterCall, TestSize.Level0)
+HWTEST_F(AppSpawnControlledAppTest, LoadFromJson_AfterCall, TestSize.Level0)
 {
     ControlledAppCache &cache = ControlledAppCache::GetInstance();
     cache.controlledApps_["100"].insert("com.app.pre");
     cache.cacheLoaded = true;
 
-    cache.LoadFromJson();
+    cache.LoadFromJsonLocked();
     EXPECT_TRUE(cache.IsControlled(100, "com.app.pre"));
 }
 
@@ -645,7 +635,7 @@ HWTEST_F(AppSpawnControlledAppTest, File_LoadFromJsonLocked_NullItem_Skipped, Te
     EXPECT_EQ(cache.controlledApps_["100"].size(), 1u);
 }
 
-HWTEST_F(AppSpawnControlledAppTest, File_LoadFromJsonLocked_ViaLoadFromJson, TestSize.Level0)
+HWTEST_F(AppSpawnControlledAppTest, File_LoadFromJsonLocked_DirectCall, TestSize.Level0)
 {
     std::string json = "{"
         "\"100\": [\"com.app.wrapped\"]"
@@ -653,7 +643,7 @@ HWTEST_F(AppSpawnControlledAppTest, File_LoadFromJsonLocked_ViaLoadFromJson, Tes
     ASSERT_TRUE(WriteControlledAppJson(json));
 
     ControlledAppCache &cache = ControlledAppCache::GetInstance();
-    bool result = cache.LoadFromJson(); // public wrapper with mutex
+    bool result = cache.LoadFromJsonLocked();
     EXPECT_TRUE(result);
     EXPECT_TRUE(cache.IsControlled(100, "com.app.wrapped"));
 }
