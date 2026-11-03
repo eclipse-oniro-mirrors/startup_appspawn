@@ -215,7 +215,7 @@ static int HnpGenerateSoftLink(HnpInstallInfo *hnpInfo, HnpCfgInfo *hnpCfg)
 * 如果hnpFile与installInfo->independentSignHnpPaths中某个文件的realpath一致
 * 则认为该hnp为独立签名hnp 此时返回true
 */
-static bool CheckIsSignHnp(const char *hnpFile, HapInstallInfo *installInfo)
+APPSPAWN_STATIC bool CheckIsSignHnp(const char *hnpFile, HapInstallInfo *installInfo)
 {
     HNP_ONLY_EXPER(hnpFile == NULL || installInfo == NULL || installInfo->signHnpPaths == NULL ||
         installInfo->signHnpSize <= 0, return false);
@@ -234,7 +234,7 @@ static bool CheckIsSignHnp(const char *hnpFile, HapInstallInfo *installInfo)
     return isSign;
 }
 
-static int HnpInstall(const char *hnpFile, HnpInstallInfo *hnpInfo, HnpCfgInfo *hnpCfg,
+APPSPAWN_STATIC int HnpInstall(const char *hnpFile, HnpInstallInfo *hnpInfo, HnpCfgInfo *hnpCfg,
     HnpSignMapInfo *hnpSignMapInfos, int *count)
 {
     int ret;
@@ -917,7 +917,7 @@ APPSPAWN_STATIC void HapInstallInfoDestory(HapInstallInfo **installInfo)
 
 #ifdef CODE_SIGNATURE_ENABLE
 __attribute__((no_sanitize("cfi")))
-static int BssInstall(HnpSignMapInfo *hnpSignMapInfos, int count, HapInstallInfo *installInfo, int execFilesCount)
+APPSPAWN_STATIC int BssInstall(HnpSignMapInfo *hnpSignMapInfos, int count, HapInstallInfo *installInfo, int execFilesCount)
 {
     HNP_INFO_CHECK(access(BIN_SEC_PATH, F_OK) == 0, return 0,
         "bin file not exist ignore install bss %{public}d", errno);
@@ -1025,7 +1025,7 @@ static int HnpInstallPre(HapInstallInfo *installInfo)
 /**
 * 获取-S参数，解析获取realpath并设置到installInfo->signHnps中
 */
-static int HandleSignParameter(HapInstallInfo *installInfo, const char *signHnp)
+APPSPAWN_STATIC int HandleSignParameter(HapInstallInfo *installInfo, const char *signHnp)
 {
     HNP_ERROR_CHECK(signHnp != NULL && strstr(signHnp, "..") == NULL,
         return HNP_ERRNO_PARAM_INVALID, "invalid signHnp param %{public}s", signHnp);

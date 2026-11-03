@@ -15,12 +15,18 @@
 
 #include <cerrno>
 #include <cstring>
+#include <map>
+#include <set>
 #include <gtest/gtest.h>
 #include <cJSON.h>
 
 #include "appspawn.h"
 #include "appspawn_hook.h"
 #include "appspawn_manager.h"
+#include "appspawn_msg.h"
+#include "appspawn_server.h"
+#include "appspawn_service.h"
+#include "securec.h"
 #include "appspawn_ace_mock_test.h"
 
 using namespace testing;
@@ -34,6 +40,12 @@ APPSPAWN_STATIC int PreLinkAppSpawn(AppSpawnMgr *content);
 APPSPAWN_STATIC int DlopenAppSpawn(AppSpawnMgr *content);
 APPSPAWN_STATIC int ProcessSpawnDlopenMsg(AppSpawnMgr *content);
 APPSPAWN_STATIC int ProcessSpawnDlcloseMsg(AppSpawnMgr *content);
+APPSPAWN_STATIC int PrelinkerMain(int prelinkMemfd);
+APPSPAWN_STATIC void PrelinkLibs();
+APPSPAWN_STATIC bool IsPrelinkEnable();
+APPSPAWN_STATIC void GetNames(const cJSON *root, std::set<std::string> &names, std::string key);
+APPSPAWN_STATIC int BuildFdInfoMap(const AppSpawnMsgNode *message, std::map<std::string, int> &fdMap, int isColdRun);
+APPSPAWN_STATIC void ClearEnvAndReturnSuccess(AppSpawnContent *content, AppSpawnClient *client);
 
 namespace OHOS {
 class AppSpawnAceTest : public testing::Test {
@@ -467,4 +479,251 @@ HWTEST_F(AppSpawnAceTest, App_Spawn_Ace_ProcessSpawnDlcloseMsg_001, TestSize.Lev
     DeleteAppSpawnMgr(mgr);
     EXPECT_EQ(ret, 0);
 }
+
+// ==================== GetNames tests ====================
+
+/**
+ * @brief GetNames with valid JSON array
+ *        Covers: line 72-86, names inserted into set
+ */
+HWTEST_F(AppSpawnAceTest, GetNames_Valid_001, TestSize.Level0)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON *arr = cJSON_CreateArray();
+    cJSON_AddItemToArray(arr, cJSON_CreateString("module1"));
+    cJSON_AddItemToArray(arr, cJSON_CreateString("module2"));
+    cJSON_AddItemToObject(root, "napi", arr);
+
+    std::set<std::string> names;
+    GetNames(root, names, "napi");
+    EXPECT_EQ(names.size(), 2u);
+    EXPECT_EQ(names.count("module1"), 1u);
+    EXPECT_EQ(names.count("module2"), 1u);
+
+    cJSON_Delete(root);
+}
+
+/**
+ * @brief GetNames with key not found
+ *        Covers: namesJson == nullptr -> return
+ */
+HWTEST_F(AppSpawnAceTest, GetNames_KeyNotFound_001, TestSize.Level0)
+{
+    cJSON *root = cJSON_CreateObject();
+    std::set<std::string> names;
+    GetNames(root, names, "nonexistent");
+    EXPECT_EQ(names.size(), 0u);
+    cJSON_Delete(root);
+}
+
+/**
+ * @brief GetNames with null entries in array
+ *        Covers: name == nullptr -> continue
+ */
+HWTEST_F(AppSpawnAceTest, GetNames_NullEntry_001, TestSize.Level0)
+{
+    cJSON *root = cJSON_CreateObject();
+    cJSON *arr = cJSON_CreateArray();
+    cJSON_AddItemToArray(arr, cJSON_CreateNull());
+    cJSON_AddItemToArray(arr, cJSON_CreateString("valid"));
+    cJSON_AddItemToObject(root, "napi", arr);
+
+    std::set<std::string> names;
+    GetNames(root, names, "napi");
+    EXPECT_EQ(names.size(), 1u);
+
+    cJSON_Delete(root);
+}
+
+// ==================== IsPrelinkEnable tests ====================
+
+/**
+ * @brief IsPrelinkEnable with param set to "true"
+ *        Covers: strcmp(buffer, "true") == 0 -> return true
+ */
+HWTEST_F(AppSpawnAceTest, IsPrelinkEnable_True_001, TestSize.Level0)
+{
+    SetParameter("const.startup.prelink.enable", "true");
+    bool ret = IsPrelinkEnable();
+    EXPECT_TRUE(ret);
+}
+
+/**
+ * @brief IsPrelinkEnable with param set to "false"
+ *        Covers: strcmp != 0 -> return false
+ */
+HWTEST_F(AppSpawnAceTest, IsPrelinkEnable_False_001, TestSize.Level0)
+{
+    SetParameter("const.startup.prelink.enable", "false");
+    bool ret = IsPrelinkEnable();
+    EXPECT_FALSE(ret);
+}
+
+// ==================== PrelinkerMain tests ====================
+
+/**
+ * @brief PrelinkerMain with invalid fd (fcntl fails)
+ *        Covers: fcntl fails -> return -1
+ */
+HWTEST_F(AppSpawnAceTest, PrelinkerMain_InvalidFd_001, TestSize.Level0)
+{
+    int ret = PrelinkerMain(-1);
+    EXPECT_EQ(ret, -1);
+}
+
+// ==================== BuildFdInfoMap tests ====================
+
+/**
+ * @brief BuildFdInfoMap with null message
+ *        Covers: message == nullptr -> return -1
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_NullMessage_001, TestSize.Level0)
+{
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(nullptr, fdMap, 0);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief BuildFdInfoMap with null buffer
+ *        Covers: message->buffer == nullptr -> return -1
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_NullBuffer_001, TestSize.Level0)
+{
+    AppSpawnMsgNode msgNode = {};
+    msgNode.buffer = nullptr;
+    msgNode.tlvOffset = nullptr;
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(&msgNode, fdMap, 0);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief BuildFdInfoMap with null tlvOffset
+ *        Covers: message->tlvOffset == nullptr -> return -1
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_NullTlvOffset_001, TestSize.Level0)
+{
+    uint8_t buffer[64] = {0};
+    AppSpawnMsgNode msgNode = {};
+    msgNode.buffer = buffer;
+    msgNode.tlvOffset = nullptr;
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(&msgNode, fdMap, 0);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief BuildFdInfoMap non-coldrun with null connection
+ *        Covers: message->connection == nullptr -> return -1
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_NullConnection_001, TestSize.Level0)
+{
+    uint8_t buffer[64] = {0};
+    uint32_t offsets[TLV_MAX + 2];
+    for (uint32_t i = 0; i < TLV_MAX + 2; i++) {
+        offsets[i] = INVALID_OFFSET;
+    }
+    AppSpawnMsgNode msgNode = {};
+    msgNode.buffer = buffer;
+    msgNode.tlvOffset = offsets;
+    msgNode.tlvCount = 0;
+    msgNode.connection = nullptr;
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(&msgNode, fdMap, 0);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief BuildFdInfoMap non-coldrun with zero fdCount
+ *        Covers: recvCtx.fdCount <= 0 -> return 0
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_ZeroFdCount_001, TestSize.Level0)
+{
+    uint8_t buffer[64] = {0};
+    uint32_t offsets[TLV_MAX + 2];
+    for (uint32_t i = 0; i < TLV_MAX + 2; i++) {
+        offsets[i] = INVALID_OFFSET;
+    }
+    AppSpawnConnection conn = {};
+    conn.receiverCtx.fdCount = 0;
+    AppSpawnMsgNode msgNode = {};
+    msgNode.buffer = buffer;
+    msgNode.tlvOffset = offsets;
+    msgNode.tlvCount = 0;
+    msgNode.connection = &conn;
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(&msgNode, fdMap, 0);
+    EXPECT_EQ(ret, 0);
+}
+
+/**
+ * @brief BuildFdInfoMap with invalid tlv offset
+ *        Covers: tlvOffset[index] == INVALID_OFFSET -> return -1
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_InvalidOffset_001, TestSize.Level0)
+{
+    uint8_t buffer[64] = {0};
+    uint32_t offsets[TLV_MAX + 2];
+    for (uint32_t i = 0; i < TLV_MAX + 2; i++) {
+        offsets[i] = INVALID_OFFSET;
+    }
+    AppSpawnConnection conn = {};
+    conn.receiverCtx.fdCount = 3;
+    AppSpawnMsgNode msgNode = {};
+    msgNode.buffer = buffer;
+    msgNode.tlvOffset = offsets;
+    msgNode.tlvCount = 1;
+    msgNode.connection = &conn;
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(&msgNode, fdMap, 0);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief BuildFdInfoMap coldrun with env fd
+ *        Covers: isColdRun path, getenv -> fdMap populated
+ */
+HWTEST_F(AppSpawnAceTest, BuildFdInfoMap_ColdRun_001, TestSize.Level0)
+{
+    uint8_t buffer[256] = {0};
+    uint32_t offsets[TLV_MAX + 2];
+    for (uint32_t i = 0; i < TLV_MAX + 2; i++) {
+        offsets[i] = INVALID_OFFSET;
+    }
+
+    AppSpawnTlvExt tlv = {};
+    tlv.tlvType = TLV_MAX;
+    sprintf_s(tlv.tlvName, sizeof(tlv.tlvName), "%s", MSG_EXT_NAME_APP_FD);
+    const char *key = "ipc-fd";
+    tlv.dataLen = strlen(key) + 1;
+    tlv.tlvLen = sizeof(AppSpawnTlvExt) + APPSPAWN_ALIGN(tlv.dataLen);
+    memcpy_s(buffer, sizeof(buffer), &tlv, sizeof(tlv));
+    memcpy_s(buffer + sizeof(AppSpawnTlvExt), sizeof(buffer) - sizeof(AppSpawnTlvExt), key, tlv.dataLen);
+    offsets[TLV_MAX] = 0;
+
+    AppSpawnMsgNode msgNode = {};
+    msgNode.buffer = buffer;
+    msgNode.tlvOffset = offsets;
+    msgNode.tlvCount = 1;
+
+    setenv("APPSPAWN_FD_ipc-fd", "10", 1);
+    std::map<std::string, int> fdMap;
+    int ret = BuildFdInfoMap(&msgNode, fdMap, 1);
+    EXPECT_EQ(ret, 0);
+    unsetenv("APPSPAWN_FD_ipc-fd");
+}
+
+// ==================== ClearEnvAndReturnSuccess tests ====================
+
+/**
+ * @brief ClearEnvAndReturnSuccess with null params
+ *        Covers: content == nullptr -> return
+ */
+HWTEST_F(AppSpawnAceTest, ClearEnvAndReturnSuccess_NullParam_001, TestSize.Level0)
+{
+    ClearEnvAndReturnSuccess(nullptr, nullptr);
+    // No crash expected
+}
+
 }   // namespace OHOS

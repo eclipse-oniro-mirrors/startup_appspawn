@@ -169,7 +169,7 @@ APPSPAWN_STATIC int UpdateSocketTimeout(uint32_t timeout, int socketFd)
     return ret;
 }
 
-static int ReadMessage(int socketFd, uint8_t *buf, int len, AppSpawnReqMsgNode *reqNode, AppSpawnResult *result)
+APPSPAWN_STATIC int ReadMessage(int socketFd, uint8_t *buf, int len, AppSpawnReqMsgNode *reqNode, AppSpawnResult *result)
 {
     struct timespec readStart = { 0 };
     clock_gettime(CLOCK_MONOTONIC, &readStart);
@@ -289,7 +289,7 @@ APPSPAWN_STATIC void TryCreateSocket(AppSpawnReqMsgMgr *reqMgr, bool needSleep)
     }
 }
 
-static void SendSpawnListenMsg(AppSpawnReqMsgMgr *reqMgr, AppSpawnReqMsgNode *reqNode)
+APPSPAWN_STATIC void SendSpawnListenMsg(AppSpawnReqMsgMgr *reqMgr, AppSpawnReqMsgNode *reqNode)
 {
     if (reqMgr->type == CLIENT_FOR_APPSPAWN && reqNode->msg->msgType != MSG_OBSERVE_PROCESS_SIGNAL_STATUS) {
         pthread_mutex_lock(&g_spawnListenMutex);
@@ -316,7 +316,7 @@ static void SendSpawnListenMsg(AppSpawnReqMsgMgr *reqMgr, AppSpawnReqMsgNode *re
     }
 }
 
-static int ClientSendMsg(AppSpawnReqMsgMgr *reqMgr, AppSpawnReqMsgNode *reqNode, AppSpawnResult *result,
+APPSPAWN_STATIC int ClientSendMsg(AppSpawnReqMsgMgr *reqMgr, AppSpawnReqMsgNode *reqNode, AppSpawnResult *result,
     bool needSleep)
 {
     uint32_t retryCount = 1;

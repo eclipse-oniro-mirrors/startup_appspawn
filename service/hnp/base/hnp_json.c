@@ -26,7 +26,7 @@
 extern "C" {
 #endif
 
-static int ParseLinksJsonToCfgInfo(cJSON *linksItem, HnpCfgInfo *hnpCfg)
+APPSPAWN_STATIC int ParseLinksJsonToCfgInfo(cJSON *linksItem, HnpCfgInfo *hnpCfg)
 {
     NativeBinLink *linkArray = NULL;
 
@@ -71,7 +71,7 @@ static int ParseLinksJsonToCfgInfo(cJSON *linksItem, HnpCfgInfo *hnpCfg)
     return 0;
 }
 
-static int ParseJsonStreamToHnpCfgInfo(cJSON *json, HnpCfgInfo *hnpCfg)
+APPSPAWN_STATIC int ParseJsonStreamToHnpCfgInfo(cJSON *json, HnpCfgInfo *hnpCfg)
 {
     int ret;
 
@@ -180,7 +180,7 @@ int GetHnpJsonBuff(HnpCfgInfo *hnpCfg, char **buff)
     return 0;
 }
 
-static bool HnpInstallHapExistCheck(const char *hnpPackageName, cJSON *json, cJSON **hapItemOut, int *hapIndex)
+APPSPAWN_STATIC bool HnpInstallHapExistCheck(const char *hnpPackageName, cJSON *json, cJSON **hapItemOut, int *hapIndex)
 {
     cJSON *hapItem = NULL;
     bool hapExist = false;
@@ -200,7 +200,7 @@ static bool HnpInstallHapExistCheck(const char *hnpPackageName, cJSON *json, cJS
     return hapExist;
 }
 
-static bool HnpInstallHnpExistCheck(cJSON *hnpItemArr, const char *name, cJSON **hnpItemOut, int *hnpIndex,
+APPSPAWN_STATIC bool HnpInstallHnpExistCheck(cJSON *hnpItemArr, const char *name, cJSON **hnpItemOut, int *hnpIndex,
     const char *version)
 {
     if (hnpItemArr == NULL) {
@@ -226,7 +226,7 @@ static bool HnpInstallHnpExistCheck(cJSON *hnpItemArr, const char *name, cJSON *
     return false;
 }
 
-static void HnpPackageVersionUpdateAll(cJSON *json, const HnpCfgInfo *hnpCfg)
+APPSPAWN_STATIC void HnpPackageVersionUpdateAll(cJSON *json, const HnpCfgInfo *hnpCfg)
 {
     for (int i = 0; i < cJSON_GetArraySize(json); i++) {
         cJSON *hapItem = cJSON_GetArrayItem(json, i);
@@ -278,7 +278,7 @@ static int HnpHapJsonWrite(cJSON *json, int uid)
     return 0;
 }
 
-static int HnpHapJsonHnpAdd(bool hapExist, cJSON *json, cJSON *hapItem, const char *hnpPackageName,
+APPSPAWN_STATIC int HnpHapJsonHnpAdd(bool hapExist, cJSON *json, cJSON *hapItem, const char *hnpPackageName,
     const HnpCfgInfo *hnpCfg)
 {
     cJSON *hnpItemArr = NULL;
@@ -378,7 +378,7 @@ int HnpInstallInfoJsonWrite(const char *hapPackageName, const HnpCfgInfo *hnpCfg
     return ret;
 }
 
-static bool HnpOtherPackageInstallCheck(const char *name, const char *version, int packageIndex, cJSON *json)
+APPSPAWN_STATIC bool HnpOtherPackageInstallCheck(const char *name, const char *version, int packageIndex, cJSON *json)
 {
     bool hnpExist = false;
     int hnpIndex = 0;
@@ -399,7 +399,7 @@ static bool HnpOtherPackageInstallCheck(const char *name, const char *version, i
     return false;
 }
 
-static int HnpPackageInfoGetOut(HnpPackageInfo *packageInfos, int sum, HnpPackageInfo **packageInfoOut, int *count)
+APPSPAWN_STATIC int HnpPackageInfoGetOut(HnpPackageInfo *packageInfos, int sum, HnpPackageInfo **packageInfoOut, int *count)
 {
     HnpPackageInfo *ptr;
 
@@ -424,7 +424,7 @@ static int HnpPackageInfoGetOut(HnpPackageInfo *packageInfos, int sum, HnpPackag
     return 0;
 }
 
-static int HnpPackageJsonGet(cJSON **pJson, int uid)
+APPSPAWN_STATIC int HnpPackageJsonGet(cJSON **pJson, int uid)
 {
     char *infoStream;
     int size;
@@ -640,7 +640,7 @@ int HnpPackageInfoDelete(const char *packageName, int uid)
 }
 
 // 处理单个 hap 项
-static int ProcessHnpArray(cJSON *hnpJson, const int uid)
+APPSPAWN_STATIC int ProcessHnpArray(cJSON *hnpJson, const int uid)
 {
     HNP_ERROR_CHECK(hnpJson != NULL && cJSON_IsArray(hnpJson),
         return HNP_ERRNO_BASE_PARSE_JSON_FAILED, "invalid json info: hnpList");
@@ -698,7 +698,7 @@ int DoRebuildHnpInfoCfg(int uid)
     return ret;
 }
 
-static char *HnpNeedUnInstallHnpVersionGet(cJSON *hnpItemArr, const char *name)
+APPSPAWN_STATIC char *HnpNeedUnInstallHnpVersionGet(cJSON *hnpItemArr, const char *name)
 {
     char *version = NULL;
     if (hnpItemArr == NULL) {

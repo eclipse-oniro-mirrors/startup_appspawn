@@ -33,11 +33,14 @@
  * - Eliminates the dependency on libhisysevent / libhisyseventmanager
  */
 
+#include <stdint.h>
+#include <string.h>
+
+#ifdef __cplusplus
 #include <cstdint>
 #include <cstring>
 #include <string>
 
-#ifdef __cplusplus
 extern "C" {
 #endif
 
@@ -138,6 +141,7 @@ public:
     class Domain {
     public:
         static constexpr char APPSPAWN[] = "APPSPAWN";
+        static constexpr char STARTUP[] = "STARTUP";
     };
 
     enum EventType {

@@ -68,7 +68,7 @@ typedef struct TagParseJsonContext {
     std::string key;
 } ParseJsonContext;
 
-static void GetNames(const cJSON *root, std::set<std::string> &names, std::string key)
+APPSPAWN_STATIC void GetNames(const cJSON *root, std::set<std::string> &names, std::string key)
 {
     cJSON *namesJson = cJSON_GetObjectItemCaseSensitive(root, key.c_str());
     APPSPAWN_CHECK_ONLY_EXPER(namesJson != nullptr, return);
@@ -84,13 +84,13 @@ static void GetNames(const cJSON *root, std::set<std::string> &names, std::strin
     }
 }
 
-static int GetNameSet(const cJSON *root, ParseJsonContext *context)
+APPSPAWN_STATIC int GetNameSet(const cJSON *root, ParseJsonContext *context)
 {
     GetNames(root, context->names, context->key);
     return 0;
 }
 
-static void PreloadModule(bool isHybrid)
+APPSPAWN_STATIC void PreloadModule(bool isHybrid)
 {
     bool preloadEts = OHOS::system::GetBoolParameter("persist.appspawn.preloadets", DEFAULT_PRELOAD_ETS_VALUE);
     bool unified = OHOS::system::GetBoolParameter("persist.appspawn.hybridspawn.unified", DEFAULT_SPAWN_UNIFIED_VALUE);
@@ -129,7 +129,7 @@ static void PreloadModule(bool isHybrid)
 
 static const int PARAM_BUFFER_SIZE = 256;
 
-static bool IsPrelinkEnable()
+APPSPAWN_STATIC bool IsPrelinkEnable()
 {
     char buffer[PARAM_BUFFER_SIZE] = {0};
     int ret = GetParameter("const.startup.prelink.enable", "true", buffer, PARAM_BUFFER_SIZE);
@@ -180,7 +180,7 @@ APPSPAWN_STATIC int PrelinkerMain(int prelinkMemfd)
     return rc;
 }
 
-static void PrelinkLibs()
+APPSPAWN_STATIC void PrelinkLibs()
 {
     int ws = -1;
 
@@ -247,7 +247,7 @@ APPSPAWN_STATIC int PreLinkAppSpawn(AppSpawnMgr *content)
     return 0;
 }
 
-static void LoadExtendLib(AppSpawnMgr *content)
+APPSPAWN_STATIC void LoadExtendLib(AppSpawnMgr *content)
 {
     const char *acelibdir = OHOS::Ace::AceForwardCompatibility::GetAceLibName();
     APPSPAWN_LOGI("LoadExtendLib: Start calling dlopen acelibdir");
@@ -275,7 +275,7 @@ static void LoadExtendLib(AppSpawnMgr *content)
     APPSPAWN_LOGI("LoadExtendLib: End preload VM");
 }
 
-static void PreloadCJLibs(void)
+APPSPAWN_STATIC void PreloadCJLibs(void)
 {
     const char* cjEnvLibName = "libcj_environment.z.so";
     const char* cjEnvInitName = "OHOS_InitSpawnEnv";
@@ -291,7 +291,7 @@ static void PreloadCJLibs(void)
     initSpawnEnv();
 }
 
-static void LoadExtendCJLib(void)
+APPSPAWN_STATIC void LoadExtendCJLib(void)
 {
     const char *acelibdir = OHOS::Ace::AceForwardCompatibility::GetAceLibName();
     APPSPAWN_LOGI("LoadExtendLib: Start calling dlopen acelibdir.");
@@ -304,7 +304,7 @@ static void LoadExtendCJLib(void)
     PreloadCJLibs();
 }
 
-static int BuildFdInfoMap(const AppSpawnMsgNode *message, std::map<std::string, int> &fdMap, int isColdRun)
+APPSPAWN_STATIC int BuildFdInfoMap(const AppSpawnMsgNode *message, std::map<std::string, int> &fdMap, int isColdRun)
 {
     APPSPAWN_CHECK_ONLY_EXPER(message != nullptr && message->buffer != nullptr, return -1);
     APPSPAWN_CHECK_ONLY_EXPER(message->tlvOffset != nullptr, return -1);

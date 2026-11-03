@@ -79,6 +79,12 @@ AppSpawnContent *StartSpawnService(const AppSpawnStartArg *arg, uint32_t argvSiz
 void AppSpawnDestroyContent(AppSpawnContent *content);
 void CheckSingleThread(void);
 
+struct RenderIpcFds {
+    int32_t ipcFd;
+    int32_t sharedFd;
+    int32_t crashFd;
+};
+
 #ifdef __cplusplus
 }
 #endif

@@ -29,6 +29,10 @@ extern "C" {
 #endif
  	 
 int SpawnKickDogStart(AppSpawnMgr *mgrContent);
+APPSPAWN_STATIC int OpenAndWriteToProc(const char *procName, const char *writeStr, size_t writeLen);
+APPSPAWN_STATIC const char *GetProcFile(bool isLinux);
+APPSPAWN_STATIC const char *GetProcContent(bool isLinux, bool isOpen, int mode);
+APPSPAWN_STATIC int CheckKernelType(bool *isLinux);
  	 
 #ifdef __cplusplus
 }
@@ -186,5 +190,121 @@ HWTEST_F(AppSpawnKickDogTest, App_Spawn_AppSpawnKickDog_002, TestSize.Level0)
     EXPECT_EQ(CheckFileContent(HM_APPSPAWN_WATCHDOG_FILE, nullptr), -1);
 
     remove(HM_APPSPAWN_WATCHDOG_FILE);
+}
+
+// ==================== Unit tests for static functions ====================
+
+/**
+ * @brief OpenAndWriteToProc with NULL writeStr
+ *        Covers: line 22-24 (writeStr == NULL -> return -1)
+ */
+HWTEST_F(AppSpawnKickDogTest, OpenAndWriteToProc_NullWriteStr_001, TestSize.Level0)
+{
+    int ret = OpenAndWriteToProc("/tmp/test", nullptr, 0);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief OpenAndWriteToProc with non-existent file
+ *        Covers: line 27-30 (open fails -> return -1)
+ */
+HWTEST_F(AppSpawnKickDogTest, OpenAndWriteToProc_OpenFail_001, TestSize.Level0)
+{
+    int ret = OpenAndWriteToProc("/tmp/nonexistent_proc_file", "test", 4);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief GetProcFile with isLinux=true
+ *        Covers: line 46-47 (isLinux -> LINUX_APPSPAWN_WATCHDOG_FILE)
+ */
+HWTEST_F(AppSpawnKickDogTest, GetProcFile_Linux_001, TestSize.Level0)
+{
+    const char *file = GetProcFile(true);
+    EXPECT_STREQ(file, LINUX_APPSPAWN_WATCHDOG_FILE);
+}
+
+/**
+ * @brief GetProcFile with isLinux=false
+ *        Covers: line 49 (not linux -> HM_APPSPAWN_WATCHDOG_FILE)
+ */
+HWTEST_F(AppSpawnKickDogTest, GetProcFile_Hm_001, TestSize.Level0)
+{
+    const char *file = GetProcFile(false);
+    EXPECT_STREQ(file, HM_APPSPAWN_WATCHDOG_FILE);
+}
+
+/**
+ * @brief GetProcContent for all combinations
+ *        Covers: line 54-70 (all branches)
+ */
+HWTEST_F(AppSpawnKickDogTest, GetProcContent_AllBranches_001, TestSize.Level0)
+{
+    // isOpen=true, isLinux=true -> LINUX_APPSPAWN_WATCHDOG_ON (line 55-56)
+    EXPECT_STREQ(GetProcContent(true, true, MODE_FOR_APP_SPAWN), LINUX_APPSPAWN_WATCHDOG_ON);
+    // isOpen=true, isLinux=false, NWEB -> HM_NWEBSPAWN_WATCHDOG_ON (line 58-59)
+    EXPECT_STREQ(GetProcContent(false, true, MODE_FOR_NWEB_SPAWN), HM_NWEBSPAWN_WATCHDOG_ON);
+    // isOpen=true, isLinux=false, HYBRID -> HM_HYBRIDSPAWN_WATCHDOG_ON (line 61)
+    EXPECT_STREQ(GetProcContent(false, true, MODE_FOR_HYBRID_SPAWN), HM_HYBRIDSPAWN_WATCHDOG_ON);
+    // isOpen=true, isLinux=false, APP -> HM_APPSPAWN_WATCHDOG_ON (line 61)
+    EXPECT_STREQ(GetProcContent(false, true, MODE_FOR_APP_SPAWN), HM_APPSPAWN_WATCHDOG_ON);
+    // isOpen=false, isLinux=true -> LINUX_APPSPAWN_WATCHDOG_KICK (line 64-65)
+    EXPECT_STREQ(GetProcContent(true, false, MODE_FOR_APP_SPAWN), LINUX_APPSPAWN_WATCHDOG_KICK);
+    // isOpen=false, isLinux=false, NWEB -> HM_NWEBSPAWN_WATCHDOG_KICK (line 67-68)
+    EXPECT_STREQ(GetProcContent(false, false, MODE_FOR_NWEB_SPAWN), HM_NWEBSPAWN_WATCHDOG_KICK);
+    // isOpen=false, isLinux=false, HYBRID -> HM_HYBRIDSPAWN_WATCHDOG_KICK (line 70)
+    EXPECT_STREQ(GetProcContent(false, false, MODE_FOR_HYBRID_SPAWN), HM_HYBRIDSPAWN_WATCHDOG_KICK);
+    // isOpen=false, isLinux=false, APP -> HM_APPSPAWN_WATCHDOG_KICK (line 70)
+    EXPECT_STREQ(GetProcContent(false, false, MODE_FOR_APP_SPAWN), HM_APPSPAWN_WATCHDOG_KICK);
+}
+
+/**
+ * @brief CheckKernelType - call on real device
+ *        Covers: line 111-124 (uname, compare, set isLinux)
+ *        On Linux the function should return 0 and set isLinux=true.
+ */
+HWTEST_F(AppSpawnKickDogTest, CheckKernelType_001, TestSize.Level0)
+{
+    bool isLinux = false;
+    int ret = CheckKernelType(&isLinux);
+    EXPECT_EQ(ret, 0);
+    // On the Linux test environment, isLinux should be true
+    EXPECT_TRUE(isLinux);
+}
+
+/**
+ * @brief SpawnKickDogStart with native spawn mode (skip)
+ *        Covers: line 130-131 (MODE_FOR_NATIVE_SPAWN -> return 0)
+ */
+HWTEST_F(AppSpawnKickDogTest, SpawnKickDogStart_NativeMode_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_NATIVE_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    int ret = SpawnKickDogStart(mgr);
+    EXPECT_EQ(ret, 0);
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+ * @brief SpawnKickDogStart with invalid mode (skip)
+ *        Covers: line 131-133 (not APP/NWEB/HYBRID -> return 0)
+ */
+HWTEST_F(AppSpawnKickDogTest, SpawnKickDogStart_InvalidMode_001, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_COLD_RUN);
+    ASSERT_NE(mgr, nullptr);
+    int ret = SpawnKickDogStart(mgr);
+    EXPECT_EQ(ret, 0);
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+ * @brief SpawnKickDogStart with null content
+ *        Covers: line 129 (mgrContent == NULL -> return 0)
+ */
+HWTEST_F(AppSpawnKickDogTest, SpawnKickDogStart_Null_001, TestSize.Level0)
+{
+    int ret = SpawnKickDogStart(nullptr);
+    EXPECT_EQ(ret, 0);
 }
 }  // namespace OHOS

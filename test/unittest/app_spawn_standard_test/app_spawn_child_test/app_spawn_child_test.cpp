@@ -38,6 +38,7 @@ typedef struct AppSpawnContent AppSpawnContent;
 void AppSpawnDestroyContent(AppSpawnContent *content);
 int AppSpawnClearEnv(AppSpawnMgr *content, AppSpawningCtx *property);
 int WriteMsgToChild(AppSpawningCtx *property, RunMode mode);
+APPSPAWN_STATIC int CloneAppSpawn(void *arg);
 #ifdef __cplusplus
 }
 #endif
@@ -1444,4 +1445,121 @@ HWTEST_F(AppSpawnChildTest, Native_Spawn_Cold_Run_001, TestSize.Level0)
     AppSpawnClientDestroy(clientHandle);
     ASSERT_EQ(ret, 0);
 }
+
+/**
+ * @brief Test AppSpawnChild covers PreReplyHook/PostReplyHook/runChildProcessor path
+ *        Covers line 112-136: AppSpawnExecutePreReplyHook, isAppspawn check,
+ *        AppSpawnExecutePostReplyHook, runChildProcessor, ret != 0 branch
+ */
+HWTEST_F(AppSpawnChildTest, App_Spawn_Child_PreReply_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnContent *content = nullptr;
+    int ret = -1;
+    do {
+        ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create reqMgr %{public}s", APPSPAWN_SERVER_NAME);
+        reqHandle = g_spawningTestHelper.SpawningTestCreateSendMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create req");
+        content = CreateTestAppSpawnContent(APPSPAWN_SOCKET_NAME, MODE_FOR_APP_SPAWN);
+        APPSPAWN_CHECK_ONLY_EXPER(content != nullptr, break);
+
+        property = g_spawningTestHelper.SpawningTestGetAppProperty(clientHandle, reqHandle);
+        reqHandle = nullptr;
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+
+        AppSpawnHookExecute(STAGE_PARENT_PRE_FORK, 0, content, &property->client);
+        ret = AppSpawnChild(content, &property->client);
+        property = nullptr;
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnReqMsgFree(reqHandle);
+    AppSpawnClientDestroy(clientHandle);
+    ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief Test AppSpawnChild with runChildProcessor set (nweb mode, non-appspawn)
+ *        Covers line 120-134: isAppspawn=false, runChildProcessor != NULL, ret != 0 branch
+ */
+HWTEST_F(AppSpawnChildTest, NWeb_Spawn_Child_RunChildProcessor_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnContent *content = nullptr;
+    int ret = -1;
+    do {
+        ret = AppSpawnClientInit(NWEBSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create reqMgr");
+        reqHandle = g_spawningTestHelper.SpawningTestCreateSendMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create req");
+        content = CreateTestAppSpawnContent(NWEBSPAWN_SOCKET_NAME, MODE_FOR_NWEB_SPAWN);
+        APPSPAWN_CHECK_ONLY_EXPER(content != nullptr, break);
+        content->mode = MODE_FOR_NWEB_SPAWN;
+
+        property = g_spawningTestHelper.SpawningTestGetAppProperty(clientHandle, reqHandle);
+        reqHandle = nullptr;
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+
+        AppSpawnHookExecute(STAGE_PARENT_PRE_FORK, 0, content, &property->client);
+        ret = AppSpawnChild(content, &property->client);
+        property = nullptr;
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnReqMsgFree(reqHandle);
+    AppSpawnClientDestroy(clientHandle);
+    ASSERT_EQ(ret, 0);
+}
+
+/**
+ * @brief Test CloneAppSpawn with null arg
+ *        Covers line 139-149: CloneAppSpawn arg == NULL -> return -1
+ */
+HWTEST_F(AppSpawnChildTest, CloneAppSpawn_NullArg_001, TestSize.Level0)
+{
+    int ret = CloneAppSpawn(nullptr);
+    EXPECT_EQ(ret, -1);
+}
+
+/**
+ * @brief Test CloneAppSpawn with valid arg
+ *        Covers line 139-149: CloneAppSpawn with valid forkArg
+ *        APPSPAWN_EXIT_TEST makes ProcessExit a no-op, so CloneAppSpawn returns 0.
+ */
+HWTEST_F(AppSpawnChildTest, CloneAppSpawn_ValidArg_001, TestSize.Level0)
+{
+    AppSpawnClientHandle clientHandle = nullptr;
+    AppSpawnReqMsgHandle reqHandle = 0;
+    AppSpawningCtx *property = nullptr;
+    AppSpawnContent *content = nullptr;
+    do {
+        int ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
+        APPSPAWN_CHECK(ret == 0, break, "Failed to create reqMgr");
+        reqHandle = g_spawningTestHelper.SpawningTestCreateSendMsg(clientHandle, MSG_APP_SPAWN, 0);
+        APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create req");
+        content = CreateTestAppSpawnContent(APPSPAWN_SOCKET_NAME, MODE_FOR_APP_SPAWN);
+        APPSPAWN_CHECK_ONLY_EXPER(content != nullptr, break);
+
+        property = g_spawningTestHelper.SpawningTestGetAppProperty(clientHandle, reqHandle);
+        reqHandle = nullptr;
+        APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
+
+        AppSpawnForkArg arg;
+        arg.content = content;
+        arg.client = &property->client;
+
+        // With APPSPAWN_EXIT_TEST defined, ProcessExit is a no-op (just logs, returns).
+        // CloneAppSpawn calls ProcessExit(AppSpawnChild(...)) then returns 0.
+        int retCode = CloneAppSpawn(&arg);
+        EXPECT_EQ(retCode, 0);
+        property = nullptr;
+    } while (0);
+    DeleteAppSpawningCtx(property);
+    AppSpawnReqMsgFree(reqHandle);
+    AppSpawnClientDestroy(clientHandle);
+}
+
 }  // namespace OHOS

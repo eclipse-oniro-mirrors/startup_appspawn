@@ -26,7 +26,7 @@ if (!defined(ohos_lite)) {
 
     if (appspawn_unittest_coverage) {
       cflags += [ "--coverage" ]
-      ldflags = [ "--coverage" ]
+      ldflags += [ "--coverage" ]
       cflags_cc = [ "--coverage" ]
     }
 
@@ -41,41 +41,67 @@ if (!defined(ohos_lite)) {
 
     # Target code include dir
     include_dirs = [
+      "${appspawn_path}",
       "${appspawn_path}/common",
+      "${appspawn_path}/modules/common",
       "${appspawn_path}/modules/modulemgr",
       "${appspawn_path}/modules/module_engine/include",
       "${appspawn_path}/standard",
+      "${appspawn_path}/util",
       "${appspawn_path}/util/include",
+      "${appspawn_innerkits_path}/client",
       "${appspawn_innerkits_path}/include",
+      "${appspawn_innerkits_path}/permission",
+      "${appspawn_path}/test/mock",
+      "${appspawn_path}/test/unittest/app_spawn_standard_test/spawning_test_helper",
     ]
-
-    # Test specific include dir
-    include_dirs += [
-      "${appspawn_path}/test/unittest/app_spawn_standard_test/app_spwan_asan_detector_test",
-    ]
+    include_dirs += appspawn_sandbox_inc
 
     # Target code sources
     sources = [
       "${appspawn_path}/modules/asan/asan_detector.c",
-      "${appspawn_path}/util/src/appspawn_utils.c",
+      "${appspawn_innerkits_path}/client/appspawn_client.c",
+      "${appspawn_innerkits_path}/client/appspawn_msg.c",
+      "${appspawn_innerkits_path}/permission/appspawn_mount_permission.c",
+      "${appspawn_path}/common/appspawn_server.c",
+      "${appspawn_path}/common/appspawn_trace.cpp",
+      "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/modulemgr/appspawn_modulemgr.c",
+      "${appspawn_path}/standard/appspawn_appmgr.c",
+      "${appspawn_path}/standard/appspawn_fd_manager.c",
       "${appspawn_path}/standard/appspawn_msgmgr.c",
+      "${appspawn_path}/standard/appspawn_service.c",
+      "${appspawn_path}/util/src/appspawn_utils.c",
+      "${appspawn_path}/util/src/appspawndf_utils.cpp",
+      "${appspawn_path}/test/mock/app_system_stub.c",
     ]
+    sources += appspawn_sandbox_src
 
     # Test specific sources
     sources += [
       "app_spawn_asan_detector_test.cpp",
+      "${appspawn_path}/test/unittest/app_spawn_standard_test/spawning_test_helper/spawning_test_helper.cpp",
     ]
 
     configs = [ "${appspawn_path}:appspawn_config" ]
 
     external_deps = [
-        "cJSON:cjson",
-        "config_policy:configpolicy_util",
+        "access_token:libtokenid_sdk",
         "bounds_checking_function:libsec_shared",
+        "cJSON:cjson",
+        "c_utils:utils",
+        "config_policy:configpolicy_util",
+        "faultloggerd:libdfx_dumpcatcher",
+        "ffrt:libffrt",
         "googletest:gmock_main",
         "hilog:libhilog",
+        "hitrace:hitrace_meter",
         "init:libbegetutil",
     ]
+
+    if (build_selinux) {
+      defines += [ "WITH_SELINUX" ]
+      external_deps += [ "selinux_adapter:libhap_restorecon" ]
+    }
   }
 }

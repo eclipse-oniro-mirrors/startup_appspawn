@@ -17,7 +17,7 @@
 #include <stdio.h>
 #include "appspawn_kickdog.h"
 
-static int OpenAndWriteToProc(const char *procName, const char *writeStr, size_t writeLen)
+APPSPAWN_STATIC int OpenAndWriteToProc(const char *procName, const char *writeStr, size_t writeLen)
 {
     if (writeStr == NULL) {
         APPSPAWN_LOGE("Write string is null");
@@ -41,7 +41,7 @@ static int OpenAndWriteToProc(const char *procName, const char *writeStr, size_t
     return writeResult;
 }
 
-static const char *GetProcFile(bool isLinux)
+APPSPAWN_STATIC const char *GetProcFile(bool isLinux)
 {
     if (isLinux) {
         return LINUX_APPSPAWN_WATCHDOG_FILE;
@@ -49,7 +49,7 @@ static const char *GetProcFile(bool isLinux)
     return HM_APPSPAWN_WATCHDOG_FILE;
 }
 
-static const char *GetProcContent(bool isLinux, bool isOpen, int mode)
+APPSPAWN_STATIC const char *GetProcContent(bool isLinux, bool isOpen, int mode)
 {
     if (isOpen) {
         if (isLinux) {
@@ -106,7 +106,7 @@ static void CreateTimerLoopTask(AppSpawnContent *content)
     APPSPAWN_CHECK(ret == 0, return, "Failed to start timerLoopTask ret %{public}d", ret);
 }
 
-static int CheckKernelType(bool *isLinux)
+APPSPAWN_STATIC int CheckKernelType(bool *isLinux)
 {
     struct utsname uts;
     if (uname(&uts) == -1) {
