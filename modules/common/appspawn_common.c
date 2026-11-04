@@ -449,6 +449,7 @@ APPSPAWN_STATIC int SetXpmConfig(const AppSpawnMgr *content, const AppSpawningCt
     struct XpmInitParam xpmInitParam = XPM_INIT_PARAM_DEFAULT;
     xpmInitParam.enableJitFort = jitfortEnable;
     xpmInitParam.idType = (uint32_t)idType;
+    xpmInitParam.withIntrusionDetection = INTRUSION_DETECTION_ON;
     xpmInitParam.ownerId = ownerId;
     xpmInitParam.apiTargetVersionStr = apiTargetVersionStr;
     xpmInitParam.appSignType = appSignType;
