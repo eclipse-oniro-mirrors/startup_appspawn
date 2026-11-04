@@ -222,12 +222,10 @@ APPSPAWN_STATIC int SetAmbientCapabilities(const AppSpawningCtx *property, uint6
     if (!IsNoShareFsEnable()) {
         return 0;
     }
-    APPSPAWN_CHECK(SetAmbientCapability(CAP_DAC_OVERRIDE) == 0, return -1,
-        "set ambient failed:%{public}d", CAP_DAC_OVERRIDE);
-
-    // Only custom sandbox app can set the CAP_KILL ambient to 1
-    if (CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX)) {
-        APPSPAWN_CHECK(SetAmbientCapability(CAP_KILL) == 0, return -1, "set ambient failed:%{public}d", CAP_KILL);
+    // customSandbox app are denied CAP_DAC_OVERRIDE/CAP_KILL ambient to limit cross-app file access.
+    if (!CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX)) {
+        APPSPAWN_CHECK(SetAmbientCapability(CAP_DAC_OVERRIDE) == 0, return -1,
+            "set ambient failed:%{public}d", CAP_DAC_OVERRIDE);
     }
 
     // Only OHOS_PERMISSION_FOWNER app can set the CAP_FOWNER ambient to 1
@@ -237,7 +235,7 @@ APPSPAWN_STATIC int SetAmbientCapabilities(const AppSpawningCtx *property, uint6
 
     // Raise ambient caps configured per-entry in g_permissionAttrMap.
     // Currently a no-op: no map entry has setAmbient=true, so extAmbientCaps is always 0.
-    // May overlap with CAP_KILL/CAP_FOWNER above; PR_CAP_AMBIENT raise is idempotent.
+    // May overlap with CAP_FOWNER above; PR_CAP_AMBIENT raise is idempotent.
     for (int cap = 0; cap < (int)BITLEN32; cap++) {
         if ((extAmbientCaps & CAP_TO_MASK(cap)) == 0) {
             continue;
@@ -278,8 +276,8 @@ APPSPAWN_STATIC int SetCapabilities(const AppSpawnMgr *content, const AppSpawnin
 #ifdef GRAPHIC_PERMISSION_CHECK
     u_int64_t baseCaps = 0;
     if (needExtPerm) {
-        baseCaps = CAP_TO_MASK(CAP_DAC_OVERRIDE);
-        baseCaps |= CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX) ? CAP_TO_MASK(CAP_KILL) : 0;
+        // customSandbox app are denied CAP_DAC_OVERRIDE/CAP_KILL ambient to limit cross-app file access.
+        baseCaps = CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX) ? 0 : CAP_TO_MASK(CAP_DAC_OVERRIDE);
         baseCaps |= CheckAppMsgFlagsSet(property, APP_FLAGS_SET_CAPS_FOWNER) ? CAP_TO_MASK(CAP_FOWNER) : 0;
         baseCaps |= extPermCaps;
     }
