@@ -2048,26 +2048,37 @@ void CheckSingleThread(void)
             continue;
         }
         char commPath[64] = {0};
-        if (sprintf_s(commPath, sizeof(commPath), "/proc/self/task/%s/comm", entry->d_name) <= 0) {
-            continue;
-        }
+        int pathLen = sprintf_s(commPath, sizeof(commPath), "/proc/self/task/%s/comm", entry->d_name);
+        APPSPAWN_CHECK(pathLen > 0, continue, "Failed to build comm path for %{public}s", entry->d_name);
         int fd = open(commPath, O_RDONLY);
-        if (fd < 0) {
-            continue;
-        }
+        APPSPAWN_CHECK(fd >= 0, continue, "Failed to open %{public}s, err %{public}d", commPath, errno);
         char comm[16] = {0};
-        ssize_t n = read(fd, comm, sizeof(comm) - 1);
+        ssize_t readLen = read(fd, comm, sizeof(comm) - 1);
         close(fd);
-        if (n > 0) {
-            char *nl = strchr(comm, '\n');
-            if (nl) {
-                *nl = '\0';
-            }
-        }
+        APPSPAWN_CHECK(readLen > 0, continue, "Failed to read %{public}s", commPath);
+        char *nl = strchr(comm, '\n');
+        APPSPAWN_ONLY_EXPER(nl != NULL, *nl = '\0');
         APPSPAWN_LOGF("thread[%{public}s]: %{public}s", entry->d_name, comm);
     }
     closedir(dir);
     abort();
+}
+
+APPSPAWN_STATIC int SetParameterWithRetry(const char *name, const char *value)
+{
+    int ret = SetParameter(name, value);
+    if (ret == 0) {
+        return 0;
+    }
+    ret = SetParameter(name, value);
+    if (ret == 0) {
+        return 0;
+    }
+#ifdef APPSPAWN_HISYSEVENT
+    ReportKeyEvent(SET_BOOTEVENT_PARAM_FAIL);
+#endif
+    APPSPAWN_LOGE("Set %{public}s param retry failed %{public}d", name, ret);
+    return ret;
 }
 
 AppSpawnContent *StartSpawnService(const AppSpawnStartArg *startArg, uint32_t argvSize, int argc, char *const argv[])
@@ -2102,8 +2113,6 @@ AppSpawnContent *StartSpawnService(const AppSpawnStartArg *startArg, uint32_t ar
         return NULL, "Failed to prepare load %{public}s result: %{public}d", arg->serviceName, ret);
 #ifndef APPSPAWN_TEST
     CheckSingleThread();
-#endif
-#ifndef APPSPAWN_TEST
     if (content->runChildProcessor == NULL) {
         APPSPAWN_LOGE("ChildLooper is not registered for %{public}s", arg->serviceName);
         APPSPAWN_KLOGE("ChildLooper is not registered for %{public}s", arg->serviceName);
@@ -2116,16 +2125,7 @@ AppSpawnContent *StartSpawnService(const AppSpawnStartArg *startArg, uint32_t ar
 #endif
     AddAppSpawnHook(STAGE_CHILD_PRE_RUN, HOOK_PRIO_LOWEST, AppSpawnClearEnv);
     if (arg->mode == MODE_FOR_APP_SPAWN) {
-        ret = SetParameter("bootevent.appspawn.started", "true");
-        if (ret != 0) {
-            ret = SetParameter("bootevent.appspawn.started", "true");
-            if (ret != 0) {
-#ifdef APPSPAWN_HISYSEVENT
-                ReportKeyEvent(SET_BOOTEVENT_PARAM_FAIL);
-#endif
-                APPSPAWN_LOGE("Set bootevent.appspawn.started param retry failed %{public}d", ret);
-            }
-        }
+        SetParameterWithRetry("bootevent.appspawn.started", "true");
     }
     return content;
 }
