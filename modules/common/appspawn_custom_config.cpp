@@ -160,6 +160,31 @@ enum {
 #define ACCESS_TOKENID_GET_USERID _IOR(HM_ACCESS_TOKEN_ID_IOCTL_BASE, HM_GET_USERID, uint32_t)
 
 constexpr const char* HDAC_DEV = "/dev/access_token_id";
+ 
+constexpr const char* HKIDS_DEV = "/dev/hkids";
+constexpr int HM_HKIDS_IOCTL_BASE = 'h';
+ 
+struct HkidsIoctlArg {
+    uint32_t moduleId;
+    uint32_t cmdId;
+    void *cmdArgs;
+    uint32_t cmdArgsSize;
+};
+ 
+struct AidsSetAInfoArg {
+    uint32_t userid;
+    uint64_t appidentifier;
+};
+ 
+constexpr int HM_HKIDS_CMD_SEC_INIT_APPSPAWN_ID = 0x18;
+constexpr int HKIDS_CMD_SEC_EXEC_CMD_ID = 0x04;
+constexpr int HKIDS_APPSPAWN_MODULE = 0;
+constexpr int AGENTID_CMD_SET_AINFO = 0;
+ 
+#define HKIDS_CMD_SEC_INIT_APPSPAWN \
+    _IOW(HM_HKIDS_IOCTL_BASE, HM_HKIDS_CMD_SEC_INIT_APPSPAWN_ID, struct HkidsIoctlArg)
+#define HKIDS_CMD_SEC_EXEC_CMD \
+    _IOW(HM_HKIDS_IOCTL_BASE, HKIDS_CMD_SEC_EXEC_CMD_ID, struct HkidsIoctlArg)
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -213,6 +238,97 @@ int GetUserId(uint32_t *userId)
     close(fdIoctl);
     *userId = userIdTmp;
     return rc;
+}
+
+static int SetHdacAgentId(uint64_t agentId, uint32_t userId)
+{
+    APPSPAWN_CHECK(agentId > 0 && userId > 0, return -1, "Invalid agentId or userId");
+    APPSPAWN_LOGV("SetHdacAgentId called with agentId=%{public}" PRIu64 "userId=%{public}u", agentId, userId);
+    int fd = open(HKIDS_DEV, O_RDWR | O_CLOEXEC);
+    APPSPAWN_CHECK_LOGW(fd >= 0, return -1,
+        "Failed to open %{public}s: %{public}s", HKIDS_DEV, strerror(errno));
+    if (ioctl(fd, HKIDS_CMD_SEC_INIT_APPSPAWN, nullptr) != 0) {
+        APPSPAWN_LOGW("hkids appspawn client init failed: %{public}s", strerror(errno));
+        close(fd);
+        return -1;
+    }
+    struct AidsSetAInfoArg ainfo = { userId, agentId };
+    struct HkidsIoctlArg hkArg = {
+        HKIDS_APPSPAWN_MODULE,
+        AGENTID_CMD_SET_AINFO,
+        &ainfo,
+        static_cast<uint32_t>(sizeof(ainfo)),
+    };
+    int rc = ioctl(fd, HKIDS_CMD_SEC_EXEC_CMD, &hkArg);
+    if (rc != 0) {
+        APPSPAWN_LOGW("Failed to set agentId for userId=%{public}u: %{public}s", userId, strerror(errno));
+    }
+    close(fd);
+    return rc;
+}
+
+static int ParseAgentIdFromMsg(const AppSpawningCtx *property, uint64_t *agentId)
+{
+    if (property == nullptr || property->message == nullptr || agentId == nullptr) {
+        return APPSPAWN_ARG_INVALID;
+    }
+    const char *agentIdStr = static_cast<const char *>(GetAppSpawnMsgExtInfo(property->message,
+        MSG_EXT_NAME_AGENT_ID, nullptr));
+    if (agentIdStr == nullptr || strlen(agentIdStr) >= AGENT_ID_STR_MAX_LEN || agentIdStr[0] == '\0' ||
+        strspn(agentIdStr, "0123456789") != strlen(agentIdStr)) {
+        return APPSPAWN_MSG_INVALID;
+    }
+
+    errno = 0;
+    char *endPtr = nullptr;
+    unsigned long long value = strtoull(agentIdStr, &endPtr, 10);
+    if (endPtr == agentIdStr || *endPtr != '\0' || errno == ERANGE ||
+        value < 0 || value > UINT64_MAX) {
+        return -1;
+    }
+
+    *agentId = static_cast<uint64_t>(value);
+    return 0;
+}
+
+static int ParseUserIdFromMsg(const AppSpawningCtx *property, uint32_t *userId)
+{
+    if (property == nullptr || property->message == nullptr || userId == nullptr) {
+        return APPSPAWN_ARG_INVALID;
+    }
+    const char *userIdStr = static_cast<const char *>(GetAppSpawnMsgExtInfo(property->message,
+        MSG_EXT_NAME_USERID, nullptr));
+    if (userIdStr == nullptr || strlen(userIdStr) >= USER_ID_STR_MAX_LEN || userIdStr[0] == '\0') {
+        return APPSPAWN_MSG_INVALID;
+    }
+
+    errno = 0;
+    char *endPtr = nullptr;
+    long long tmpUserId = strtoll(userIdStr, &endPtr, 10);
+    if (endPtr == userIdStr || *endPtr != '\0' || errno == ERANGE ||
+        tmpUserId < 0 || tmpUserId > UINT32_MAX) {
+        return -1;
+    }
+    *userId = static_cast<uint64_t>(tmpUserId);
+    return 0;
+}
+ 
+void SetAgentIdFromMsg(const AppSpawningCtx *property)
+{
+    if (!CheckAppMsgFlagsSet(property, APP_FLAGS_AGENT)) {
+        return;
+    }
+    uint64_t agentId = 0;
+    int ret = ParseAgentIdFromMsg(property, &agentId);
+    APPSPAWN_CHECK_LOGW(ret == 0, return,
+        "ParseAgentIdFromMsg ret=%{public}d, skip agentId write to kernel", ret);
+
+    uint32_t userId = 0;
+    ret = ParseUserIdFromMsg(property, &userId);
+    APPSPAWN_CHECK_LOGW(ret == 0, return,
+        "ParseUserIdFromMsg ret=%{public}d, skip userId write to kernel", ret);
+
+    (void)SetHdacAgentId(agentId, userId);
 }
 
 #ifdef __cplusplus

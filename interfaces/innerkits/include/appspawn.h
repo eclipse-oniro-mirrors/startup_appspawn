@@ -223,6 +223,7 @@ typedef enum {
     APP_FLAGS_CONTROLLED_APP,
     APP_FLAGS_HMDFS_REDUCED_MOUNT,
     APP_FLAGS_HMDFS_FULL_MOUNT,
+    APP_FLAGS_AGENT,  // Identify the agent process request, agentid write to kernel
     MAX_FLAGS_INDEX = 63,
 } AppFlagsIndex;
 
@@ -325,6 +326,10 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 #define MSG_EXT_NAME_APP_DISTRIBUTION_TYPE "AppDistributionType"
 #define MSG_EXT_NAME_XPM_ID_TYPE "XpmIdType"
 #define MSG_EXT_NAME_IPC_GROUP "IPCGroup"
+#define MSG_EXT_NAME_AGENT_ID "AgentId"
+
+#define AGENT_ID_STR_MAX_LEN 64
+#define USER_ID_STR_MAX_LEN 16
 
 int AppSpawnReqMsgAddExtInfo(AppSpawnReqMsgHandle reqHandle, const char *name, const uint8_t *value, uint32_t valueLen);
 
