@@ -97,8 +97,8 @@ struct MountQueueContext {
 APPSPAWN_STATIC MountEntryResult MountSingleConfigEntry(const UnlockMountEntry &config, const LockBundleInfo &bundle)
 {
     MountEntryResult result = {0};
-    // Calculate userId from bundle.uid
-    std::string userIdStr = std::to_string(bundle.uid / UID_BASE);
+    // Calculate userId from bundle.appUid
+    std::string userIdStr = std::to_string(bundle.appUid / UID_BASE);
     std::string srcPath = ReplacePlaceholders(config.srcPath, userIdStr, bundle.bundleName);
     std::string destPath = ReplacePlaceholders(config.destPath, userIdStr, bundle.bundleName);
 
@@ -130,10 +130,10 @@ APPSPAWN_STATIC MountEntryResult MountSingleConfigEntry(const UnlockMountEntry &
         APPSPAWN_LOGW("mount %{public}s to %{public}s failed, ret=%{public}d, errno=%{public}d",
             srcPath.c_str(), fullDestPath.c_str(), ret, errno);
         APPSPAWN_KLOGE("UnlockMount: mount %{public}s to %{public}s failed", srcPath.c_str(), fullDestPath.c_str());
-        APPSPAWN_KLOGE("uid=%{public}d, ret=%{public}d, errno=%{public}d", bundle.uid, ret, errno);
+        APPSPAWN_KLOGE("uid=%{public}d, ret=%{public}d, errno=%{public}d", bundle.appUid, ret, errno);
         result.fail++;
 #ifdef APPSPAWN_HISYSEVENT
-        ReportUnlockMountAppFail(bundle.uid, bundle.bundleName.c_str(),
+        ReportUnlockMountAppFail(bundle.appUid, bundle.bundleName.c_str(),
             srcPath.c_str(), fullDestPath.c_str(), ret);
 #endif
         return result;
@@ -187,7 +187,7 @@ APPSPAWN_STATIC std::unique_ptr<MountQueueContext> CreateMountContext(int uid)
     // Filter bundles by userId
     std::vector<LockBundleInfo> filteredBundles;
     for (const auto &bundle : bundles) {
-        APPSPAWN_ONLY_EXPER(bundle.uid / UID_BASE != static_cast<uint32_t>(uid), continue);
+        APPSPAWN_ONLY_EXPER(bundle.appUid / UID_BASE != static_cast<uint32_t>(uid), continue);
         filteredBundles.push_back(bundle);
     }
 

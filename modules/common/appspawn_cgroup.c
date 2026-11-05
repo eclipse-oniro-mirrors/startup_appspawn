@@ -75,7 +75,7 @@ static const SpawnModeInfo *GetSpawnModeInfo(const AppSpawnMgr *content)
 
 APPSPAWN_STATIC int GetCgroupPath(const AppSpawnedProcessInfo *appInfo, char *buffer, uint32_t buffLen)
 {
-    const int userId = appInfo->uid / UID_BASE;
+    const int userId = appInfo->appUid / UID_BASE;
 #ifdef APPSPAWN_TEST
     int ret = snprintf_s(buffer, buffLen, buffLen - 1, APPSPAWN_BASE_DIR "/dev/pids/testpids/%d/%s/app_%d/",
         userId, appInfo->name, appInfo->pid);
@@ -159,13 +159,13 @@ static void KillProcessesByCGroup(const char *path, AppSpawnMgr *content, const 
         APPSPAWN_LOGI("Kill app pid %{public}d now ...", pid);
         int reason = appInfo->killReason.reason != 0 ? appInfo->killReason.reason : REASON_KILL_CGROUP;
         int errorCause = appInfo->killReason.reason != 0 ? appInfo->killReason.errorCause : 0;
-        APPSPAWN_LOGI("KillProcessesByCGroup: pid:%{public}d uid:%{public}d reason:%{public}d",
-            pid, appInfo->uid, reason);
+        APPSPAWN_LOGI("KillProcessesByCGroup: pid:%{public}d appUid:%{public}d reason:%{public}d",
+            pid, appInfo->appUid, reason);
 #ifndef APPSPAWN_TEST
         if (kill(pid, SIGKILL) != 0) {
             APPSPAWN_LOGE("unable to kill process, pid: %{public}d ret %{public}d", pid, errno);
         } else {
-            SetKillReason(content, pid, appInfo->uid, reason, errorCause);
+            SetKillReason(content, pid, appInfo->appUid, reason, errorCause);
         }
 #endif
     }
@@ -180,7 +180,7 @@ APPSPAWN_STATIC int ProcessMgrRemoveApp(const AppSpawnMgr *content, const AppSpa
         return 0;
     }
     char cgroupPath[PATH_MAX] = {};
-    APPSPAWN_LOGV("ProcessMgrRemoveApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->uid);
+    APPSPAWN_LOGV("ProcessMgrRemoveApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);
     int ret = GetCgroupPath(appInfo, cgroupPath, sizeof(cgroupPath));
     APPSPAWN_CHECK(ret == 0, return -1, "Failed to get real path errno: %{public}d", errno);
     char procPath[PATH_MAX] = {};
@@ -375,7 +375,7 @@ APPSPAWN_STATIC int ProcessMgrAddApp(const AppSpawnMgr *content, const AppSpawne
     APPSPAWN_CHECK_ONLY_EXPER(appInfo != NULL, return -1);
     APPSPAWN_ONLY_EXPER(IsNWebSpawnMode(content), return 0);
     char path[PATH_MAX] = {};
-    APPSPAWN_LOGV("ProcessMgrAddApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->uid);
+    APPSPAWN_LOGV("ProcessMgrAddApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);
     int ret = GetCgroupPath(appInfo, path, sizeof(path));
     APPSPAWN_CHECK(ret == 0, return -1, "Failed to get real path errno: %{public}d", errno);
     (void)CreateSandboxDir(path, 0755);  // 0755 default mode

@@ -459,6 +459,7 @@ int AppSpawnTestHelper::AddDacInfo(AppSpawnReqMsgHandle &reqHandle)
 {
     AppDacInfo dacInfo = {};
     dacInfo.uid = defaultTestUid_;
+    dacInfo.appUid = defaultTestUid_;  // appUid for app identification
     dacInfo.gid = defaultTestGid_;
     dacInfo.gidCount = 2;  // 2 count
     dacInfo.gidTable[0] = defaultTestGidGroup_;
@@ -744,6 +745,7 @@ int AppSpawnTestHelper::AddBaseTlv(uint8_t *buffer, uint32_t bufferLen, uint32_t
     // add dac
     AppDacInfo  dacInfo = {};
     dacInfo.uid = 20010029; // 20010029 test uid
+    dacInfo.appUid = 20010029; // 20010029 test appUid
     dacInfo.gid = 20010029; // 20010029 test gid
     dacInfo.gidCount = 2; // 2 count
     dacInfo.gidTable[0] = 20010029; // 20010029 test gid

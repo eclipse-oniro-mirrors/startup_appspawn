@@ -66,13 +66,17 @@ public:
     }
 };
 
+namespace {
+constexpr uint32_t CGROUP_TEST_APPUID = 20000021;  // appUid fixture (200000 * 100 + 21)
+}
+
 static AppSpawnedProcess *CreateTestAppInfo(const char *name)
 {
     AppSpawnedProcess *appInfo = reinterpret_cast<AppSpawnedProcess *>(malloc(sizeof(AppSpawnedProcess) +
                                  strlen(name) + 1));
     APPSPAWN_CHECK(appInfo != nullptr, return nullptr, "Failed to create appInfo");
     appInfo->pid = 33;
-    appInfo->uid = 200000 * 100 + 21;
+    appInfo->appUid = CGROUP_TEST_APPUID;
     appInfo->max = 0;
     appInfo->exitStatus = 0;
     int ret = strcpy_s(appInfo->name, strlen(name) + 1, name);

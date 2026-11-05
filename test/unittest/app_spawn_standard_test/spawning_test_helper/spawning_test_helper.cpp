@@ -43,6 +43,7 @@ int SpawningTestHelper::SpawningTestAddDacInfo(AppSpawnReqMsgHandle &reqHandle)
 {
     AppDacInfo dacInfo = {};
     dacInfo.uid = spawningTestDefaultTestUid_;
+    dacInfo.appUid = spawningTestDefaultTestUid_;  // appUid for app identification
     dacInfo.gid = spawningTestDefaultTestGid_;
     dacInfo.gidCount = DAC_COUNT_TEST_ID;
     dacInfo.gidTable[0] = spawningTestDefaultTestGidGroup_;

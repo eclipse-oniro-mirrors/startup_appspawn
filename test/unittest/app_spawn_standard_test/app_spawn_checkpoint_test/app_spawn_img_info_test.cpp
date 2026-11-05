@@ -267,7 +267,7 @@ HWTEST_F(AppSpawnImgInfoTest, App_ImgInfo_AddCheckPointInfo_004, TestSize.Level0
         mgr, 1001, "com.test.app", 0, 1000);
     ASSERT_NE(result, nullptr);
     EXPECT_EQ(result->checkPointId, 1001);
-    EXPECT_EQ(result->uid, 1000);
+    EXPECT_EQ(result->appUid, 1000);
     EXPECT_EQ(result->appIndex, 0);
     EXPECT_STREQ(result->name, "com.test.app");
 

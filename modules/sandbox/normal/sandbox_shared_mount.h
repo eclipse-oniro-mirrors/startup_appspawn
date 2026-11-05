@@ -69,7 +69,7 @@ struct SharedMountArgs {
 // Lock bundle info structure for _preunlock directory management
 struct LockBundleInfo {
     uint32_t refCount;
-    uint32_t uid;
+    uint32_t appUid;
     std::string lockPath;
     std::string bundleName;
 };

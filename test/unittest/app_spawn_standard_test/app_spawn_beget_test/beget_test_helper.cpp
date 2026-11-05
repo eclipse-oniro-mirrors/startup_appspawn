@@ -43,6 +43,7 @@ int BegetTestHelper::BegetTestAddDacInfo(AppSpawnReqMsgHandle &reqHandle)
 {
     AppDacInfo dacInfo = {};
     dacInfo.uid = begetTestDefaultTestUid_;
+    dacInfo.appUid = begetTestDefaultTestUid_;  // appUid for app identification
     dacInfo.gid = begetTestDefaultTestGid_;
     dacInfo.gidCount = DAC_COUNT_TEST_ID;
     dacInfo.gidTable[0] = begetTestDefaultTestGidGroup_;

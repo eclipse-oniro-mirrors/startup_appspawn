@@ -97,6 +97,7 @@ int AppMgrTestHelper::AppMgrTestAddBaseTlv(uint8_t *buffer, uint32_t bufferLen, 
     // add dac
     AppDacInfo  dacInfo = {};
     dacInfo.uid = 20010029; // 20010029 test uid
+    dacInfo.appUid = 20010029; // 20010029 test appUid
     dacInfo.gid = 20010029; // 20010029 test gid
     dacInfo.gidCount = 2; // 2 count
     dacInfo.gidTable[0] = 20010029; // 20010029 test gid

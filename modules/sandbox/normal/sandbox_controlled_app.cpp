@@ -166,7 +166,7 @@ int32_t ControlledAppCache::ComputeForSpawn(const AppSpawningCtx *property)
         "ctrl: security context ownerInfo missing (crypto=%{public}d), aborting", cryptoStatus);
 
     std::string ownerId(ownerInfo->ownerId);
-    uint32_t userId = dacInfo->uid / UID_BASE;
+    uint32_t userId = dacInfo->appUid / UID_BASE;
     bool matched = IsControlled(userId, ownerId);
     if (matched) {
         ret = SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, APP_FLAGS_CONTROLLED_APP);

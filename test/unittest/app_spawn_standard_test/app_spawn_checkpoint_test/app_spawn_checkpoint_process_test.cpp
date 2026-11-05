@@ -1723,11 +1723,11 @@ HWTEST_F(AppSpawnCheckpointProcessTest, ForkDenied_WithDacInfo_UidCalc_006, Test
         MSG_SPAWN_WORKER_PROCESS, "com.test.forkdenied_uidcalc", 12345, 7005);
     ASSERT_NE(property, nullptr);
 
-    // Verify DAC info and uid value (20010029 / 200000 = 100)
+    // Verify DAC info and appUid value (20010029 / 200000 = 100), fork-denied path uses appUid
     AppDacInfo *dacInfo = (AppDacInfo *)GetAppProperty(property, TLV_DAC_INFO);
     ASSERT_NE(dacInfo, nullptr);
-    EXPECT_EQ(dacInfo->uid, 20010029u);
-    int expectedUserId = static_cast<int>(dacInfo->uid / UID_BASE);
+    EXPECT_EQ(dacInfo->appUid, 20010029u);
+    int expectedUserId = static_cast<int>(dacInfo->appUid / UID_BASE);
     EXPECT_EQ(expectedUserId, 100);
 
     // Mock ioctl to succeed and set a known pid

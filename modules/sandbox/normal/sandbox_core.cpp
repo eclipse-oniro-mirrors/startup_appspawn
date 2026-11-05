@@ -186,7 +186,7 @@ std::string SandboxCore::GetSandboxPath(const AppSpawningCtx *appProperty, cJSON
 
 int32_t SandboxCore::HandleDlpMount(const AppSpawnMsgDacInfo *dacInfo)
 {
-    std::string fusePath = "/mnt/data/" + std::to_string(dacInfo->uid / UID_BASE) + "/fuse";
+    std::string fusePath = "/mnt/data/" + std::to_string(dacInfo->appUid / UID_BASE) + "/fuse";
     // umount fuse path, make sure that sandbox path is not a mount point
     umount2(fusePath.c_str(), MNT_DETACH);
 
@@ -202,7 +202,7 @@ int32_t SandboxCore::HandleDlpMount(const AppSpawnMsgDacInfo *dacInfo)
                             "rootmode=40000,user_id=%u,group_id=%u,allow_other,"
                             "context=\"u:object_r:dlp_fuse_file:s0\","
                             "fscontext=u:object_r:dlp_fuse_file:s0",
-                            fd, dacInfo->uid, dacInfo->gid);
+                            fd, dacInfo->appUid, dacInfo->gid);
     APPSPAWN_CHECK(ret >= 0, close(fd);
                    return APPSPAWN_ERROR_UTILS_MEM_FAIL, "Make mount fuse option failed, errno is %{public}d", errno);
 
@@ -937,7 +937,7 @@ int32_t SandboxCore::MountIPCGroup(const AppSpawningCtx *appProperty, std::strin
         cJSON_Delete(ipcGroupRoot);
         return 0;
     }
-    std::string userId = std::to_string(dacInfo->uid / UID_BASE);
+    std::string userId = std::to_string(dacInfo->appUid / UID_BASE);
     auto processor = [&appProperty, &sandboxPackagePath, &userId](cJSON *item) {
         return ProcessIPCGroupItem(item, appProperty, sandboxPackagePath, userId);
     };
@@ -1432,7 +1432,7 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     APPSPAWN_CHECK(rc == 0, return rc, "change current dir failed");
     APPSPAWN_LOGV("Change root dir success");
 #endif
-    SetDecWithDir(appProperty, dacInfo->uid / UID_BASE);
+    SetDecWithDir(appProperty, dacInfo->appUid / UID_BASE);
     SetDecDenyWithDir(appProperty);
     SetDecPolicy();
     return 0;
@@ -1797,7 +1797,7 @@ int32_t SandboxCore::GetPackageList(AppSpawningCtx *property, std::vector<std::s
             uid = std::string(userId);
         } else {
             APPSPAWN_CHECK(info != nullptr, return APPSPAWN_ARG_INVALID, "Invalid dacInfo");
-            uid = std::to_string(info->uid / UID_BASE);
+            uid = std::to_string(info->appUid / UID_BASE);
         }
         std::string defaultSandboxRoot = (tmp ? SandboxCommonDef::g_mntTmpRoot : SandboxCommonDef::g_mntShareRoot) +
                                           uid + "/debug_hap";
@@ -1948,7 +1948,7 @@ int32_t SandboxCore::MountDebugSharefs(const AppSpawningCtx *property, const cha
     }
     char options[SandboxCommonDef::OPTIONS_MAX_LEN] = {0};
     ret = snprintf_s(options, SandboxCommonDef::OPTIONS_MAX_LEN, SandboxCommonDef::OPTIONS_MAX_LEN - 1,
-                     "override_support_delete,user_id=%u", info->uid / UID_BASE);
+                     "override_support_delete,user_id=%u", info->appUid / UID_BASE);
     if (ret <= 0) {
         return APPSPAWN_ERROR_UTILS_MEM_FAIL;
     }

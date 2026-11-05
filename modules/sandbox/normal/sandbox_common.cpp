@@ -229,7 +229,7 @@ std::string SandboxCommon::GetSandboxRootPath(const AppSpawningCtx *appProperty,
     std::string isolatedFlagText = CheckAppMsgFlagsSet(appProperty, APP_FLAGS_ISOLATED_SANDBOX_TYPE) ? "isolated/" : "";
     std::string lockSuffix = CheckAppMsgFlagsSet(appProperty, APP_FLAGS_UNLOCKED_STATUS) ? "" : "_preunlock";
     std::string sandboxRootTemplate = SandboxCommonDef::g_sandBoxRootDir +
-        std::to_string(dacInfo->uid / UID_BASE) + "/" + isolatedFlagText.c_str() +
+        std::to_string(dacInfo->appUid / UID_BASE) + "/" + isolatedFlagText.c_str() +
         SandboxCommonDef::g_variablePackageName + lockSuffix;
     const std::string variableSandboxRoot = ReplaceSandboxRootVariablePackageName(appProperty, sandboxRootTemplate);
 
@@ -465,7 +465,7 @@ std::string SandboxCommon::GetOptions(const AppSpawningCtx *appProperty, cJSON *
         return options;
     }
     options = optionsChr;
-    options += ",user_id=" + std::to_string(dacInfo->uid / UID_BASE);
+    options += ",user_id=" + std::to_string(dacInfo->appUid / UID_BASE);
     return options;
 }
 
@@ -794,7 +794,7 @@ void SandboxCommon::MakeAtomicServiceDir(const AppSpawningCtx *appProperty, std:
     AppSpawnMsgDacInfo *dacInfo = reinterpret_cast<AppSpawnMsgDacInfo *>(GetAppProperty(appProperty, TLV_DAC_INFO));
     APPSPAWN_CHECK(dacInfo != nullptr, return, "No dac info in msg app property");
     if (path.find("/mnt/share") != std::string::npos) {
-        path = "/data/service/el2/" + std::to_string(dacInfo->uid / UID_BASE) + "/share/" + variablePackageName;
+        path = "/data/service/el2/" + std::to_string(dacInfo->appUid / UID_BASE) + "/share/" + variablePackageName;
     }
     struct stat st = {};
     if (stat(path.c_str(), &st) == 0 && S_ISDIR(st.st_mode)) {
@@ -831,11 +831,11 @@ void SandboxCommon::MakeAtomicServiceDir(const AppSpawningCtx *appProperty, std:
     }
 #endif
     if (path.find("/base") != std::string::npos || path.find("/data/service/el2") != std::string::npos) {
-        ret = chown(path.c_str(), dacInfo->uid, dacInfo->gid);
+        ret = chown(path.c_str(), dacInfo->appUid, dacInfo->gid);
     } else if (path.find("/database") != std::string::npos) {
-        ret = chown(path.c_str(), dacInfo->uid, DecodeGid("ddms"));
+        ret = chown(path.c_str(), dacInfo->appUid, DecodeGid("ddms"));
     } else if (path.find("/log") != std::string::npos) {
-        ret = chown(path.c_str(), dacInfo->uid, DecodeGid("log"));
+        ret = chown(path.c_str(), dacInfo->appUid, DecodeGid("log"));
     }
     APPSPAWN_CHECK(ret == 0, return, "chown %{public}s failed, errno %{public}d", path.c_str(), errno);
     return;
@@ -1108,7 +1108,8 @@ std::string SandboxCommon::ConvertToRealPathWithPermission(const AppSpawningCtx 
     }
 
     if (path.find(SandboxCommonDef::g_permissionUserId) != std::string::npos) {
-        path = ReplaceAllVariables(path, SandboxCommonDef::g_permissionUserId, std::to_string(dacInfo->uid / UID_BASE));
+        path = ReplaceAllVariables(path, SandboxCommonDef::g_permissionUserId,
+            std::to_string(dacInfo->appUid / UID_BASE));
     }
     return path;
 }
@@ -1134,7 +1135,7 @@ std::string SandboxCommon::ConvertToRealPath(const AppSpawningCtx *appProperty, 
     }
 
     if (path.find(SandboxCommonDef::g_userId) != std::string::npos) {
-        path = ReplaceAllVariables(path, SandboxCommonDef::g_userId, std::to_string(dacInfo->uid / UID_BASE));
+        path = ReplaceAllVariables(path, SandboxCommonDef::g_userId, std::to_string(dacInfo->appUid / UID_BASE));
     }
 
     if (path.find(SandboxCommonDef::g_hostUserId) != std::string::npos) {

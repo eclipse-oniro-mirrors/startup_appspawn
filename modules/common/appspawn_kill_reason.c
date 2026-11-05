@@ -128,9 +128,9 @@ APPSPAWN_STATIC int KillReasonReportHook(const AppSpawnMgr *mgr, const AppSpawne
     if (appInfo == NULL || appInfo->killReason.reason == 0) {
         return 0;
     }
-    APPSPAWN_LOGI("KillReasonReportHook: pid:%{public}d uid:%{public}d reason:%{public}d errorCause:%{public}d",
-        appInfo->pid, appInfo->uid, appInfo->killReason.reason, appInfo->killReason.errorCause);
-    SetKillReason(mgr, appInfo->pid, appInfo->uid, appInfo->killReason.reason, appInfo->killReason.errorCause);
+    APPSPAWN_LOGI("KillReasonReportHook: pid:%{public}d appUid:%{public}d reason:%{public}d errorCause:%{public}d",
+        appInfo->pid, appInfo->appUid, appInfo->killReason.reason, appInfo->killReason.errorCause);
+    SetKillReason(mgr, appInfo->pid, appInfo->appUid, appInfo->killReason.reason, appInfo->killReason.errorCause);
     return 0;
 }
 

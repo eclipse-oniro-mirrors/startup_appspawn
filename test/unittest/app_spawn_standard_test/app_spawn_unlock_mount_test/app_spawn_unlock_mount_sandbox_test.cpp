@@ -804,7 +804,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForApp_001, TestSize.Level
     LockBundleInfo bundle;
     bundle.lockPath = "/mnt/sandbox/100";
     bundle.bundleName = "chipset";
-    bundle.uid = 200100;
+    bundle.appUid = 200100;
     bundle.refCount = 1;
     std::atomic<int> successCount{0};
     std::atomic<int> failCount{0};
@@ -834,7 +834,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForApp_003, TestSize.Level
     LockBundleInfo bundle;
     bundle.lockPath = "noslash";  // No '/' in path
     bundle.bundleName = "com.example.app1";
-    bundle.uid = 200100;
+    bundle.appUid = 200100;
     std::atomic<int> successCount{0};
     std::atomic<int> failCount{0};
     std::atomic<int> skipCount{0};
@@ -862,7 +862,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForApp_004, TestSize.Level
     LockBundleInfo bundle;
     bundle.lockPath = "/mnt/sandbox/100";
     bundle.bundleName = "com.example.app1";
-    bundle.uid = 200100;
+    bundle.appUid = 200100;
     std::atomic<int> successCount{0};
     std::atomic<int> failCount{0};
     std::atomic<int> skipCount{0};
@@ -893,7 +893,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForApp_005, TestSize.Level
     LockBundleInfo bundle;
     bundle.lockPath = "";
     bundle.bundleName = "com.example.app1";
-    bundle.uid = 200100;
+    bundle.appUid = 200100;
     std::atomic<int> successCount{0};
     std::atomic<int> failCount{0};
     std::atomic<int> skipCount{0};
@@ -921,7 +921,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForApp_007, TestSize.Level
     LockBundleInfo bundle;
     bundle.lockPath = "/mnt/sandbox/100";
     bundle.bundleName = "com.example.app1";
-    bundle.uid = 200100;
+    bundle.appUid = 200100;
     std::atomic<int> successCount{0};
     std::atomic<int> failCount{0};
     std::atomic<int> skipCount{0};
@@ -951,7 +951,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForApp_009, TestSize.Level
     LockBundleInfo bundle;
     bundle.lockPath = "/mnt/sandbox/100";
     bundle.bundleName = "com.example.mixed";
-    bundle.uid = 200100;
+    bundle.appUid = 200100;
     std::atomic<int> successCount{0};
     std::atomic<int> failCount{0};
     std::atomic<int> skipCount{0};
@@ -1094,11 +1094,11 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, AddLockBundleRef_002, TestSize.Level1)
     int ret = AddLockBundleRef(200100, "com.example.app1", lockPath);
 
     // Assert
-    // 覆盖: AddLockBundleRef new entry with uid/bundleName (sandbox_shared_mount.cpp:234)
+    // 覆盖: AddLockBundleRef new entry with appUid/bundleName (sandbox_shared_mount.cpp:234)
     EXPECT_EQ(ret, 0);
     auto it = g_lockBundleMap.find(lockPath);
     ASSERT_NE(it, g_lockBundleMap.end());
-    EXPECT_EQ(it->second.uid, 200100u);
+    EXPECT_EQ(it->second.appUid, 200100u);
     EXPECT_EQ(it->second.bundleName, "com.example.app1");
     EXPECT_EQ(it->second.refCount, 1u);
 }
@@ -1378,7 +1378,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, AppCleanupHook_002, TestSize.Level1)
     ASSERT_NE(appInfo, nullptr);
     strncpy_s(appInfo->name, nameLen, name, strlen(name));
     appInfo->name[strlen(name)] = '\0';
-    appInfo->uid = 200100;
+    appInfo->appUid = 200100;
     appInfo->lockBundleRefAdded = true;
 
     AppSpawnMgr mgr;
@@ -1411,7 +1411,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, AppCleanupHook_003, TestSize.Level1)
     ASSERT_NE(appInfo, nullptr);
     strncpy_s(appInfo->name, nameLen, name, strlen(name));
     appInfo->name[strlen(name)] = '\0';
-    appInfo->uid = 200100;
+    appInfo->appUid = 200100;
     appInfo->lockBundleRefAdded = false;  // Not added
 
     AppSpawnMgr mgr;
@@ -1443,7 +1443,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, AppCleanupHook_004, TestSize.Level1)
     ASSERT_NE(appInfo, nullptr);
     strncpy_s(appInfo->name, nameLen, name, strlen(name));
     appInfo->name[strlen(name)] = '\0';
-    appInfo->uid = 200100;
+    appInfo->appUid = 200100;
     appInfo->lockBundleRefAdded = true;
     appInfo->appIndex = 0;
 
@@ -1485,7 +1485,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, AppCleanupHook_005, TestSize.Level1)
     ASSERT_NE(appInfo, nullptr);
     strncpy_s(appInfo->name, nameLen, name, strlen(name));
     appInfo->name[strlen(name)] = '\0';
-    appInfo->uid = 200100;
+    appInfo->appUid = 200100;
     appInfo->lockBundleRefAdded = true;
     appInfo->appIndex = 0;
 
@@ -1784,7 +1784,7 @@ int DoSharedMountForUser(int uid)
     // Filter bundles by userId
     std::vector<LockBundleInfo> filteredBundles;
     for (const auto &bundle : bundles) {
-        if ((bundle.uid / UID_BASE) == static_cast<uint32_t>(uid)) {
+        if ((bundle.appUid / UID_BASE) == static_cast<uint32_t>(uid)) {
             filteredBundles.push_back(bundle);
         }
     }

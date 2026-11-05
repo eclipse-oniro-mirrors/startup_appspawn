@@ -149,7 +149,7 @@ APPSPAWN_STATIC void WriteSignalInfoToFd(AppSpawnedProcess *appInfo, AppSpawnCon
 {
     APPSPAWN_CHECK(content->signalFd > 0, return, "Invalid signal fd[%{public}d]", content->signalFd);
     APPSPAWN_CHECK(appInfo->pid > 0, return, "Invalid pid[%{public}d]", appInfo->pid);
-    APPSPAWN_CHECK(appInfo->uid > 0, return, "Invalid uid[%{public}d]", appInfo->uid);
+    APPSPAWN_CHECK(appInfo->appUid > 0, return, "Invalid uid[%{public}d]", appInfo->appUid);
     APPSPAWN_CHECK(appInfo->name != NULL, return, "Invalid name");
 
     cJSON *root = cJSON_CreateObject();
@@ -158,7 +158,7 @@ APPSPAWN_STATIC void WriteSignalInfoToFd(AppSpawnedProcess *appInfo, AppSpawnCon
         return;
     }
     cJSON_AddNumberToObject(root, "pid", appInfo->pid);
-    cJSON_AddNumberToObject(root, "uid", appInfo->uid);
+    cJSON_AddNumberToObject(root, "uid", appInfo->appUid);
     cJSON_AddNumberToObject(root, "signal", signal);
     cJSON_AddStringToObject(root, "bundleName", appInfo->name);
     char *jsonString = cJSON_Print(root);
@@ -1662,7 +1662,7 @@ static uint32_t GetAppCloneIndex(AppSpawningCtx *property)
     return (bundleInfo != NULL) ? bundleInfo->bundleIndex : 0;
 }
 
-static AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *property)
+APPSPAWN_STATIC AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *property)
 {
     bool isDebuggable = CheckAppMsgFlagsSet(property, APP_FLAGS_DEBUGGABLE);
     uint32_t appIndex = GetAppCloneIndex(property);
@@ -1678,6 +1678,7 @@ static AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *property)
 
     AppSpawnMsgDacInfo *dacInfo = GetAppProperty(property, TLV_DAC_INFO);
     appInfo->uid = (dacInfo != NULL) ? dacInfo->uid : 0;
+    appInfo->appUid = (dacInfo != NULL) ? dacInfo->appUid : 0;
     appInfo->spawnStart.tv_sec = property->spawnStart.tv_sec;
     appInfo->spawnStart.tv_nsec = property->spawnStart.tv_nsec;
     appInfo->lockBundleRefAdded = property->lockBundleRefAdded;  // Copy flag from AppSpawningCtx
@@ -2200,8 +2201,9 @@ static int AddSpawnedProcessInfo(AppSpawningCtx *property, AppSpawnConnection *c
             "Failed to add spawned process for worker pid=%{public}d", property->pid);
 
         AppSpawnMsgDacInfo *dacInfo = GetAppProperty(property, TLV_DAC_INFO);
-        appInfo->uid = dacInfo != NULL ? dacInfo->uid : 0;
-        appInfo->spmRefAdded = property->spmRefAdded;  // Copy SPM refcount flag
+        appInfo->uid = (dacInfo != NULL) ? dacInfo->uid : 0;
+        appInfo->appUid = dacInfo != NULL ? dacInfo->appUid : 0;
+        appInfo->spmRefAdded = property->spmRefAdded; // Copy SPM refcount flag
         WatchChildProcessFd(property);
         ProcessMgrHookExecute(STAGE_SERVER_APP_ADD, GetAppSpawnContent(), appInfo);
     }

@@ -52,6 +52,26 @@ do {    \
     (tlvCount)++;   \
 } while (0)
 
+namespace {
+constexpr uint32_t CHECKPOINT_TEST_DAC_ID = 20010029;      // uid/appUid/gid fixture
+constexpr uint32_t CHECKPOINT_TEST_GID_SECOND = 20010030;  // second entry of gidTable
+}
+
+// add dac info (使用 AppDacInfo)
+static int CheckpointTestAddDacTlv(uint8_t *buffer, uint32_t bufferLen, uint32_t &currLen, uint32_t &tlvCount)
+{
+    AppDacInfo dacInfo = {};
+    dacInfo.uid = CHECKPOINT_TEST_DAC_ID;
+    dacInfo.appUid = CHECKPOINT_TEST_DAC_ID;  // appUid for app identification
+    dacInfo.gid = CHECKPOINT_TEST_DAC_ID;
+    dacInfo.gidCount = 2;
+    dacInfo.gidTable[0] = CHECKPOINT_TEST_DAC_ID;
+    dacInfo.gidTable[1] = CHECKPOINT_TEST_GID_SECOND;
+    int ret = 0;
+    CHECKPOINT_ADD_TLV(TLV_DAC_INFO, dacInfo, currLen, tlvCount);
+    return 0;
+}
+
 int CheckpointTestHelper::CheckpointTestAddBaseTlv(uint8_t *buffer, uint32_t bufferLen,
     uint32_t &realLen, uint32_t &tlvCount)
 {
@@ -101,13 +121,8 @@ int CheckpointTestHelper::CheckpointTestAddBaseTlv(uint8_t *buffer, uint32_t buf
     CHECKPOINT_ADD_TLV(TLV_BUNDLE_INFO, info, currLen, tlvCount);
 
     // add dac info (使用 AppDacInfo)
-    AppDacInfo dacInfo = {};
-    dacInfo.uid = 20010029;
-    dacInfo.gid = 20010029;
-    dacInfo.gidCount = 2;
-    dacInfo.gidTable[0] = 20010029;
-    dacInfo.gidTable[1] = 20010030;
-    CHECKPOINT_ADD_TLV(TLV_DAC_INFO, dacInfo, currLen, tlvCount);
+    ret = CheckpointTestAddDacTlv(buffer, bufferLen, currLen, tlvCount);
+    APPSPAWN_CHECK(ret == 0, return -1, "Failed add tlv TLV_DAC_INFO");
 
     realLen = currLen;
     return 0;

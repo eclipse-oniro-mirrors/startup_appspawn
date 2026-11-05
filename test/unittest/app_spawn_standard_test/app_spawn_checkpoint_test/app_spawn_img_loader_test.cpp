@@ -247,7 +247,7 @@ HWTEST_F(AppSpawnImgLoaderTest, App_ImgLoader_AddCheckPointInfo_003, TestSize.Le
     EXPECT_EQ(node->checkPointId, 1234);
     EXPECT_EQ(strcmp(node->name, "test_process"), 0);
     EXPECT_EQ(node->appIndex, 1);
-    EXPECT_EQ(node->uid, 1000);
+    EXPECT_EQ(node->appUid, 1000);
 
     // Verify it was added to the queue
     AppSpawnedCheckPointProcesses *foundNode = GetSpawningImgInfoByName(mgr, "test_process");
@@ -314,12 +314,12 @@ HWTEST_F(AppSpawnImgLoaderTest, App_ImgLoader_GetByName_003, TestSize.Level0)
     AppSpawnedCheckPointProcesses *foundNode = GetSpawningImgInfoByName(mgr, "process1");
     ASSERT_NE(foundNode, nullptr);
     EXPECT_EQ(foundNode->checkPointId, 1111);
-    EXPECT_EQ(foundNode->uid, 1000);
+    EXPECT_EQ(foundNode->appUid, 1000);
 
     foundNode = GetSpawningImgInfoByName(mgr, "process2");
     ASSERT_NE(foundNode, nullptr);
     EXPECT_EQ(foundNode->checkPointId, 2222);
-    EXPECT_EQ(foundNode->uid, 2000);
+    EXPECT_EQ(foundNode->appUid, 2000);
 
     DeleteAppSpawnMgr(mgr);
 }
@@ -623,7 +623,7 @@ HWTEST_F(AppSpawnImgLoaderTest, App_ImgLoader_LongProcessName_001, TestSize.Leve
     ASSERT_NE(foundNode, nullptr);
     EXPECT_EQ(foundNode->checkPointId, 9999);
     EXPECT_EQ(foundNode->appIndex, 5);
-    EXPECT_EQ(foundNode->uid, 3000);
+    EXPECT_EQ(foundNode->appUid, 3000);
 
     DeleteAppSpawnMgr(mgr);
 }

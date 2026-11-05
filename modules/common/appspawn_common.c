@@ -78,6 +78,7 @@
 #define PID_NS_INIT_GID 100000
 #define PREINSTALLED_HAP_FLAG 0x01 // hapFlags 0x01: SELINUX_HAP_RESTORECON_PREINSTALLED_APP in selinux
 #define MIN_VALID_APP_UID 10000
+#define MIN_VALID_SHARED_UID 100
 #define MIN_VALID_APP_GID 10000
 #define APP_SIGN_TYPE_DEFAULT "none"
 #define XPM_DEV_PATH "/dev/xpm"
@@ -110,6 +111,18 @@ void __attribute__((weak)) SetAgentIdFromMsg(const AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("SetAgentIdFromMsg is not implemented (weak stub), agentId is NOT written to kernel");
     return;
+}
+
+int __attribute__((weak)) SetAppUid(uint32_t appUid)
+{
+    APPSPAWN_LOGV("SetAppUid called (weak implementation)");
+    return 0;
+}
+
+int __attribute__((weak)) GetAppUid(uint32_t *appUid)
+{
+    APPSPAWN_LOGV("GetAppUid called (weak implementation)");
+    return 0;
 }
 
 static int SetProcessName(const AppSpawnMgr *content, const AppSpawningCtx *property)
@@ -531,6 +544,31 @@ APPSPAWN_STATIC void GetExtPermGids(const AppSpawningCtx *property,
     cJSON_Delete(extInfoJson);
 }
 
+/*
+ * @brief Compatibility for the caller not passing appUid: fallback to uid when appUid is 0.
+ *        Invalid non-zero values are rejected by SetUidGid, not fixed here.
+ */
+APPSPAWN_STATIC int NormalizeDacAppUid(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    UNUSED(content);
+    AppSpawnMsgDacInfo *dacInfo = (AppSpawnMsgDacInfo *)GetAppProperty(property, TLV_DAC_INFO);
+    if (dacInfo != NULL && dacInfo->appUid == 0) {
+        APPSPAWN_LOGI("NormalizeDacAppUid: appUid not set, fallback to uid=%{public}u for %{public}s",
+            dacInfo->uid, GetProcessName(property));
+        dacInfo->appUid = dacInfo->uid;
+    }
+    return 0;
+}
+
+static bool IsValidDacInfo(const AppSpawningCtx *property, const AppDacInfo *dacInfo)
+{
+    uint32_t minUid = IsShareUidApp(property) ? MIN_VALID_SHARED_UID : MIN_VALID_APP_UID;
+    return (dacInfo->uid >= minUid && dacInfo->uid < UINT32_MAX) &&
+        (dacInfo->appUid >= MIN_VALID_APP_UID && dacInfo->appUid < UINT32_MAX) &&
+        (dacInfo->gid >= MIN_VALID_APP_GID && dacInfo->gid < UINT32_MAX) &&
+        (dacInfo->gidCount <= APP_MAX_GIDS);
+}
+
 APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     const char *processName = GetProcessName(property);
@@ -538,14 +576,13 @@ APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *
     AppSpawnMsgDacInfo *dacInfo = (AppSpawnMsgDacInfo *)GetAppProperty(property, TLV_DAC_INFO);
     APPSPAWN_CHECK(dacInfo != NULL, return APPSPAWN_TLV_NONE,
         "No tlv %{public}d in msg %{public}s", TLV_DAC_INFO, processName);
-    APPSPAWN_CHECK(dacInfo->uid >= MIN_VALID_APP_UID && dacInfo->uid < UINT32_MAX &&
-        dacInfo->gid >= MIN_VALID_APP_GID && dacInfo->gid < UINT32_MAX && dacInfo->gidCount <= APP_MAX_GIDS,
+    APPSPAWN_CHECK(IsValidDacInfo(property, dacInfo),
 #ifdef APPSPAWN_HISYSEVENT
         ReportSpawnChildProcessFail(processName, ERR_APPSPAWN_MSG_PARAM_INVALID, APPSPAWN_MSG_INVALID);
 #endif
         return APPSPAWN_MSG_INVALID,
-        "uid %{public}u or gid %{public}u gidCount %{public}u is invalid",
-        dacInfo->uid, dacInfo->gid, dacInfo->gidCount);
+        "appUid %{public}u uid %{public}u or gid %{public}u gidCount %{public}u is invalid",
+        dacInfo->appUid, dacInfo->uid, dacInfo->gid, dacInfo->gidCount);
 
     // append gids configured per-permission (gated same as cap path)
     if (NeedExtPerm(content, property)) {
@@ -578,6 +615,10 @@ APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *
         ret = SetUserId(userIdStr);
         APPSPAWN_CHECK_ONLY_LOGW(ret == 0, "SetUserId(%{public}s) failed", userIdStr);
     }
+
+    // Set appUid to kernel after setresuid.
+    ret = SetAppUid(dacInfo->appUid);
+    APPSPAWN_CHECK_ONLY_LOGW(ret == 0, "SetAppUid(%{public}u) failed", dacInfo->appUid);
 
     /* The setenv operation should be performed after the final SetProcessName. This is because the HiLog module
      * uses the HAP_DEBUGGABLE env as the basis for determining whether the application process name has been set.
@@ -991,6 +1032,11 @@ MODULE_CONSTRUCTOR(void)
     AddPreloadHook(HOOK_PRIO_COMMON, PreLoadSetSeccompFilter);
     AddPreloadHook(HOOK_PRIO_COMMON, SpawnLoadConfig);
     AddPreloadHook(HOOK_PRIO_COMMON, SpawnLoadSeLinuxConfig);
+
+    // Normalize appUid before the SPM rebuild hook; the image process path
+    // only runs BOOT_IMG hooks, so register on both stages.
+    AddAppSpawnHook(STAGE_PARENT_MSG_DECODE, HOOK_PRIO_HIGHEST - 1, NormalizeDacAppUid);
+    AddAppSpawnHook(STAGE_PARENT_BOOT_IMG, HOOK_PRIO_HIGHEST - 1, NormalizeDacAppUid);
 
     AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_HIGHEST, SpawnGetSpawningFlag);
 #ifdef CODE_SIGNATURE_ENABLE
