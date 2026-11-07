@@ -106,6 +106,12 @@ int __attribute__((weak)) SetUserId(char *userIdStr)
     return 0;
 }
 
+void __attribute__((weak)) SetAgentIdFromMsg(const AppSpawningCtx *property)
+{
+    APPSPAWN_LOGV("SetAgentIdFromMsg is not implemented (weak stub), agentId is NOT written to kernel");
+    return;
+}
+
 static int SetProcessName(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     const char *processName = GetProcessName(property);
@@ -588,6 +594,18 @@ APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *
     return 0;
 }
 
+APPSPAWN_STATIC int SetAppAgentId(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    if (!IsNoShareFsEnable()) {
+        return 0;
+    }
+    if(!IsAppSpawnMode(content) && !IsNativeSpawnMode(content)) {
+        return 0;
+    }
+    SetAgentIdFromMsg(property);
+    return 0;
+}
+
 #ifndef APPSPAWN_CHANGE_SCHED_ENABLE
 typedef struct TaskConfig {
     pid_t pid;
@@ -817,6 +835,9 @@ static int SpawnSetProperties(AppSpawnMgr *content, AppSpawningCtx *property)
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
     ret = SetUidGid(content, property);
+    APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
+
+    ret = SetAppAgentId(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
     ret = SetFileDescriptors(content, property);
