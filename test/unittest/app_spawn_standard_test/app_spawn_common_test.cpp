@@ -4644,6 +4644,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidUid_001, TestSize.Level0
         // Set uid to invalid value (below MIN_VALID_APP_UID=10000)
         AppDacInfo dacInfo = {};
         dacInfo.uid = 1;  // invalid uid
+        dacInfo.appUid = g_testHelper.GetTestUid();  // valid appUid isolates the invalid process uid
         dacInfo.gid = g_testHelper.GetTestGid();
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -4657,7 +4658,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidUid_001, TestSize.Level0
     DeleteAppSpawnMgr(mgr);
     ASSERT_EQ(ret, APPSPAWN_MSG_INVALID);
 }
- 
+
 /**
  * @brief SetUidGid with invalid gid (below MIN_VALID_APP_GID) should return APPSPAWN_MSG_INVALID
  *        Branch: gid < MIN_VALID_APP_GID
@@ -4679,6 +4680,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGid_001, TestSize.Level0
         // Set gid to invalid value (below MIN_VALID_APP_UID=10000)
         AppDacInfo dacInfo = {};
         dacInfo.uid = g_testHelper.GetTestUid();
+        dacInfo.appUid = g_testHelper.GetTestUid();  // valid appUid so the gid branch is reached
         dacInfo.gid = 1;  // invalid gid
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -4714,6 +4716,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGidCount_001, TestSize.L
         // Set gidCount to an excessively large value
         AppDacInfo dacInfo = {};
         dacInfo.uid = g_testHelper.GetTestUid();
+        dacInfo.appUid = g_testHelper.GetTestUid();  // valid appUid so the gidCount branch is reached
         dacInfo.gid = g_testHelper.GetTestGid();
         dacInfo.gidCount = APP_MAX_GIDS + 1;  // exceed max
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -4748,6 +4751,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxBoundary_001, TestSize.Le
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = UINT32_MAX;  // boundary value
+        dacInfo.appUid = g_testHelper.GetTestUid();  // valid appUid isolates the invalid process uid
         dacInfo.gid = g_testHelper.GetTestGid();
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -4910,6 +4914,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMinBoundary_001, TestSize.Le
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = 10000;  // MIN_VALID_APP_UID, lower boundary
+        dacInfo.appUid = 10000;  // MIN_VALID_APP_UID, lower boundary
         dacInfo.gid = g_testHelper.GetTestGid();
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -4944,6 +4949,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountMaxBoundary_001, TestSi
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = 20010029;  // 20010029 test uid
+        dacInfo.appUid = 20010029;  // 20010029 test appUid
         dacInfo.gid = 20010029;  // 20010029 test gid
         dacInfo.gidCount = APP_MAX_GIDS;  // upper boundary
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -5009,6 +5015,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidBelowMin_001, TestSize.Level
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = 9999;  // below MIN_VALID_APP_UID (10000)
+        dacInfo.appUid = 20010029;  // valid appUid isolates the invalid process uid
         dacInfo.gid = g_testHelper.GetTestGid();
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -5044,6 +5051,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidBelowMin_001, TestSize.Level
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = 20010029;  // valid uid
+        dacInfo.appUid = 20010029;  // valid appUid so the gid branch is reached
         dacInfo.gid = 9999;  // below MIN_VALID_APP_GID (10000)
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -5079,6 +5087,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountOverMax_001, TestSize.L
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = 20010029;  // valid uid
+        dacInfo.appUid = 20010029;  // valid appUid so the gidCount branch is reached
         dacInfo.gid = 20010029;  // valid gid
         dacInfo.gidCount = APP_MAX_GIDS + 1;  // exceeds APP_MAX_GIDS (64)
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
@@ -5114,6 +5123,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxInvalid_001, TestSize.Lev
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         AppDacInfo dacInfo = {};
         dacInfo.uid = UINT32_MAX;  // uid must be < UINT32_MAX
+        dacInfo.appUid = g_testHelper.GetTestUid();  // valid appUid isolates the invalid process uid
         dacInfo.gid = 20010029;  // valid gid
         dacInfo.gidCount = 0;
         ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);

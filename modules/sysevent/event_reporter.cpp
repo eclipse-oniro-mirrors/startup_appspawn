@@ -29,7 +29,7 @@ constexpr char KEY_UID[] = "UID";
 constexpr char KEY_STATUS[] = "STATUS";
 constexpr int32_t MAX_NAME_LENGTH = 1024;
 
-void ProcessMgrRemoveApp(const char* processName, int pid, int uid, int status)
+void ProcessMgrRemoveApp(const char* processName, int pid, int appUid, int status)
 {
     std::string pname = "Unknown";
     if ((processName != NULL) && (strlen(processName) <= MAX_NAME_LENGTH)) {
@@ -46,7 +46,7 @@ void ProcessMgrRemoveApp(const char* processName, int pid, int uid, int status)
 
     if (signal != 0) {
         int ret = HiSysEventWrite(HiSysEvent::Domain::STARTUP, KEY_PROCESS_EXIT, HiSysEvent::EventType::BEHAVIOR,
-            KEY_NAME, pname, KEY_PID, pid, KEY_UID, uid, KEY_STATUS, status);
+            KEY_NAME, pname, KEY_PID, pid, KEY_UID, appUid, KEY_STATUS, status);
         if (ret != 0) {
             APPSPAWN_LOGE("ProcessMgrRemoveApp error, ret: %{public}d", ret);
         }
@@ -57,7 +57,7 @@ void ProcessMgrRemoveApp(const char* processName, int pid, int uid, int status)
 
 static int ProcessMgrRemoveApp(const AppSpawnMgr *content, const AppSpawnedProcessInfo *appInfo)
 {
-    OHOS::system::ProcessMgrRemoveApp(appInfo->name, appInfo->pid, appInfo->uid, appInfo->exitStatus);
+    OHOS::system::ProcessMgrRemoveApp(appInfo->name, appInfo->pid, appInfo->appUid, appInfo->exitStatus);
     return 0;
 }
 

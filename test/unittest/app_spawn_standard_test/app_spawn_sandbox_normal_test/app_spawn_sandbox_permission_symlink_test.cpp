@@ -208,7 +208,7 @@ HWTEST_F(AppSpawnSandboxPermissionSymlinkTest, DoSandboxFilePermissionSymlink_01
     ASSERT_NE(dacInfo, nullptr);
     const char *bundleName = GetBundleName(appProperty);
     ASSERT_NE(bundleName, nullptr);
-    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->uid / UID_BASE) + "/" + bundleName;
+    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->appUid / UID_BASE) + "/" + bundleName;
     // 创建沙箱根目录
     SandboxCommon::CreateDirRecursive(sandboxRoot, 0755);
     // 清理可能残留的符号链接
@@ -263,7 +263,7 @@ HWTEST_F(AppSpawnSandboxPermissionSymlinkTest, DoSandboxFilePermissionSymlink_02
     ASSERT_NE(dacInfo, nullptr);
     const char *bundleName = GetBundleName(appProperty);
     ASSERT_NE(bundleName, nullptr);
-    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->uid / UID_BASE) + "/" + bundleName;
+    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->appUid / UID_BASE) + "/" + bundleName;
 
     // 创建沙箱根目录
     SandboxCommon::CreateDirRecursive(sandboxRoot, 0755);
@@ -315,7 +315,7 @@ HWTEST_F(AppSpawnSandboxPermissionSymlinkTest, DoSandboxFilePermissionSymlink_03
     ASSERT_NE(dacInfo, nullptr);
     const char *bundleName = GetBundleName(appProperty);
     ASSERT_NE(bundleName, nullptr);
-    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->uid / UID_BASE) + "/" + bundleName;
+    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->appUid / UID_BASE) + "/" + bundleName;
 
     // 创建沙箱根目录
     SandboxCommon::CreateDirRecursive(sandboxRoot, 0755);
@@ -386,7 +386,7 @@ HWTEST_F(AppSpawnSandboxPermissionSymlinkTest, DoSandboxFilePermissionSymlink_04
     ASSERT_NE(dacInfo, nullptr);
     const char *bundleName = GetBundleName(appProperty);
     ASSERT_NE(bundleName, nullptr);
-    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->uid / UID_BASE) + "/" + bundleName;
+    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->appUid / UID_BASE) + "/" + bundleName;
 
     // 创建沙箱根目录
     SandboxCommon::CreateDirRecursive(sandboxRoot, 0755);
@@ -458,7 +458,7 @@ HWTEST_F(AppSpawnSandboxPermissionSymlinkTest, DoSandboxFilePermissionSymlink_05
     ASSERT_NE(dacInfo, nullptr);
     const char *bundleName = GetBundleName(appProperty);
     ASSERT_NE(bundleName, nullptr);
-    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->uid / UID_BASE) + "/" + bundleName;
+    std::string sandboxRoot = "/mnt/sandbox/" + std::to_string(dacInfo->appUid / UID_BASE) + "/" + bundleName;
 
     // 创建沙箱根目录
     SandboxCommon::CreateDirRecursive(sandboxRoot, 0755);

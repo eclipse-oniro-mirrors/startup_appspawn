@@ -33,13 +33,19 @@ using namespace testing;
 using namespace testing::ext;
 using namespace OHOS::AppSpawn;
 
+namespace {
+constexpr uint32_t CUSTOM_SANDBOX_UID = 100;
+constexpr uint32_t CUSTOM_SANDBOX_APPUID = 20010052;
+}
+
 // Duplicate the file-local RefcountContext struct from spm.c for test access
 typedef struct {
     uint64_t accessTokenIdEx;
     uint32_t uid;
+    uint32_t appUid;
     uint32_t spmHighToken;
     uint32_t spmLowToken;
-    uint32_t spmUid;
+    uint32_t spmAppUid;
 } RefcountContext;
 
 // Static function declarations (APPSPAWN_STATIC is empty when APPSPAWN_TEST is defined)
@@ -141,6 +147,7 @@ protected:
         dacTlv->tlvLen = (uint16_t)dacTotalLen;
         AppDacInfo *dacData = (AppDacInfo *)(dacTlv + 1);
         dacData->uid = uid;
+        dacData->appUid = uid;
         dacData->gid = uid;
         dacData->gidCount = 0;
         msg->tlvOffset[TLV_DAC_INFO] = offset;
@@ -222,10 +229,11 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_IncRefCountsForContext_001, TestSize.Lev
 
     RefcountContext refCtx = {};
     refCtx.accessTokenIdEx = ((uint64_t)0x12345678 << 32) | 12345678u;
-    refCtx.uid = 1000;
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
 
     EXPECT_CALL(*mock_, SpmIncTokenidRefCnt(12345678u, _)).WillOnce(Return(0));
-    EXPECT_CALL(*mock_, SpmIncUidRefCnt(1000u, _)).WillOnce(Return(0));
+    EXPECT_CALL(*mock_, SpmIncUidRefCnt(CUSTOM_SANDBOX_APPUID, _)).WillOnce(Return(0));
 
     int ret = IncreaseRefCounts(ctx, &refCtx);
     EXPECT_EQ(ret, 0);
@@ -247,9 +255,11 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_IncRefCountsForContext_002, TestSize.Lev
 
     RefcountContext refCtx = {};
     refCtx.accessTokenIdEx = 12345678u;
-    refCtx.uid = 1000;
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
 
     EXPECT_CALL(*mock_, SpmIncTokenidRefCnt(_, _)).WillOnce(Return(-1));
+    EXPECT_CALL(*mock_, SpmIncUidRefCnt(_, _)).Times(0);
 
     int ret = IncreaseRefCounts(ctx, &refCtx);
     EXPECT_EQ(ret, SPM_ERROR_REF_COUNT_INC_FAILED);
@@ -271,10 +281,11 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_IncRefCountsForContext_003, TestSize.Lev
 
     RefcountContext refCtx = {};
     refCtx.accessTokenIdEx = 12345678u;
-    refCtx.uid = 1000;
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
 
     EXPECT_CALL(*mock_, SpmIncTokenidRefCnt(_, _)).WillOnce(Return(0));
-    EXPECT_CALL(*mock_, SpmIncUidRefCnt(_, _)).WillOnce(Return(-1));
+    EXPECT_CALL(*mock_, SpmIncUidRefCnt(CUSTOM_SANDBOX_APPUID, _)).WillOnce(Return(-1));
 
     int ret = IncreaseRefCounts(ctx, &refCtx);
     EXPECT_EQ(ret, SPM_ERROR_REF_COUNT_INC_FAILED);
@@ -295,10 +306,11 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_001, TestSize.Level1
     ASSERT_NE(ctx, nullptr);
 
     RefcountContext refCtx = {};
-    refCtx.uid = 1000;
-    refCtx.spmUid = 2000;  // mismatch, but normal mode skips SpmGetUidRefCnt
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
+    refCtx.spmAppUid = 2000;  // mismatch, but normal mode skips SpmGetUidRefCnt
 
-    // SpmGetUidRefCnt should NOT be called
+    EXPECT_CALL(*mock_, SpmGetUidRefCnt(_, _)).Times(0);
     int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
@@ -307,7 +319,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_001, TestSize.Level1
 }
 
 // ============================================================================
-// 1.9 ValidateUidRefCount — nweb mode + spmUid==0: skip check, return 0
+// 1.9 ValidateUidRefCount — nweb mode + spmAppUid==0: skip check, return 0
 // ============================================================================
 HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_002, TestSize.Level1)
 {
@@ -317,10 +329,11 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_002, TestSize.Level1
     ASSERT_NE(ctx, nullptr);
 
     RefcountContext refCtx = {};
-    refCtx.uid = 1000;
-    refCtx.spmUid = 0;  // spmUid==0 -> skip check
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
+    refCtx.spmAppUid = 0;  // spmAppUid==0 -> skip check
 
-    // SpmGetUidRefCnt should NOT be called
+    EXPECT_CALL(*mock_, SpmGetUidRefCnt(_, _)).Times(0);
     int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
@@ -329,7 +342,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_002, TestSize.Level1
 }
 
 // ============================================================================
-// 1.10 ValidateUidRefCount — isolated sandbox + uid match: skip check, return 0
+// 1.10 ValidateUidRefCount — isolated sandbox + appUid match: skip check, return 0
 // ============================================================================
 HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_003, TestSize.Level2)
 {
@@ -346,10 +359,11 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_003, TestSize.Level2
         .WillOnce(Return(1));
 
     RefcountContext refCtx = {};
-    refCtx.uid = 1000;
-    refCtx.spmUid = 1000;  // uid match -> skip check
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
+    refCtx.spmAppUid = CUSTOM_SANDBOX_APPUID;  // appUid match -> skip check
 
-    // SpmGetUidRefCnt should NOT be called
+    EXPECT_CALL(*mock_, SpmGetUidRefCnt(_, _)).Times(0);
     int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
@@ -378,15 +392,16 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_OnSpawnAbortUpdateRefCount_001, TestSize
 
     AppSpawnMsgAccessToken tokenInfo;
     tokenInfo.accessTokenIdEx = tokenIdEx;
-    AppDacInfo dacInfo;
-    dacInfo.uid = 1000;
+    AppDacInfo dacInfo = {};
+    dacInfo.uid = CUSTOM_SANDBOX_UID;
+    dacInfo.appUid = CUSTOM_SANDBOX_APPUID;
 
     EXPECT_CALL(*mock_, GetAppSpawnMsgInfo(_, TLV_ACCESS_TOKEN_INFO))
         .WillOnce(Return(&tokenInfo));
     EXPECT_CALL(*mock_, SpmDecTokenidRefCnt(_, _)).WillOnce(Return(0));
     EXPECT_CALL(*mock_, GetAppSpawnMsgInfo(_, TLV_DAC_INFO))
         .WillOnce(Return(&dacInfo));
-    EXPECT_CALL(*mock_, SpmDecUidRefCnt(_, _)).WillOnce(Return(0));
+    EXPECT_CALL(*mock_, SpmDecUidRefCnt(CUSTOM_SANDBOX_APPUID, _)).WillOnce(Return(0));
 
     int ret = OnSpawnAbortUpdateRefCount(mgr, ctx);
     EXPECT_EQ(ret, 0);
@@ -407,16 +422,17 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_OnAppExitUpdateRefCount_001, TestSize.Le
     ASSERT_NE(mgr, nullptr);
 
     AppSpawnedProcess appInfo = {};
-    appInfo.uid = 1000;
+    appInfo.appUid = CUSTOM_SANDBOX_APPUID;
     appInfo.pid = 12345;
     appInfo.tokenid = 12345678u;
     appInfo.spmRefAdded = SPM_REF_TOKENID | SPM_REF_UID;
 
     EXPECT_CALL(*mock_, SpmDecTokenidRefCnt(_, _)).WillOnce(Return(0));
-    EXPECT_CALL(*mock_, SpmDecUidRefCnt(_, _)).WillOnce(Return(0));
+    EXPECT_CALL(*mock_, SpmDecUidRefCnt(CUSTOM_SANDBOX_APPUID, _)).WillOnce(Return(0));
 
     int ret = OnAppExitUpdateRefCount(mgr, &appInfo);
     EXPECT_EQ(ret, 0);
+    EXPECT_EQ(appInfo.spmRefAdded, SPM_REF_NONE);
 
     TestDataFactory::FreeAppSpawnMgr(mgr);
 }
@@ -511,7 +527,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateSpmDataConsistency_004, TestSize
 
     uint64_t accessTokenIdEx = ((uint64_t)0xABCD0001 << 32) | 12345u;
 
-    // Normal process: uidFromMsg=1000 != spmUid=2000 => MISMATCH
+    // Normal process: uidFromMsg=1000 != spmAppUid=2000 => MISMATCH
     int ret = ValidateSpmDataConsistency(spmData, accessTokenIdEx, 1000, mgr, ctx);
     EXPECT_EQ(ret, SPM_ERROR_UID_MISMATCH);
 
@@ -531,11 +547,12 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_004, TestSize.Level1
     ASSERT_NE(ctx, nullptr);
 
     RefcountContext refCtx = {};
-    refCtx.uid = 1000;
-    refCtx.spmUid = 2000;  // mismatch + nweb mode -> SpmGetUidRefCnt is called
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
+    refCtx.spmAppUid = 2000;  // mismatch + nweb mode -> SpmGetUidRefCnt is called
 
     uint64_t refCnt = 1;
-    EXPECT_CALL(*mock_, SpmGetUidRefCnt(1000u, _))
+    EXPECT_CALL(*mock_, SpmGetUidRefCnt(CUSTOM_SANDBOX_APPUID, _))
         .WillOnce(DoAll(SetArgPointee<1>(refCnt), Return(0)));
 
     int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
@@ -563,11 +580,12 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_005, TestSize.Level1
         .WillOnce(Return(1));
 
     RefcountContext refCtx = {};
-    refCtx.uid = 1000;
-    refCtx.spmUid = 2000;  // mismatch + isolated sandbox -> SpmGetUidRefCnt is called
+    refCtx.uid = CUSTOM_SANDBOX_UID;
+    refCtx.appUid = CUSTOM_SANDBOX_APPUID;
+    refCtx.spmAppUid = 2000;  // mismatch + isolated sandbox -> SpmGetUidRefCnt is called
 
     uint64_t refCnt = 1;
-    EXPECT_CALL(*mock_, SpmGetUidRefCnt(1000u, _))
+    EXPECT_CALL(*mock_, SpmGetUidRefCnt(CUSTOM_SANDBOX_APPUID, _))
         .WillOnce(DoAll(SetArgPointee<1>(refCnt), Return(0)));
 
     int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
@@ -931,8 +949,9 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_RebuildMessageFromSPM_003, TestSize.Leve
     // Mock GetAppSpawnMsgInfo to return token and DAC data
     AppSpawnMsgAccessToken tokenInfo;
     tokenInfo.accessTokenIdEx = tokenIdEx;
-    AppDacInfo dacInfo;
-    dacInfo.uid = 1000;
+    AppDacInfo dacInfo = {};
+    dacInfo.uid = CUSTOM_SANDBOX_UID;
+    dacInfo.appUid = CUSTOM_SANDBOX_APPUID;
 
     EXPECT_CALL(*mock_, GetAppSpawnMsgInfo(_, TLV_ACCESS_TOKEN_INFO))
         .WillRepeatedly(Return(&tokenInfo));
@@ -941,7 +960,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_RebuildMessageFromSPM_003, TestSize.Leve
 
     // IncreaseRefCounts succeeds (called before SPM data validation)
     EXPECT_CALL(*mock_, SpmIncTokenidRefCnt(_, _)).WillOnce(Return(0));
-    EXPECT_CALL(*mock_, SpmIncUidRefCnt(_, _)).WillOnce(Return(0));
+    EXPECT_CALL(*mock_, SpmIncUidRefCnt(CUSTOM_SANDBOX_APPUID, _)).WillOnce(Return(0));
 
     // SpmDataNew succeeds
     SpmData *spmData = TestDataFactory::CreateMockSpmData(

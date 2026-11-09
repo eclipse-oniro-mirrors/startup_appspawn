@@ -153,11 +153,32 @@ enum {
     HM_GET_BINARY_PERMISSIONS,
     HM_SET_USERID,
     HM_GET_USERID,
+    HM_SET_SA_TOKEN_ID,
+    HM_GET_USERINFO,
+    HM_ADD_SPM_ENTRIES,
+    HM_SET_SPM_ENTRIES,
+    HM_GET_SPM_ENTRY,
+    HM_REMOVE_SPM_ENTRY,
+    HM_SET_REFCNT_UID,
+    HM_GET_REFCNT_UID,
+    HM_SET_REFCNT_TOKENID,
+    HM_GET_REFCNT_TOKENID,
+    HM_SPM_CLEAN_REFCNT,
+    HM_SPM_GET_VERSION,
+    HM_SET_HAP_PTOKENID,
+    HM_SET_BIN_DECLARED_PERM,
+    HM_GET_BIN_DECLARED_PERM,
+    HM_GET_ENTERPRISE_SPACE_ID,
+    HM_SET_ENTERPRISE_SPACE_ID,
+    HM_SET_APPUID = 31,
+    HM_GET_APPUID = 32,
     HM_ACCESS_TOKENID_MAX_NR
 };
 
 #define ACCESS_TOKENID_SET_USERID _IOW(HM_ACCESS_TOKEN_ID_IOCTL_BASE, HM_SET_USERID, uint32_t)
 #define ACCESS_TOKENID_GET_USERID _IOR(HM_ACCESS_TOKEN_ID_IOCTL_BASE, HM_GET_USERID, uint32_t)
+#define ACCESS_TOKENID_SET_APPUID _IOW(HM_ACCESS_TOKEN_ID_IOCTL_BASE, HM_SET_APPUID, uint32_t)
+#define ACCESS_TOKENID_GET_APPUID _IOR(HM_ACCESS_TOKEN_ID_IOCTL_BASE, HM_GET_APPUID, uint32_t)
 
 constexpr const char* HDAC_DEV = "/dev/access_token_id";
  
@@ -329,6 +350,41 @@ void SetAgentIdFromMsg(const AppSpawningCtx *property)
         "ParseUserIdFromMsg ret=%{public}d, skip userId write to kernel", ret);
 
     (void)SetHdacAgentId(agentId, userId);
+}
+
+int SetAppUid(uint32_t appUid)
+{
+    APPSPAWN_LOGV("SetAppUid called with appUid=%{public}u", appUid);
+    int fdIoctl = open(HDAC_DEV, O_WRONLY);
+    APPSPAWN_CHECK(fdIoctl >= 0, return -1,
+        "Failed to open %{public}s: %{public}s", HDAC_DEV, strerror(errno));
+    int rc = ioctl(fdIoctl, ACCESS_TOKENID_SET_APPUID, &appUid);
+    if (rc < 0) {
+        APPSPAWN_LOGE("Failed to set appUid=%{public}u: %{public}s", appUid, strerror(errno));
+    }
+    APPSPAWN_LOGV("SetAppUid result=%{public}d, appUid=%{public}u", rc, appUid);
+    close(fdIoctl);
+    return rc;
+}
+
+int GetAppUid(uint32_t *appUid)
+{
+    APPSPAWN_CHECK(appUid != nullptr, return -1, "appUid == nullptr.");
+    errno = 0;
+    int fdIoctl = open(HDAC_DEV, O_RDONLY);
+    APPSPAWN_CHECK(fdIoctl >= 0, return -1,
+        "Failed to open %{public}s: %{public}s", HDAC_DEV, strerror(errno));
+    uint32_t appUidTmp = 0;
+    int rc = ioctl(fdIoctl, ACCESS_TOKENID_GET_APPUID, &appUidTmp);
+    if (rc < 0) {
+        close(fdIoctl);
+        APPSPAWN_LOGE("Failed to get appUid: %{public}s", strerror(errno));
+        return -1;
+    }
+    close(fdIoctl);
+    *appUid = appUidTmp;
+    APPSPAWN_LOGV("GetAppUid success, appUid=%{public}u", *appUid);
+    return rc;
 }
 
 #ifdef __cplusplus

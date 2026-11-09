@@ -146,7 +146,7 @@ bool IsValidDataGroupItem(cJSON *item)
 // Global map for managing lock bundle info, key is lockPath (complete _preunlock directory path)
 APPSPAWN_STATIC std::map<std::string, LockBundleInfo> g_lockBundleMap;
 
-APPSPAWN_STATIC int AddLockBundleRef(uint32_t uid, const std::string &bundleName, const std::string &lockPath)
+APPSPAWN_STATIC int AddLockBundleRef(uint32_t appUid, const std::string &bundleName, const std::string &lockPath)
 {
     APPSPAWN_ONLY_EXPER(lockPath.empty(), return -1);
     auto it = g_lockBundleMap.find(lockPath);
@@ -154,12 +154,12 @@ APPSPAWN_STATIC int AddLockBundleRef(uint32_t uid, const std::string &bundleName
         // First time, initialize structure
         LockBundleInfo info;
         info.refCount = 1;
-        info.uid = uid;
+        info.appUid = appUid;
         info.lockPath = lockPath;
         info.bundleName = bundleName;
         g_lockBundleMap[lockPath] = info;
-        APPSPAWN_LOGI("AddLockBundleRef: new lockPath %{public}s, uid=%{public}u, bundleName=%{public}s, "
-                      "refCount=1", lockPath.c_str(), uid, bundleName.c_str());
+        APPSPAWN_LOGI("AddLockBundleRef: new lockPath %{public}s, appUid=%{public}u, bundleName=%{public}s, "
+                      "refCount=1", lockPath.c_str(), appUid, bundleName.c_str());
     } else {
         // Already exists, increase count
         it->second.refCount++;
@@ -277,7 +277,7 @@ APPSPAWN_STATIC int MountSharedMapItem(const AppSpawningCtx *property, const App
     /* /mnt/sandbox/<currentUserId>/<varBundleName>/data/storage/el<x> */
     char sandboxPath[PATH_MAX_LEN] = {0};
     int ret = snprintf_s(sandboxPath, PATH_MAX_LEN, PATH_MAX_LEN - 1, "/mnt/sandbox/%u/%s_preunlock%s",
-                         info->uid / UID_BASE, varBundleName, sandboxPathItem);
+                         info->appUid / UID_BASE, varBundleName, sandboxPathItem);
     if (ret <= 0) {
         APPSPAWN_LOGE("snprintf sandboxPath failed, errno %{public}d", errno);
         return APPSPAWN_ERROR_UTILS_MEM_FAIL;
@@ -448,7 +448,7 @@ APPSPAWN_STATIC int ParseDataGroupList(AppSpawnMgr *content, const AppSpawningCt
             }
         }
         // sandboxPath: /mnt/sandbox/<currentUserId>/<varBundleName>/data/storage/el<x>/group
-        std::string sandboxPath = "/mnt/sandbox/" + std::to_string(info->uid / UID_BASE) +
+        std::string sandboxPath = "/mnt/sandbox/" + std::to_string(info->appUid / UID_BASE) +
                                   "/" + varBundleName + "_preunlock" + templateItem->sandboxPath;
 
         ret = AddDataGroupItemToQueue(content, srcPath, sandboxPath, uuidItem->valuestring);
@@ -518,7 +518,7 @@ APPSPAWN_STATIC void MountDirToShared(AppSpawnMgr *content, const AppSpawningCtx
         APPSPAWN_LOGE("Invalid app dac info or varBundleName");
         return);
 
-    if (IsUnlockStatus(info->uid)) {
+    if (IsUnlockStatus(info->appUid)) {
         SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, APP_FLAGS_UNLOCKED_STATUS);
         return;
     }
@@ -526,9 +526,10 @@ APPSPAWN_STATIC void MountDirToShared(AppSpawnMgr *content, const AppSpawningCtx
     MountSharedMap(property, info, varBundleName.c_str());
     ParseDataGroupList(content, property, info, varBundleName.c_str());
 
-    std::string lockPath = "/mnt/sandbox/" + std::to_string(info->uid / UID_BASE) + "/" + varBundleName + "_preunlock";
+    std::string lockPath = "/mnt/sandbox/" + std::to_string(info->appUid / UID_BASE) + "/" +
+                           varBundleName + "_preunlock";
     // Add reference count for _preunlock directory, use lockPath as key
-    AddLockBundleRef(info->uid, bundleName, lockPath);
+    AddLockBundleRef(info->appUid, bundleName, lockPath);
 
     // Save lockPath and set flag (use const_cast to modify)
     char *lock = strdup(lockPath.c_str());

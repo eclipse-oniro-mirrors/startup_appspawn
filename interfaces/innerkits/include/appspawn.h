@@ -67,6 +67,7 @@ typedef struct {
     uint32_t gidCount;  // the size of gidTable
     uint32_t gidTable[APP_MAX_GIDS];
     char userName[APP_USER_NAME];
+    uint32_t appUid;    // the real appUid (200xxxxx), used for app identification scenarios
 } AppDacInfo;
 
 typedef struct {
@@ -224,6 +225,7 @@ typedef enum {
     APP_FLAGS_HMDFS_REDUCED_MOUNT,
     APP_FLAGS_HMDFS_FULL_MOUNT,
     APP_FLAGS_AGENT,  // Identify the agent process request, agentid write to kernel
+    APP_FLAGS_SHAREUID_ENABLED, // isShareUid
     MAX_FLAGS_INDEX = 63,
 } AppFlagsIndex;
 

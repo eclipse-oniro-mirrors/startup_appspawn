@@ -124,9 +124,10 @@ static const char * const DISTRIBUTION_TYPE_MAP[] = {
 typedef struct {
     uint64_t accessTokenIdEx;  // 64-bit: [tokenidattr(32-bit) | tokenid(32-bit)]
     uint32_t uid;              // UID for refcount operations
+    uint32_t appUid;           // appUid for refcount operations
     uint32_t spmHighToken;
     uint32_t spmLowToken;
-    uint32_t spmUid;
+    uint32_t spmAppUid;
 } RefcountContext;
 
 uint32_t GetSpawnId(void)
@@ -244,6 +245,7 @@ APPSPAWN_STATIC int CollectDacInfoFromSPM(const AppSpawnMgr *mgr, const AppSpawn
 
     // Update uid from SPM (always override)
     dacInfo->uid = spmData->uid;
+    // will add dacInfo->appUid = spmData->appUid after spmData porting appUid
 
     APPSPAWN_LOGI("CollectDacInfoFromSPM: uid=%{public}u, gid=%{public}u, gidCount=%{public}u",
         dacInfo->uid, dacInfo->gid, dacInfo->gidCount);
@@ -526,6 +528,7 @@ APPSPAWN_STATIC int ValidateSpmDataConsistency(const SpmData *spmData,
     }
 
     // Check UID consistency
+    // will add spmData->uid != uidFromMsg || spmData->appUid != appUidFromMsg after spmData porting appUid
     if (spmData->uid != uidFromMsg) {
         if (!isSpecialProcess) {
             // Normal process: UID mismatch is a security error
@@ -897,19 +900,20 @@ APPSPAWN_STATIC int IncreaseRefCounts(AppSpawningCtx *ctx, const RefcountContext
     refAdded |= SPM_REF_TOKENID;
 
     // Increment uid refcount
-    incRet = SpmIncUidRefCnt(refCtx->uid, spawnId);
+    incRet = SpmIncUidRefCnt(refCtx->appUid, spawnId);
     APPSPAWN_ONLY_EXPER(incRet == EOPNOTSUPP, APPSPAWN_LOGI("not support spm ignore refcount");
         ctx->spmRefAdded = refAdded;
         return SPM_ERROR_SPM_NOSUPP);
     APPSPAWN_CHECK(incRet == 0,
         ctx->spmRefAdded = refAdded;
         return SPM_ERROR_REF_COUNT_INC_FAILED,
-        "SpmIncUidRefCnt failed (ret=%{public}d), uid=%{public}u, spawnId=%{public}u", incRet, refCtx->uid, spawnId);
+        "SpmIncUidRefCnt failed (ret=%{public}d), appUid=%{public}u, spawnId=%{public}u",
+        incRet, refCtx->appUid, spawnId);
     refAdded |= SPM_REF_UID;
     ctx->spmRefAdded = refAdded;
 
     APPSPAWN_LOGI("IncreaseRefCounts: bitmap=0x%{public}02x, tokenid=%{public}" PRIu64
-        ", uid=%{public}u, spawnId=%{public}u", refAdded, refCtx->accessTokenIdEx, refCtx->uid, spawnId);
+        ", appUid=%{public}u, spawnId=%{public}u", refAdded, refCtx->accessTokenIdEx, refCtx->appUid, spawnId);
     return 0;
 }
 
@@ -921,11 +925,11 @@ APPSPAWN_STATIC int ValidateUidRefCount(const AppSpawnMgr *mgr, const AppSpawnin
     uint32_t runMode = mgr->content.mode;
     bool isNWebMode = (runMode == MODE_FOR_NWEB_SPAWN || runMode == MODE_FOR_NWEB_COLD_RUN);
     bool hasIsolatedSandboxFlag = CheckAppMsgFlagsSet(ctx, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
-    APPSPAWN_ONLY_EXPER((!isNWebMode && !hasIsolatedSandboxFlag) || refCtx->spmUid == 0 ||
-        (hasIsolatedSandboxFlag && refCtx->uid == refCtx->spmUid), return 0);
+    APPSPAWN_ONLY_EXPER((!isNWebMode && !hasIsolatedSandboxFlag) || refCtx->spmAppUid == 0 ||
+        (hasIsolatedSandboxFlag && refCtx->appUid == refCtx->spmAppUid), return 0);
 
     uint64_t uidRefCnt = 0;
-    int getRet = SpmGetUidRefCnt(refCtx->uid, &uidRefCnt);
+    int getRet = SpmGetUidRefCnt(refCtx->appUid, &uidRefCnt);
     APPSPAWN_CHECK(getRet == 0 && uidRefCnt == 1, return SPM_ERROR_GET_SPM_FAILED,
         "get spm uid ref failed %{public}d %{public}" PRIu64, getRet, uidRefCnt);
     return 0;
@@ -960,6 +964,7 @@ static int GetTokenidAndUidFromMsg(const AppSpawnMsgNode *message,
         return SPM_ERROR_MISSING_MSG_DATA;
     }
     refCtx->uid = dacInfo->uid;
+    refCtx->appUid = dacInfo->appUid;
 
     return 0;
 }
@@ -1171,8 +1176,9 @@ APPSPAWN_STATIC int RebuildMessageFromSPM(const AppSpawnMgr *mgr, AppSpawningCtx
         return 0,
         "RebuildMessageFromSPM: SPM data failed (ret=%{public}d), use original message", ret);
 
-    // 4. Validate uidRefCount for nweb/isolated (needs spmUid from SPM data)
-    refCtx.spmUid = spmData->uid;
+    // 4. Validate uidRefCount for nweb/isolated (needs spmAppUid from SPM data)
+    // will update refCtx.spmAppUid = spmData->appUid after spmData porting appUid
+    refCtx.spmAppUid = spmData->uid;
     ret = ValidateUidRefCount(mgr, ctx, &refCtx);
     APPSPAWN_CHECK(ret == 0, SpmDataFree(spmData);
         ReportSpmFailEvent(ret);
@@ -1248,11 +1254,11 @@ int OnSpawnAbortUpdateRefCount(AppSpawnMgr *mgr, AppSpawningCtx *ctx)
         }
     }
 
-    // Decrement uid refcount if it was incremented
+    // Decrement appUid refcount if it was incremented
     if (ctx->spmRefAdded & SPM_REF_UID) {
         const AppDacInfo *dacInfo = (const AppDacInfo *)GetAppSpawnMsgInfo(msg, TLV_DAC_INFO);
         if (dacInfo != NULL) {
-            int ret = SpmDecUidRefCnt(dacInfo->uid, spawnId);
+            int ret = SpmDecUidRefCnt(dacInfo->appUid, spawnId);
             if (ret != 0) {
                 APPSPAWN_LOGW("OnSpawnAbortUpdateRefCount: SpmDecUidRefCnt failed (ret=%{public}d)", ret);
             }
@@ -1291,9 +1297,9 @@ int OnAppExitUpdateRefCount(const AppSpawnMgr *mgr, const AppSpawnedProcess *app
             mutableApp->spmRefAdded &= ~SPM_REF_TOKENID);  // clear bit only on success to prevent double decrement
     }
 
-    // Decrement uid refcount if it was incremented
+    // Decrement appUid refcount if it was incremented
     if (appInfo->spmRefAdded & SPM_REF_UID) {
-        int ret = SpmDecUidRefCnt(appInfo->uid, spawnId);
+        int ret = SpmDecUidRefCnt(appInfo->appUid, spawnId);
         APPSPAWN_ONLY_EXPER(ret != 0,
             APPSPAWN_LOGE("OnAppExitUpdateRefCount: SpmDecUidRefCnt failed (ret=%{public}d)", ret));
         APPSPAWN_ONLY_EXPER(ret == 0,
@@ -1301,8 +1307,8 @@ int OnAppExitUpdateRefCount(const AppSpawnMgr *mgr, const AppSpawnedProcess *app
     }
 
     APPSPAWN_LOGI("OnAppExitUpdateRefCount: bitmap=0x%{public}02x, tokenid=%{public}" PRIu64
-        ", uid=%{public}u, pid=%{public}d, spawnId=%{public}u",
-         appInfo->spmRefAdded, appInfo->tokenid, appInfo->uid, appInfo->pid, spawnId);
+        ", appUid=%{public}u, pid=%{public}d, spawnId=%{public}u",
+         appInfo->spmRefAdded, appInfo->tokenid, appInfo->appUid, appInfo->pid, spawnId);
 
     return 0;
 }

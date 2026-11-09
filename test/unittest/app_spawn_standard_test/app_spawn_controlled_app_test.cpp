@@ -356,7 +356,7 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_ControlledApp_MatchInCache, 
     AppSpawnMsgDacInfo *dacInfo =
         reinterpret_cast<AppSpawnMsgDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     ASSERT_NE(dacInfo, nullptr);
-    uint32_t userId = dacInfo->uid / UID_BASE;
+    uint32_t userId = dacInfo->appUid / UID_BASE;
 
     AppSpawnMsgOwnerId *ownerInfo =
         reinterpret_cast<AppSpawnMsgOwnerId *>(GetAppProperty(property, TLV_OWNER_INFO));
@@ -386,7 +386,7 @@ HWTEST_F(AppSpawnControlledAppTest, ComputeForSpawn_NotControlled_NoFlag, TestSi
     AppSpawnMsgDacInfo *dacInfo =
         reinterpret_cast<AppSpawnMsgDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     ASSERT_NE(dacInfo, nullptr);
-    uint32_t userId = dacInfo->uid / UID_BASE;
+    uint32_t userId = dacInfo->appUid / UID_BASE;
 
     AppSpawnMsgOwnerId *ownerInfo =
         reinterpret_cast<AppSpawnMsgOwnerId *>(GetAppProperty(property, TLV_OWNER_INFO));

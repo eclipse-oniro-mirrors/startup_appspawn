@@ -398,8 +398,8 @@ void DumpAppSpawnMsg(const AppSpawnMsgNode *message)
 
     AppSpawnMsgDacInfo *dacInfo = (AppSpawnMsgDacInfo *)GetAppSpawnMsgInfo(message, TLV_DAC_INFO);
     if (dacInfo != NULL) {
-        APPSPAWN_DUMP("uid:%{public}d gid:%{public}d count:%{public}d",
-            dacInfo->uid, dacInfo->gid, dacInfo->gidCount);
+        APPSPAWN_DUMP("uid:%{public}d appUid:%{public}d gid:%{public}d count:%{public}d",
+            dacInfo->uid, dacInfo->appUid, dacInfo->gid, dacInfo->gidCount);
         for (uint32_t i = 0; i < dacInfo->gidCount; i++) {
             APPSPAWN_LOGV("gid group[%{public}d]: %{public}d", i, dacInfo->gidTable[i]);
         }

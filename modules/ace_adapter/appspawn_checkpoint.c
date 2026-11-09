@@ -109,7 +109,7 @@ APPSPAWN_STATIC int32_t AddSpawningFds(AppSpawnMgr *content, SpawningFdType type
 }
 
 APPSPAWN_STATIC AppSpawnedCheckPointProcesses *AddSpawningCheckPointInfo(
-    AppSpawnMgr *content, uint64_t checkPointId, const char *processName, uint32_t appIndex, uint32_t uid)
+    AppSpawnMgr *content, uint64_t checkPointId, const char *processName, uint32_t appIndex, uint32_t appUid)
 {
     APPSPAWN_CHECK((checkPointId > 0 && content != NULL && processName != NULL), return NULL,
                    "Invalid check point id for %{public}s", processName);
@@ -120,7 +120,7 @@ APPSPAWN_STATIC AppSpawnedCheckPointProcesses *AddSpawningCheckPointInfo(
     APPSPAWN_CHECK(node != NULL, return NULL, "Failed to malloc for appinfo");
 
     node->checkPointId = checkPointId;
-    node->uid = uid;
+    node->appUid = appUid;
     node->exitStatus = 0;
     node->appIndex = appIndex;
     int ret = strcpy_s(node->name, len, processName);
@@ -146,7 +146,7 @@ static void SetWorkerProcesssForkDenied(const char *bundleName, AppSpawningCtx *
     AppDacInfo *appInfo = (AppDacInfo *)GetAppProperty(property, TLV_DAC_INFO);
     APPSPAWN_CHECK_ONLY_EXPER(appInfo != NULL, return);
 
-    const int userId = appInfo->uid / UID_BASE;
+    const int userId = appInfo->appUid / UID_BASE;
     char pathForkDenied[PATH_MAX] = {};
     int ret = snprintf_s(pathForkDenied, PATH_MAX, PATH_MAX - 1, "/dev/pids/%d/%s/app_%d/",
                          userId, bundleName, property->pid);
@@ -164,7 +164,7 @@ static void SetWorkerProcesssForkDenied(const char *bundleName, AppSpawningCtx *
     ret = write(fd, "0", 1);
     if (ret >= 0) {
         APPSPAWN_CHECK_ONLY_LOG(fsync(fd) != -1, "Failed to fsync for target: %{public}d", errno);
-        APPSPAWN_LOGI("SetForkDenied success, cgroup's owner:%{public}d", appInfo->uid);
+        APPSPAWN_LOGI("SetForkDenied success, cgroup's owner:%{public}d", appInfo->appUid);
     }
     close(fd);
 }
@@ -230,7 +230,10 @@ APPSPAWN_STATIC int32_t DoCheckpointProcess(AppSpawnMgr *content, AppSpawningCtx
         app->checkPointId = args.checkPointId;
         APPSPAWN_LOGV("Update checkpoint id: %{public}" PRId64"", app->checkPointId);
     } else if (app == NULL) {
-        (void)AddSpawningCheckPointInfo(content, args.checkPointId, GetProcessName(property), 0, 0);
+        // Fix: record appUid from TLV_DAC_INFO instead of 0, so that checkpoint restore
+        const AppDacInfo *dacInfo = (const AppDacInfo *)GetAppSpawnMsgInfo(property->message, TLV_DAC_INFO);
+        uint32_t appUid = (dacInfo != NULL) ? dacInfo->appUid : 0;
+        (void)AddSpawningCheckPointInfo(content, args.checkPointId, GetProcessName(property), 0, appUid);
     }
 
     APPSPAWN_LOGI("DoCheckpointProcess success, pid=%{public}d, checkPointId=%{public}" PRId64"",

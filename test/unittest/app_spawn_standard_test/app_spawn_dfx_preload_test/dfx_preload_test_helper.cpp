@@ -47,6 +47,7 @@ int DfxPreloadTestHelper::DfxPreloadTestAddDacInfo(AppSpawnReqMsgHandle &reqHand
 {
     AppDacInfo dacInfo = {};
     dacInfo.uid = defaultTestUid_;
+    dacInfo.appUid = defaultTestUid_;  // appUid for app identification
     dacInfo.gid = defaultTestGid_;
     dacInfo.gidCount = DEFAULT_TEST_GID_COUNT;
     dacInfo.gidTable[0] = defaultTestGidGroup_;

@@ -110,6 +110,7 @@ typedef struct {
 typedef struct TagAppSpawnedProcess {
     struct ListNode node;
     uid_t uid;
+    uid_t appUid;
     pid_t pid;
     uint32_t max;
     int exitStatus;
@@ -143,6 +144,7 @@ typedef struct TagAppSpawnedProcess {
 typedef struct TagAppSpawnedCheckPointProcesses {
     struct ListNode node;
     uid_t uid;
+    uid_t appUid;
     int exitStatus;
     uint32_t appIndex;
     uint64_t checkPointId;
@@ -369,6 +371,16 @@ APPSPAWN_INLINE int IsIsolatedNativeSpawnMode(const AppSpawnMgr *content, const 
 {
     return (content != NULL) && (content->content.mode == MODE_FOR_NATIVE_SPAWN) &&
         CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
+}
+
+/* PC custom sandbox app: PC(nosharefs) && (isShareUid || CUSTOM_SANDBOX).
+ * Inline here because callers live in different DSOs (see versionscript).
+ */
+APPSPAWN_INLINE bool IsShareUidApp(const AppSpawningCtx *property)
+{
+    return IsNoShareFsEnable() &&
+        (CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX) ||
+         CheckAppMsgFlagsSet(property, APP_FLAGS_SHAREUID_ENABLED));
 }
 
 #ifdef __cplusplus

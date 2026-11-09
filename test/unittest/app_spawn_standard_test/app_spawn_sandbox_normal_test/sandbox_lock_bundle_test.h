@@ -24,7 +24,7 @@
 extern std::map<std::string, LockBundleInfo> g_lockBundleMap;
 
 // Functions for lock bundle reference management (exported via APPSPAWN_TEST macro)
-int AddLockBundleRef(uint32_t uid, const std::string &bundleName, const std::string &lockPath);
+int AddLockBundleRef(uint32_t appUid, const std::string &bundleName, const std::string &lockPath);
 void ReleaseLockBundleRef(const std::string &lockPath);
 
 #endif  // SANDBOX_LOCK_BUNDLE_TEST_H

@@ -42,6 +42,7 @@ int CodeSignTestHelper::CodeSignTestAddDacInfo(AppSpawnReqMsgHandle &reqHandle)
 {
     AppDacInfo dacInfo = {};
     dacInfo.uid = codeSignTestDefaultTestUid_;
+    dacInfo.appUid = codeSignTestDefaultTestUid_;  // appUid for app identification
     dacInfo.gid = codeSignTestDefaultTestGid_;
     dacInfo.gidCount = DAC_COUNT_TEST_ID;
     dacInfo.gidTable[0] = codeSignTestDefaultTestGidGroup_;

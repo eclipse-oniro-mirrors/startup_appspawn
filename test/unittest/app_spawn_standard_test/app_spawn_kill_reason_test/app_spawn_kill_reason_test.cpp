@@ -164,7 +164,7 @@ AppSpawnedProcess *CreateTestAppInfo(const char *name, pid_t pid, uid_t uid, int
         return nullptr;
     }
     appInfo->pid = pid;
-    appInfo->uid = uid;
+    appInfo->appUid = uid;
     appInfo->max = 0;
     appInfo->exitStatus = 0;
     appInfo->killReason.reason = killReason;

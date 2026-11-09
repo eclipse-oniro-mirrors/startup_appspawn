@@ -1365,7 +1365,7 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteSignalInfoToFd_001, TestSize.Level0)
     AppSpawnedProcess *appInfo = (AppSpawnedProcess *)malloc(sizeof(AppSpawnedProcess) + nameLen);
     ASSERT_NE(nullptr, appInfo);
     appInfo->pid = 4242;     // 4242 test pid
-    appInfo->uid = 3000123;  // 3000123 test uid
+    appInfo->appUid = 3000123;  // 3000123 test appUid
     ASSERT_EQ(0, strcpy_s(appInfo->name, nameLen, "write.signal.app"));
 
     int pipefd[2] = {-1, -1};
@@ -1377,13 +1377,13 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteSignalInfoToFd_001, TestSize.Level0)
     content->signalFd = pipefd[1];
     appInfo->pid = 0;
     WriteSignalInfoToFd(appInfo, content, 9);
-    //invalid uid, if wrongly written, json would contain "uid":0
+    //invalid appUid, if wrongly written, json would contain "uid":0
     appInfo->pid = 4242;
-    appInfo->uid = 0;
+    appInfo->appUid = 0;
     WriteSignalInfoToFd(appInfo, content, 9);
 
     //normal case, json info is written into signal fd
-    appInfo->uid = 3000123;
+    appInfo->appUid = 3000123;
     WriteSignalInfoToFd(appInfo, content, 9);
     char buffer[256] = {0};  // 256 max json len
     ssize_t readLen = read(pipefd[0], buffer, sizeof(buffer) - 1);

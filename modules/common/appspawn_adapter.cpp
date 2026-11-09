@@ -91,7 +91,7 @@ void SetHapDomainInfo(const AppSpawnMgr *content, const AppSpawningCtx *property
     hapDomainInfo->hapFlags = msgDomainInfo->hapFlags;
     // The value of 0 is invalid. Its purpose is to initialize.
     AppDacInfo *appInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
-    hapDomainInfo->uid = appInfo == nullptr ? 0 : appInfo->uid;
+    hapDomainInfo->uid = appInfo == nullptr ? 0 : appInfo->appUid;
     if (CheckAppMsgFlagsSet(property, APP_FLAGS_DEBUGGABLE)) {
         hapDomainInfo->hapFlags |= SELINUX_HAP_DEBUGGABLE;
     }
@@ -284,7 +284,7 @@ static void InitAppCommonEnv(const AppSpawningCtx *property)
     if (appInfo == NULL) {
         return;
     }
-    const uint32_t userId = appInfo->uid / UID_BASE;
+    const uint32_t userId = appInfo->appUid / UID_BASE;
     char user[MAX_USERID_LEN] = {0};
     int len = sprintf_s(user, MAX_USERID_LEN, "%u", userId);
     APPSPAWN_CHECK(len > 0, return, "Failed to format userid: %{public}u", userId);
