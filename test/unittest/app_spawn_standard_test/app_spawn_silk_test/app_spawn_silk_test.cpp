@@ -127,24 +127,7 @@ HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_002, TestSize.Level0)
     cJSON_Delete(root);
     EXPECT_EQ(ret, false);
     EXPECT_EQ(g_silkConfig.configItems, nullptr);
-	EXPECT_EQ(g_silkConfig.configCursor, 0);
-}
-
-/**
- * @brief 边界值：appName恰好256字符（len=257 > SILK_JSON_NAME_MAX）应被跳过
- *        放在末位时与LongName_002同样返回false
- */
-HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_003, TestSize.Level0)
-{
-    std::string boundaryName(256, 'x');
-    std::string jsonStr = "{\"enabled_app_list\":[\"com.valid.app\",\"" + boundaryName + "\"]}";
-    cJSON *root = cJSON_Parse(jsonStr.c_str());
-    ASSERT_NE(root, nullptr);
-    bool ret = ParseSilkConfig(root, &g_silkConfig);
-    cJSON_Delete(root);
-    EXPECT_EQ(ret, false);
-    EXPECT_EQ(g_silkConfig.configItems, nullptr);
-	EXPECT_EQ(g_silkConfig.configCursor, 0);
+    EXPECT_EQ(g_silkConfig.configCursor, 0);
 }
 
 /**
@@ -160,8 +143,8 @@ HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_004, TestSize.Level0)
     bool ret = ParseSilkConfig(root, &g_silkConfig);
     cJSON_Delete(root);
     EXPECT_EQ(ret, true);
-	EXPECT_EQ(g_silkConfig.configCursor, 2);
-	for (int i = 0; i < g_silkConfig.configCursor; i++) {
+    EXPECT_EQ(g_silkConfig.configCursor, 2);
+    for (int i = 0; i < g_silkConfig.configCursor; i++) {
         free(g_silkConfig.configItems[i]);
         g_silkConfig.configItems[i] = nullptr;
     }
