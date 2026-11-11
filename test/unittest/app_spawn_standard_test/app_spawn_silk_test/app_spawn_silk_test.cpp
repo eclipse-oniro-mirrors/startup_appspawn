@@ -134,7 +134,7 @@ HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_002, TestSize.Level0)
  * @brief 边界值：appName 255字符（len=256 <= SILK_JSON_NAME_MAX）应被接受
  *        放在末位时末位成功拷贝，isSuccess = true, 返回true
  */
-HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_004, TestSize.Level0)
+HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_003, TestSize.Level0)
 {
     std::string validName(255, 'x');
     std::string jsonStr = "{\"enabled_app_list\":[\"com.valid.app\",\"" + validName + "\"]}";
