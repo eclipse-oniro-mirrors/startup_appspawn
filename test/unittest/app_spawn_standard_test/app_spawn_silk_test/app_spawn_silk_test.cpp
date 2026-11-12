@@ -88,7 +88,7 @@ HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_003, TestSize.Level0)
 
 /**
  * @brief ParseSilkConfig处理超长 appName（> 256）时跳过该项
- *        覆盖len > SILK_JSON_NAME_MAX 的continue 分支（line 84-85）
+ *        覆盖len > SILK_JSON_NAME_MAX 的continue 分支
  */
 HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_001, TestSize.Level0)
 {
@@ -115,7 +115,6 @@ HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_001, TestSize.Level0)
 /**
  * @brief 超长 appName 位于数组末位时，末位continue后循环结束
  *        isSuccess保持false，FreeAllSilkConfig全量释放并返回false
- *        覆盖appspawn_silk.c:100-102末位失败+104-106释放返回分支
  */
 HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_002, TestSize.Level0)
 {
