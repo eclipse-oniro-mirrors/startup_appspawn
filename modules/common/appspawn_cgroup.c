@@ -179,6 +179,7 @@ APPSPAWN_STATIC int ProcessMgrRemoveApp(const AppSpawnMgr *content, const AppSpa
     if (IsNWebSpawnMode(content) || strcmp(appInfo->name, NWEBSPAWN_SERVER_NAME) == 0) {
         return 0;
     }
+    APPSPAWN_CHECK(!appInfo->isDaemonBin, return 0, "ProcessMgrRemoveApp isDaemon skip");
     char cgroupPath[PATH_MAX] = {};
     APPSPAWN_LOGV("ProcessMgrRemoveApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);
     int ret = GetCgroupPath(appInfo, cgroupPath, sizeof(cgroupPath));
@@ -373,6 +374,7 @@ APPSPAWN_STATIC int ProcessMgrAddApp(const AppSpawnMgr *content, const AppSpawne
 {
     APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return -1);
     APPSPAWN_CHECK_ONLY_EXPER(appInfo != NULL, return -1);
+    APPSPAWN_CHECK(!appInfo->isDaemonBin, return 0, "ProcessMgrAddApp isDaemon skip");
     APPSPAWN_ONLY_EXPER(IsNWebSpawnMode(content), return 0);
     char path[PATH_MAX] = {};
     APPSPAWN_LOGV("ProcessMgrAddApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);

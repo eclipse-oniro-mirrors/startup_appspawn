@@ -1362,10 +1362,11 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteSignalInfoToFd_001, TestSize.Level0)
     ASSERT_NE(nullptr, content);
 
     const size_t nameLen = 32;  // 32 test name len
-    AppSpawnedProcess *appInfo = (AppSpawnedProcess *)malloc(sizeof(AppSpawnedProcess) + nameLen);
+    AppSpawnedProcess *appInfo = (AppSpawnedProcess *)calloc(1, sizeof(AppSpawnedProcess) + nameLen);
     ASSERT_NE(nullptr, appInfo);
     appInfo->pid = 4242;     // 4242 test pid
     appInfo->appUid = 3000123;  // 3000123 test appUid
+    appInfo->isDaemonBin = false;
     ASSERT_EQ(0, strcpy_s(appInfo->name, nameLen, "write.signal.app"));
 
     int pipefd[2] = {-1, -1};

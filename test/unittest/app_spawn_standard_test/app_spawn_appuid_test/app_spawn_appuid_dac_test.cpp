@@ -32,7 +32,7 @@ using OHOS::AppUidTest::CleanupAppUidProperty;
 
 /* Production functions under test (APPSPAWN_STATIC is empty under APPSPAWN_TEST). */
 extern "C" {
-int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property);
+int SetAppUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property);
 int NormalizeDacAppUid(AppSpawnMgr *content, AppSpawningCtx *property);
 int SetAppUid(uint32_t appUid);
 int GetAppUid(uint32_t *appUid);
@@ -161,7 +161,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_CustomSandbox_001, TestSize.Lev
     // enable the real custom sandbox condition so the userId-like 10x uid passes the range check
     SetNoShareFsEnable(true);
     AppUidMockReset();
-    int ret = SetUidGid(mgr, property);
+    int ret = SetAppUidGid(mgr, property);
     SetNoShareFsEnable(false);
     EXPECT_EQ(ret, 0);
 
@@ -196,7 +196,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NormalApp_001, TestSize.Level0)
     ASSERT_NE(property, nullptr);
 
     AppUidMockReset();
-    int ret = SetUidGid(mgr, property);
+    int ret = SetAppUidGid(mgr, property);
     EXPECT_EQ(ret, 0);
 
     AppUidSetresuidCall setresuid = {};
@@ -226,7 +226,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_RootUid_001, TestSize.Level0)
 
     SetNoShareFsEnable(true);
     AppUidMockReset();
-    int ret = SetUidGid(mgr, property);
+    int ret = SetAppUidGid(mgr, property);
     SetNoShareFsEnable(false);
     EXPECT_EQ(ret, APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
@@ -249,7 +249,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_BothIoctlCoexist_001, TestSize.
     // enable the real custom sandbox condition so the userId-like 10x uid passes the range check
     SetNoShareFsEnable(true);
     AppUidMockReset();
-    int ret = SetUidGid(mgr, property);
+    int ret = SetAppUidGid(mgr, property);
     SetNoShareFsEnable(false);
     EXPECT_EQ(ret, 0);
     AppUidIoctlCall call = {};
@@ -275,7 +275,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_DacCheckInvalidAppUid_001, Test
     AppSpawningCtx *property = BuildAppUidProperty("com.test.baddac", NORMAL_APP_UID, 1, false);
     ASSERT_NE(property, nullptr);
 
-    int ret = SetUidGid(mgr, property);
+    int ret = SetAppUidGid(mgr, property);
     EXPECT_EQ(ret, APPSPAWN_MSG_INVALID);
     // setresuid must not be reached
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
@@ -748,7 +748,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_ShareUid_001, TestSize.Level1)
     ASSERT_NE(property, nullptr);
     SetNoShareFsEnable(true);
     EXPECT_EQ(SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, APP_FLAGS_SHAREUID_ENABLED), 0);
-    EXPECT_EQ(SetUidGid(mgr, property), 0);
+    EXPECT_EQ(SetAppUidGid(mgr, property), 0);
     AppUidSetresuidCall call = {};
     EXPECT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
     EXPECT_EQ(call.ruid, CUSTOM_SANDBOX_UID);
@@ -766,7 +766,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NonPcCustomFlag_001, TestSize.L
     AppSpawningCtx *property = BuildAppUidProperty("com.test.uidboundary", NORMAL_APP_UID, NORMAL_APP_UID, true);
     ASSERT_NE(property, nullptr);
     SetNoShareFsEnable(false);
-    EXPECT_EQ(SetUidGid(mgr, property), 0);
+    EXPECT_EQ(SetAppUidGid(mgr, property), 0);
     AppUidSetresuidCall call = {};
     EXPECT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
     EXPECT_EQ(call.ruid, NORMAL_APP_UID);
@@ -784,7 +784,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_UidUpperBoundary_001, TestSize.
     AppSpawningCtx *property = BuildAppUidProperty("com.test.uidboundary", UINT32_MAX, NORMAL_APP_UID, false);
     ASSERT_NE(property, nullptr);
     SetNoShareFsEnable(false);
-    EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
     EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
     CleanupAppUidProperty(property);
@@ -798,7 +798,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_AppUidUpperBoundary_001, TestSi
     AppSpawningCtx *property = BuildAppUidProperty("com.test.uidboundary", NORMAL_APP_UID, UINT32_MAX, false);
     ASSERT_NE(property, nullptr);
     SetNoShareFsEnable(false);
-    EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
     EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
     CleanupAppUidProperty(property);
@@ -816,7 +816,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_NormalizeNonzeroInvalid_001, TestSize.Lev
     auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     ASSERT_NE(dacInfo, nullptr);
     EXPECT_EQ(dacInfo->appUid, 1u);
-    EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
     CleanupAppUidProperty(property);
     DeleteAppSpawnMgr(mgr);
@@ -853,7 +853,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NormalLowUidRejected_001, TestS
             AppSpawningCtx *property = BuildAppUidProperty("com.test.lowuid", uid, NORMAL_APP_UID, false);
             ASSERT_NE(property, nullptr);
             AppUidMockReset();
-            EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+            EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
             EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
             EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
             CleanupAppUidProperty(property);
@@ -874,7 +874,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NonPcLowUidFlagsRejected_001, T
         ASSERT_NE(property, nullptr);
         ASSERT_EQ(SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, flag), 0);
         AppUidMockReset();
-        EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+        EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
         EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
         EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
         CleanupAppUidProperty(property);
@@ -888,7 +888,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NormalLowerBoundary_001, TestSi
     ASSERT_NE(mgr, nullptr);
     AppSpawningCtx *property = BuildAppUidProperty("com.test.minuid", MIN_APP_UID, MIN_APP_UID, false);
     ASSERT_NE(property, nullptr);
-    EXPECT_EQ(SetUidGid(mgr, property), 0);
+    EXPECT_EQ(SetAppUidGid(mgr, property), 0);
     AppUidSetresuidCall call = {};
     ASSERT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
     EXPECT_EQ(call.ruid, MIN_APP_UID);
@@ -896,7 +896,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NormalLowerBoundary_001, TestSi
     ASSERT_NE(dacInfo, nullptr);
     dacInfo->appUid = MIN_APP_UID - 1;
     AppUidMockReset();
-    EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
     EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
     CleanupAppUidProperty(property);
@@ -922,13 +922,13 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_SharedLowerBoundary_001, TestSi
     AppSpawningCtx *property = BuildAppUidProperty("com.test.sharedminuid",
         CUSTOM_SANDBOX_UID - 1, CUSTOM_SANDBOX_APPUID, true);
     ASSERT_NE(property, nullptr);
-    EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
     EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
     AppDacInfo *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     ASSERT_NE(dacInfo, nullptr);
     dacInfo->uid = CUSTOM_SANDBOX_UID;
-    EXPECT_EQ(SetUidGid(mgr, property), 0);
+    EXPECT_EQ(SetAppUidGid(mgr, property), 0);
     AppUidSetresuidCall call = {};
     ASSERT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
     EXPECT_EQ(call.ruid, CUSTOM_SANDBOX_UID);
@@ -948,15 +948,15 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_InvalidGroups_001, TestSize.Lev
     const uint32_t invalidGids[] = {0, MIN_APP_GID - 1, UINT32_MAX};
     for (uint32_t gid : invalidGids) {
         dacInfo->gid = gid;
-        EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+        EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     }
     dacInfo->gid = MIN_APP_GID;
     dacInfo->gidCount = APP_MAX_GIDS + 1;
-    EXPECT_EQ(SetUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
     EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
     dacInfo->gidCount = APP_MAX_GIDS;
-    EXPECT_EQ(SetUidGid(mgr, property), 0);
+    EXPECT_EQ(SetAppUidGid(mgr, property), 0);
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 1);
     CleanupAppUidProperty(property);
     DeleteAppSpawnMgr(mgr);

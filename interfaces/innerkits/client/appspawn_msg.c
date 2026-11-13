@@ -267,7 +267,8 @@ static int CreateBaseMsg(AppSpawnReqMsgNode *reqNode, uint32_t msgType, const ch
     ret = SetFlagsTlv(reqNode, block, &reqNode->msgFlags, TLV_MSG_FLAGS, MAX_FLAGS_INDEX);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
     APPSPAWN_CHECK_ONLY_EXPER(msgType == MSG_APP_SPAWN || msgType == MSG_SPAWN_NATIVE_PROCESS ||
-                              msgType == MSG_SPAWN_IMAGE_PROCESS || msgType == MSG_SPAWN_WORKER_PROCESS, return 0);
+                              msgType == MSG_SPAWN_IMAGE_PROCESS || msgType == MSG_SPAWN_WORKER_PROCESS ||
+                              msgType == MSG_SPAWN_SERVICE_BIN, return 0);
     int maxCount = GetPermissionMaxCount();
     APPSPAWN_CHECK(maxCount > 0, return APPSPAWN_SYSTEM_ERROR, "Invalid max for permission %{public}s", processName);
     ret = SetFlagsTlv(reqNode, block, &reqNode->permissionFlags, TLV_PERMISSION, maxCount);

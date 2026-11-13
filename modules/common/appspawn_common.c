@@ -41,6 +41,8 @@
 
 #include "appspawn_adapter.h"
 #include "appspawn_hook.h"
+#include "spawn_primitives.h"
+#include "spawn_policy.h"
 #include "appspawn_service.h"
 #include "appspawn_msg.h"
 #include "appspawn_manager.h"
@@ -125,7 +127,7 @@ int __attribute__((weak)) GetAppUid(uint32_t *appUid)
     return 0;
 }
 
-static int SetProcessName(const AppSpawnMgr *content, const AppSpawningCtx *property)
+APPSPAWN_STATIC int SetProcessName(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     const char *processName = GetProcessName(property);
     APPSPAWN_CHECK(processName != NULL, return -EINVAL, "Can not get process name");
@@ -236,7 +238,7 @@ static int SetAmbientCapability(int cap)
     return 0;
 }
 
-APPSPAWN_STATIC int SetAmbientCapabilities(const AppSpawningCtx *property, uint64_t extAmbientCaps)
+APPSPAWN_STATIC int SetAppAmbientCapabilities(const AppSpawningCtx *property, uint64_t extAmbientCaps)
 {
     if (!IsNoShareFsEnable()) {
         return 0;
@@ -272,26 +274,17 @@ static bool NeedExtPerm(const AppSpawnMgr *content, const AppSpawningCtx *proper
         (IsAppSpawnMode(content) || IsNativeSpawnMode(content));
 }
 
-APPSPAWN_STATIC int SetCapabilities(const AppSpawnMgr *content, const AppSpawningCtx *property)
+APPSPAWN_STATIC int SetAppCapabilities(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
-    // init cap
-    struct __user_cap_header_struct capHeader;
-    bool isRet = memset_s(&capHeader, sizeof(capHeader), 0, sizeof(capHeader)) != EOK;
-    APPSPAWN_CHECK(!isRet, return -EINVAL, "Failed to memset cap header");
-
-    capHeader.version = _LINUX_CAPABILITY_VERSION_3;
-    capHeader.pid = 0;
-    struct __user_cap_data_struct capData[2];
-    isRet = memset_s(&capData, sizeof(capData), 0, sizeof(capData)) != EOK;
-    APPSPAWN_CHECK(!isRet, return -EINVAL, "Failed to memset cap data");
-    bool needExtPerm = NeedExtPerm(content, property);
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    const bool isDaemonCaps = (pl->capsFrom == POLICY_SRC_SUDO);
+    bool needExtPerm = !isDaemonCaps && NeedExtPerm(content, property);
     uint64_t extAmbientCaps = 0;
     uint64_t extPermCaps = 0;
     if (needExtPerm) {
         extPermCaps = GetExtPermCaps(property, &extAmbientCaps);
     }
-
-    // init inheritable permitted effective zero
+    // compute capability mask (app policy); mechanism lives in spawn_primitives.h (same module)
 #ifdef GRAPHIC_PERMISSION_CHECK
     u_int64_t baseCaps = 0;
     if (needExtPerm) {
@@ -300,26 +293,24 @@ APPSPAWN_STATIC int SetCapabilities(const AppSpawnMgr *content, const AppSpawnin
         baseCaps |= CheckAppMsgFlagsSet(property, APP_FLAGS_SET_CAPS_FOWNER) ? CAP_TO_MASK(CAP_FOWNER) : 0;
         baseCaps |= extPermCaps;
     }
-    const uint64_t inheriTable = baseCaps;
-    const uint64_t permitted = baseCaps;
-    const uint64_t effective = baseCaps;
+    const uint64_t inheriTable = isDaemonCaps ? pl->capsMask : baseCaps;
+    const uint64_t permitted = isDaemonCaps ? pl->capsMask : baseCaps;
+    const uint64_t effective = isDaemonCaps ? pl->capsMask : baseCaps;
 #else
-    const uint64_t inheriTable = 0x3fffffffff;
-    const uint64_t permitted = 0x3fffffffff;
-    const uint64_t effective = 0x3fffffffff;
+    const uint64_t inheriTable = isDaemonCaps ? pl->capsMask : 0x3fffffffff;
+    const uint64_t permitted = isDaemonCaps ? pl->capsMask : 0x3fffffffff;
+    const uint64_t effective = isDaemonCaps ? pl->capsMask : 0x3fffffffff;
 #endif
-    capData[0].inheritable = (__u32)(inheriTable);
-    capData[1].inheritable = (__u32)(inheriTable >> BITLEN32);
-    capData[0].permitted = (__u32)(permitted);
-    capData[1].permitted = (__u32)(permitted >> BITLEN32);
-    capData[0].effective = (__u32)(effective);
-    capData[1].effective = (__u32)(effective >> BITLEN32);
-    isRet = capset(&capHeader, &capData[0]) != 0;
-    APPSPAWN_CHECK(!isRet, return -errno, "Failed to capset errno: %{public}d", errno);
+    int ret = SetCapabilities(inheriTable, permitted, effective);
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to capset via primitive, ret: %{public}d", ret);
 
     if (needExtPerm) {
-        isRet = SetAmbientCapabilities(property, extAmbientCaps);
+        bool isRet = SetAppAmbientCapabilities(property, extAmbientCaps);
         APPSPAWN_CHECK(!isRet, return -1, "Failed to set ambient");
+    }
+    if (isDaemonCaps) {
+        ret = SetAmbientCapabilities(pl->capsMask);
+        APPSPAWN_CHECK(ret == 0, return ret, "SetAmbientCapabilities(daemon) failed: %{public}d", ret);
     }
     return 0;
 }
@@ -430,6 +421,10 @@ APPSPAWN_STATIC int SetNWebXpmConfig(void)
 
 APPSPAWN_STATIC int SetXpmConfig(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (!pl->xpmEnable) {
+        return 0;
+    }
 #ifdef CODE_SIGNATURE_ENABLE
     // nwebspawn no permission set xpm config
     if (IsNWebSpawnMode(content)) {
@@ -546,7 +541,7 @@ APPSPAWN_STATIC void GetExtPermGids(const AppSpawningCtx *property,
 
 /*
  * @brief Compatibility for the caller not passing appUid: fallback to uid when appUid is 0.
- *        Invalid non-zero values are rejected by SetUidGid, not fixed here.
+ *        Invalid non-zero values are rejected by SetAppUidGid, not fixed here.
  */
 APPSPAWN_STATIC int NormalizeDacAppUid(AppSpawnMgr *content, AppSpawningCtx *property)
 {
@@ -569,7 +564,7 @@ static bool IsValidDacInfo(const AppSpawningCtx *property, const AppDacInfo *dac
         (dacInfo->gidCount <= APP_MAX_GIDS);
 }
 
-APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property)
+APPSPAWN_STATIC int SetAppUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     const char *processName = GetProcessName(property);
     APPSPAWN_CHECK(processName != NULL, return APPSPAWN_TLV_NONE, "Can not get process name");
@@ -594,20 +589,30 @@ APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *
     APPSPAWN_CHECK(ret == 0, return errno,
         "setgroups failed: %{public}d, gids.size=%{public}u", errno, dacInfo->gidCount);
 
-    // set gid
-    ret = setresgid(dacInfo->gid, dacInfo->gid, dacInfo->gid);
-    APPSPAWN_CHECK(ret == 0, return errno, "setgid(%{public}u) failed: %{public}d", dacInfo->gid, errno);
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (pl->uidFrom == POLICY_SRC_FIXED) {
+        // init/services/modules/seccomp/seccomp_policy/spawn.seccomp.policy
+        if (pl->uid != getuid() || pl->gid != getgid()) {
+            APPSPAWN_LOGE("daemon uid/gid(%{public}u/%{public}u) differs from appspawn identity, "
+                "not supported by spawn.seccomp.policy", pl->uid, pl->gid);
+            return APPSPAWN_ARG_INVALID;
+        }
+    } else {
+        // set gid
+        ret = setresgid(dacInfo->gid, dacInfo->gid, dacInfo->gid);
+        APPSPAWN_CHECK(ret == 0, return errno, "setgid(%{public}u) failed: %{public}d", dacInfo->gid, errno);
 
-    StartAppspawnTrace("SetSeccompFilter");
-    ret = SetSeccompFilter(content, property);
-    FinishAppspawnTrace();
-    APPSPAWN_CHECK(ret == 0, return ret, "Failed to set setSeccompFilter");
+        StartAppspawnTrace("SetSeccompFilter");
+        ret = SetSeccompFilter(content, property);
+        FinishAppspawnTrace();
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to set setSeccompFilter");
 
-    /* If the effective user ID is changed from 0 to nonzero,
-     * then all capabilities are cleared from the effective set
-     */
-    ret = setresuid(dacInfo->uid, dacInfo->uid, dacInfo->uid);
-    APPSPAWN_CHECK(ret == 0, return errno, "setuid(%{public}u) failed: %{public}d", dacInfo->uid, errno);
+        /* If the effective user ID is changed from 0 to nonzero,
+        * then all capabilities are cleared from the effective set
+        */
+        ret = setresuid(dacInfo->uid, dacInfo->uid, dacInfo->uid);
+        APPSPAWN_CHECK(ret == 0, return errno, "setuid(%{public}u) failed: %{public}d", dacInfo->uid, errno);
+    }
 
     char *userIdStr = (char *)GetAppSpawnMsgExtInfo(property->message, MSG_EXT_NAME_USERID, NULL);
     if (userIdStr != NULL) {
@@ -679,6 +684,10 @@ static void SetProcessQos(void)
 
 APPSPAWN_STATIC int SetSchedPriority(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (!pl->schedEnable) {
+        return 0;  // daemon: no app scheduling
+    }
 #ifdef APPSPAWN_CHANGE_SCHED_ENABLE
     if (IsAppSpawnMode(content) || IsHybridSpawnMode(content)) {
         struct sched_param param = { 0 };
@@ -700,6 +709,10 @@ APPSPAWN_STATIC int SetSchedPriority(const AppSpawnMgr *content, const AppSpawni
 
 static int32_t SetFileDescriptors(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (!pl->setFileDescriptors) {
+        return 0;
+    }
 #ifndef APPSPAWN_TEST
     // redirect stdin stdout stderr to /dev/null
     int devNullFd = open(DEVICE_NULL_STR, O_RDWR);
@@ -783,6 +796,10 @@ static int32_t WaitForDebugger(const AppSpawningCtx *property)
 
 static int SpawnSetPreInstalledFlag(AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (pl->uidFrom == POLICY_SRC_FIXED) {
+        return 0;  // daemon: no pre-installed flag
+    }
     AppSpawnMsgDomainInfo *msgDomainInfo = (AppSpawnMsgDomainInfo *)GetAppProperty(property, TLV_DOMAIN_INFO);
     APPSPAWN_CHECK(msgDomainInfo != NULL, return APPSPAWN_TLV_NONE, "No domain info in req from %{public}s",
                    GetProcessName(property));
@@ -838,6 +855,10 @@ static int SpawnEnableCache(AppSpawnMgr *content, AppSpawningCtx *property)
 
 static void SpawnLoadSilk(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (!pl->silkEnable) {
+        return;  // daemon: no silk
+    }
     const char *processName = GetBundleName(property);
     APPSPAWN_CHECK(processName != NULL, return, "Can not get bundle name");
     (void)LoadSilkLibrary(processName);
@@ -875,7 +896,7 @@ static int SpawnSetProperties(AppSpawnMgr *content, AppSpawningCtx *property)
     ret = SetSchedPriority(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
-    ret = SetUidGid(content, property);
+    ret = SetAppUidGid(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
     ret = SetAppAgentId(content, property);
@@ -884,11 +905,11 @@ static int SpawnSetProperties(AppSpawnMgr *content, AppSpawningCtx *property)
     ret = SetFileDescriptors(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
-    ret = SetCapabilities(content, property);
+    ret = SetAppCapabilities(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
-    StartAppspawnTrace("SetSelinuxCon");
-    ret = SetSelinuxCon(content, property);
+    StartAppspawnTrace("SetAppSelinuxCon");
+    ret = SetAppSelinuxCon(content, property);
     FinishAppspawnTrace();
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
@@ -921,6 +942,12 @@ static int SpawnComplete(AppSpawnMgr *content, AppSpawningCtx *property)
 static int SpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Spawning: prepare app %{public}s", GetProcessName(property));
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (pl->uidFrom == POLICY_SRC_FIXED) {
+        property->client.flags &= ~APP_COLD_START;
+        property->client.flags |= content->flags;
+        return 0;
+    }
     if (CheckAppMsgFlagsSet(property, APP_FLAGS_COLD_BOOT)) {
         // check cold start
         property->client.flags |= CheckEnabled("startup.appspawn.cold.boot", "true") ? APP_COLD_START : 0;

@@ -31,6 +31,7 @@
 #include "appspawn_service.h"
 #include "appspawn_manager.h"
 #include "appspawn_utils.h"
+#include "appspawn_servicebin_adapter.h"
 #ifdef ARKWEB_UTILS_ENABLE
 #include "arkweb_utils.h"
 #endif
@@ -429,6 +430,8 @@ static int RunChildProcessor(AppSpawnContent *content, AppSpawnClient *client)
     int ret = 0;
     if (GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS) {
         ret = RunChildByRenderCmd(reinterpret_cast<AppSpawnMgr *>(content), property);
+    } else if (GetAppSpawnMsgType(property) == MSG_SPAWN_SERVICE_BIN) {
+        ret = AppSpawnServiceBinRunTarget(reinterpret_cast<AppSpawnMgr *>(content), property);
     } else {
         ret = RunChildThread(reinterpret_cast<AppSpawnMgr *>(content), property);
     }

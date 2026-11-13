@@ -34,6 +34,7 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/standard",
       "${appspawn_path}/common",
       "${appspawn_path}/modules/modulemgr",
+      "${appspawn_path}/modules/module_engine/include",
       "${appspawn_path}/modules/common"
     ]
 
@@ -42,7 +43,7 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/standard/appspawn_service.c",
       "${appspawn_path}/standard/appspawn_appmgr.c",
       "${appspawn_path}/standard/appspawn_fd_manager.c",
-      "${appspawn_path}/standard/appspawn_msgmgr.c"
+      "${appspawn_path}/standard/appspawn_msgmgr.c",
     ]
 
     defines = [

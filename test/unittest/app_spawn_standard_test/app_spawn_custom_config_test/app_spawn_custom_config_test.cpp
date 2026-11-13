@@ -36,7 +36,7 @@ APPSPAWN_STATIC std::string_view TrimWhitespaceView(std::string_view str);
 APPSPAWN_STATIC int32_t ParseEnvLine(const std::string &line, std::string &envName, std::string &envValue);
 APPSPAWN_STATIC int32_t LoadCustomSandboxEnv(const char* envFilePath);
 APPSPAWN_STATIC int SpawnSetCustomSandboxEnv(AppSpawnMgr *content, AppSpawningCtx *property);
-APPSPAWN_STATIC int SetUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property);
+APPSPAWN_STATIC int SetAppUidGid(const AppSpawnMgr *content, const AppSpawningCtx *property);
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -520,7 +520,7 @@ HWTEST_F(AppSpawnCustomConfigTest, SetUidGidUserIdTest_001, TestSize.Level1)
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
 
         property->allowDumpable = false;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -555,7 +555,7 @@ HWTEST_F(AppSpawnCustomConfigTest, SetUidGidUserIdTest_002, TestSize.Level1)
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
 
         property->allowDumpable = false;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);

@@ -39,8 +39,8 @@ void SetCapabilityTestState(CapabilityTestState *state);
 
 int CapabilityCapsetMock(cap_user_header_t hdrp, const cap_user_data_t datap);
 int CapabilityPrctlMock(int option, ...);
-int SetCapabilities(const AppSpawnMgr *content, const AppSpawningCtx *property);
-int SetAmbientCapabilities(const AppSpawningCtx *property, uint64_t extAmbientCaps);
+int SetAppCapabilities(const AppSpawnMgr *content, const AppSpawningCtx *property);
+int SetAppAmbientCapabilities(const AppSpawningCtx *property, uint64_t extAmbientCaps);
 
 #ifdef __cplusplus
 }

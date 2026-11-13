@@ -28,6 +28,7 @@ ohos_shared_library("appspawn_ace") {
   }
   sources = [
     "ace_adapter.cpp",
+    "appspawn_servicebin_adapter.cpp",
     "command_lexer.cpp",
     "dfx_preload.cpp",
     "appspawn_checkpoint.c"

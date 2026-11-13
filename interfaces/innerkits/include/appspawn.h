@@ -130,6 +130,7 @@ typedef enum {
     MSG_LOAD_WEBLIB_IN_APPSPAWN,
     MSG_SPAWN_IMAGE_PROCESS,      // Request to spawn the image process
     MSG_SPAWN_WORKER_PROCESS,     // Request to spawn the worker process
+    MSG_SPAWN_SERVICE_BIN,        // Request to spawn a daemon process (IPC boundary — needs protocol owner review)
     MAX_TYPE_INVALID
 } AppSpawnMsgType;
 
@@ -226,6 +227,7 @@ typedef enum {
     APP_FLAGS_HMDFS_FULL_MOUNT,
     APP_FLAGS_AGENT,  // Identify the agent process request, agentid write to kernel
     APP_FLAGS_SHAREUID_ENABLED, // isShareUid
+    APP_FLAGS_DAEMON_BIN,
     MAX_FLAGS_INDEX = 63,
 } AppFlagsIndex;
 
@@ -327,6 +329,7 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 #define MSG_EXT_NAME_APP_SIGN_TYPE "AppSignType"
 #define MSG_EXT_NAME_APP_DISTRIBUTION_TYPE "AppDistributionType"
 #define MSG_EXT_NAME_XPM_ID_TYPE "XpmIdType"
+#define MSG_EXT_NAME_DAEMON_BIN_PATH "daemon_bin_path"
 #define MSG_EXT_NAME_IPC_GROUP "IPCGroup"
 #define MSG_EXT_NAME_AGENT_ID "AgentId"
 

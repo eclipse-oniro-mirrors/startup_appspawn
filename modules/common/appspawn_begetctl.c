@@ -68,6 +68,8 @@ APPSPAWN_STATIC void RunAppSandbox(const char *ptyName)
 APPSPAWN_STATIC int RunBegetctlBootApp(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_CHECK_ONLY_EXPER(property != NULL, return -1);
+    APPSPAWN_CHECK_LOGV(!IsDaemonBinProperty(property), return 0,
+        "RunBegetctlBootApp: skip daemon");
     UNUSED(content);
     if ((property->client.flags & APP_BEGETCTL_BOOT) != APP_BEGETCTL_BOOT) {
         APPSPAWN_LOGV("Enter begetctl boot without BEGETCTL_BOOT flag set");

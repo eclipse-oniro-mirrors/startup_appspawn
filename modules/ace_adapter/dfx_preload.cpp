@@ -42,6 +42,7 @@ static int CheckSupportDfxColdStart(const AppSpawningCtx *property)
 APPSPAWN_STATIC int SetDfxPreloadEnableEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_CHECK_ONLY_EXPER(GetAppSpawnMsgType(property) != MSG_SPAWN_NATIVE_PROCESS, return 0);
+    APPSPAWN_CHECK_ONLY_EXPER(!IsDaemonBinProperty(property), return 0);
     const char *bundleName = GetBundleName(property);
     APPSPAWN_CHECK(bundleName != NULL, return APPSPAWN_ARG_INVALID, "Can not get bundle name");
 

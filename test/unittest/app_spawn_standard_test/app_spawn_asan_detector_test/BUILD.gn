@@ -75,6 +75,7 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/util/src/appspawndf_utils.cpp",
       "${appspawn_path}/test/mock/app_system_stub.c",
     ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
     sources += appspawn_sandbox_src
 
     # Test specific sources
@@ -102,6 +103,7 @@ if (!defined(ohos_lite)) {
     if (build_selinux) {
       defines += [ "WITH_SELINUX" ]
       external_deps += [ "selinux_adapter:libhap_restorecon" ]
+      external_deps += [ "selinux:libselinux" ]
     }
   }
 }

@@ -128,6 +128,7 @@ typedef struct TagAppSpawnedProcess {
                           //   bit0 (0x01): tokenid refcount
                           //   bit1 (0x02): uid refcount
     AppSpawnKillReason killReason;  // Kill reason for process exit reporting
+    bool isDaemonBin;     // 报文标记 APP_FLAGS_DAEMON_BIN 的解析结果：bin（daemon）类型孵化
     char name[0];
 } AppSpawnedProcess;
 
@@ -351,6 +352,26 @@ APPSPAWN_INLINE int CheckAppMsgFlagsSet(const AppSpawningCtx *property, uint32_t
     APPSPAWN_CHECK(property != NULL && property->message != NULL,
         return 0, "Invalid property for name %{public}u", TLV_MSG_FLAGS);
     return CheckAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, index);
+}
+
+APPSPAWN_INLINE bool IsDaemonBinMsg(const AppSpawnMsgNode *message)
+{
+    APPSPAWN_CHECK(message != NULL, return false, "Invalid message for daemon bin check");
+    bool isServicesBin = (message->msgHeader.msgType == MSG_SPAWN_SERVICE_BIN);
+    bool hasDaemonFlag = (CheckAppSpawnMsgFlag(message, TLV_MSG_FLAGS, APP_FLAGS_DAEMON_BIN) != 0);
+    if (isServicesBin && !hasDaemonFlag) {
+        APPSPAWN_LOGE("daemon bin request missing flag %{public}s for %{public}s",
+            "APP_FLAGS_DAEMON_BIN", message->msgHeader.processName);
+    }
+    return isServicesBin && hasDaemonFlag;
+}
+
+APPSPAWN_INLINE bool IsDaemonBinProperty(const AppSpawningCtx *property)
+{
+    APPSPAWN_CHECK(property != NULL && property->message != NULL,
+        return false, "Invalid property for daemon bin check");
+    APPSPAWN_CHECK(IsNoShareFsEnable(), return false, "Current platform not support daemon");
+    return IsDaemonBinMsg(property->message);
 }
 
 APPSPAWN_INLINE int CheckAppPermissionFlagSet(const AppSpawningCtx *property, uint32_t index)

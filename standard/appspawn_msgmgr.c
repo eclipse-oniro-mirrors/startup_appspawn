@@ -13,9 +13,12 @@
  * limitations under the License.
  */
 
+#include <errno.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 #include "appspawn.h"
@@ -182,6 +185,59 @@ AppSpawnMsgNode *RebuildAppSpawnMsgNode(AppSpawnMsgNode *message, AppSpawnedProc
     return NULL;
 }
 
+#define DAEMON_BIN_PATH_ROOT "/data/storage/el1/bundle/libs/"
+#if defined(__aarch64__)
+#define DAEMON_BIN_ABI "arm64"
+#elif defined(__arm__)
+#define DAEMON_BIN_ABI "arm"
+#elif defined(__x86_64__)
+#define DAEMON_BIN_ABI "x86_64"
+#else
+#define DAEMON_BIN_ABI "riscv64"
+#endif
+
+static bool IsDaemonBinPathPrefixAllowed(const char *binPath, uint32_t len)
+{
+    if (binPath == NULL || len == 0 || len >= PATH_MAX) {
+        return false;
+    }
+    size_t rootLen = strlen(DAEMON_BIN_PATH_ROOT);
+    if (len <= rootLen || memcmp(binPath, DAEMON_BIN_PATH_ROOT, rootLen) != 0) {
+        return false;
+    }
+
+    const size_t abiLen = strlen(DAEMON_BIN_ABI);
+    return len > rootLen + abiLen + 1 &&
+        memcmp(binPath + rootLen, DAEMON_BIN_ABI, abiLen) == 0 &&
+        binPath[rootLen + abiLen] == '/';
+}
+
+APPSPAWN_STATIC int CheckDaemonSpawnMsg(const AppSpawnMsgNode *message)
+{
+    AppSpawnContent *content = GetAppSpawnContent();
+    if (content != NULL && !IsAppSpawnMode((AppSpawnMgr *)content)) {
+        APPSPAWN_LOGE("daemon spawn request rejected: not appspawn mode");
+        return APPSPAWN_MSG_INVALID;
+    }
+
+    APPSPAWN_CHECK(IsNoShareFsEnable(), return APPSPAWN_MSG_INVALID, "Current platform not support daemon");
+
+    AppSpawnMsgDacInfo *dacInfo = (AppSpawnMsgDacInfo *)GetAppSpawnMsgInfo(message, TLV_DAC_INFO);
+    APPSPAWN_CHECK(dacInfo != NULL, return APPSPAWN_MSG_INVALID,
+        "daemon spawn request rejected: no dac info in msg");
+    APPSPAWN_CHECK(dacInfo->gidCount > 0 && dacInfo->gidCount <= APP_MAX_GIDS, return APPSPAWN_MSG_INVALID,
+        "daemon spawn request rejected: invalid gid table, gidCount %{public}u", dacInfo->gidCount);
+
+    uint32_t len = 0;
+    const char *binPath = (const char *)GetAppSpawnMsgExtInfo(
+        message, MSG_EXT_NAME_DAEMON_BIN_PATH, &len);
+    APPSPAWN_CHECK(binPath != NULL && len > 0 && binPath[0] == '/', return APPSPAWN_MSG_INVALID,
+        "daemon spawn request rejected: daemon_bin_path is not an absolute path");
+    APPSPAWN_CHECK(IsDaemonBinPathPrefixAllowed(binPath, len), return APPSPAWN_MSG_INVALID,
+        "daemon spawn request rejected: daemon_bin_path outside allowlist, len=%{public}u", len);
+    return 0;
+}
+
 int CheckAppSpawnMsg(const AppSpawnMsgNode *message)
 {
     APPSPAWN_CHECK_ONLY_EXPER(message != NULL, return APPSPAWN_MSG_INVALID);
@@ -209,6 +265,10 @@ int CheckAppSpawnMsg(const AppSpawnMsgNode *message)
             APPSPAWN_LOGE("Invalid bundle name %{public}s", bundleInfo->bundleName);
             return APPSPAWN_MSG_INVALID;
         }
+    }
+
+    if (IsDaemonBinMsg(message)) {
+        return CheckDaemonSpawnMsg(message);
     }
     return 0;
 }
