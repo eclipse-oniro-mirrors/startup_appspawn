@@ -365,7 +365,9 @@ int AppSpawnReqMsgSetAppDacInfo(AppSpawnReqMsgHandle reqHandle, const AppDacInfo
 {
     AppSpawnReqMsgNode *reqNode = (AppSpawnReqMsgNode *)reqHandle;
     APPSPAWN_CHECK_ONLY_EXPER(reqNode != NULL, return APPSPAWN_ARG_INVALID);
-    APPSPAWN_CHECK(dacInfo != NULL, return APPSPAWN_ARG_INVALID, "Invalid dacInfo ");
+    APPSPAWN_CHECK(dacInfo != NULL, return APPSPAWN_ARG_INVALID, "Invalid dacInfo");
+    APPSPAWN_LOGI("uid:%{public}u appUid:%{public}u gid:%{public}u count:%{public}u",
+        dacInfo->uid, dacInfo->appUid, dacInfo->gid, dacInfo->gidCount);
 
     AppDacInfo tmpDacInfo = {0};
     (void)memcpy_s(&tmpDacInfo, sizeof(tmpDacInfo), dacInfo, sizeof(tmpDacInfo));

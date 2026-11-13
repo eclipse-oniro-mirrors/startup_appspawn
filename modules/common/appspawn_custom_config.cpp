@@ -352,6 +352,12 @@ void SetAgentIdFromMsg(const AppSpawningCtx *property)
     (void)SetHdacAgentId(agentId, userId);
 }
 
+// ioctl only takes effect on the calling thread.
+// The setappuid wrapper in musl invokes ioctl for all threads of the process,
+// which applies to the whole process.
+// If the process has multiple threads, calling ioctl separately only affects the caller thread,
+// and causes inconsistent appuid among other threads.
+// need to fix this later, use musl setappuid api
 int SetAppUid(uint32_t appUid)
 {
     APPSPAWN_LOGV("SetAppUid called with appUid=%{public}u", appUid);
