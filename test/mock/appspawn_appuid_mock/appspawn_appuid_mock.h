@@ -80,6 +80,13 @@ typedef struct {
     uint32_t suid;
 } AppUidSetresuidCall;
 
+/* Recorded setresgid call. */
+typedef struct {
+    uint32_t rgid;
+    uint32_t egid;
+    uint32_t sgid;
+} AppUidSetresgidCall;
+
 /* Recorded open call (path only). */
 typedef struct {
     char path[APPUID_MOCK_PATH_MAX];
@@ -133,6 +140,10 @@ int AppUidMockFindOpenPath(const char *subStr);
 /* Recorded setresuid calls. */
 int AppUidMockSetresuidCallCount(void);
 int AppUidMockGetSetresuidCall(int index, AppUidSetresuidCall *out);
+
+/* Recorded setresgid calls. */
+int AppUidMockSetresgidCallCount(void);
+int AppUidMockGetSetresgidCall(int index, AppUidSetresgidCall *out);
 
 /* Recorded prctl calls. */
 int AppUidMockPrctlCallCount(void);

@@ -81,6 +81,7 @@
 #define PREINSTALLED_HAP_FLAG 0x01 // hapFlags 0x01: SELINUX_HAP_RESTORECON_PREINSTALLED_APP in selinux
 #define MIN_VALID_APP_UID 10000
 #define MIN_VALID_SHARED_UID 100
+#define MIN_VALID_SHARED_GID 100
 #define MIN_VALID_APP_GID 10000
 #define APP_SIGN_TYPE_DEFAULT "none"
 #define XPM_DEV_PATH "/dev/xpm"
@@ -558,9 +559,10 @@ APPSPAWN_STATIC int NormalizeDacAppUid(AppSpawnMgr *content, AppSpawningCtx *pro
 static bool IsValidDacInfo(const AppSpawningCtx *property, const AppDacInfo *dacInfo)
 {
     uint32_t minUid = IsShareUidApp(property) ? MIN_VALID_SHARED_UID : MIN_VALID_APP_UID;
-    return (dacInfo->uid >= minUid && dacInfo->uid < UINT32_MAX) &&
-        (dacInfo->appUid >= MIN_VALID_APP_UID && dacInfo->appUid < UINT32_MAX) &&
-        (dacInfo->gid >= MIN_VALID_APP_GID && dacInfo->gid < UINT32_MAX) &&
+    uint32_t minGid = IsShareUidApp(property) ? MIN_VALID_SHARED_GID : MIN_VALID_APP_GID;
+    return (dacInfo->appUid >= MIN_VALID_APP_UID && dacInfo->appUid < UINT32_MAX) &&
+        (dacInfo->uid >= minUid && dacInfo->uid < UINT32_MAX) &&
+        (dacInfo->gid >= minGid && dacInfo->gid < UINT32_MAX) &&
         (dacInfo->gidCount <= APP_MAX_GIDS);
 }
 

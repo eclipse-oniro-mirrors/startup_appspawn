@@ -19,6 +19,7 @@
 #include "cJSON.h"
 #include <unistd.h>
 
+#include <memory>
 #include <string>
 
 #include "app_spawn_appuid_test_helper.h"
@@ -86,6 +87,43 @@ void ExpectSignalAppUid(int fd, uint32_t expectedAppUid)
     }
     cJSON_Delete(json);
 }
+
+// Every identity check reads calls captured from the production SetUidGid path.
+void ExpectPrimaryGid(uint32_t expectedGid)
+{
+    ASSERT_EQ(AppUidMockSetresgidCallCount(), 1);
+    AppUidSetresgidCall call = {};
+    ASSERT_EQ(AppUidMockGetSetresgidCall(0, &call), 0);
+    EXPECT_EQ(call.rgid, expectedGid);
+    EXPECT_EQ(call.egid, expectedGid);
+    EXPECT_EQ(call.sgid, expectedGid);
+}
+
+void ExpectAppliedIdentity(uint32_t expectedUid, uint32_t expectedGid, uint32_t expectedAppUid)
+{
+    ExpectPrimaryGid(expectedGid);
+    ASSERT_EQ(AppUidMockSetresuidCallCount(), 1);
+    AppUidSetresuidCall uidCall = {};
+    ASSERT_EQ(AppUidMockGetSetresuidCall(0, &uidCall), 0);
+    EXPECT_EQ(uidCall.ruid, expectedUid);
+    EXPECT_EQ(uidCall.euid, expectedUid);
+    EXPECT_EQ(uidCall.suid, expectedUid);
+    AppUidIoctlCall ioctlCall = {};
+    ASSERT_EQ(AppUidMockFindIoctlCall(AppUidMockEncodeIoctlCmd(1, APPUID_HM_SET_APPUID), &ioctlCall), 1);
+    EXPECT_EQ(ioctlCall.value, expectedAppUid);
+}
+
+void ExpectDacRejected(AppSpawnMgr *mgr, AppSpawningCtx *property)
+{
+    AppUidMockReset();
+    EXPECT_EQ(SetAppUidGid(mgr, property), APPSPAWN_MSG_INVALID);
+    EXPECT_EQ(AppUidMockSetresgidCallCount(), 0);
+    EXPECT_EQ(AppUidMockSetresuidCallCount(), 0);
+    EXPECT_EQ(AppUidMockIoctlCallCount(), 0);
+}
+
+using AppUidMgrPtr = std::unique_ptr<AppSpawnMgr, decltype(&DeleteAppSpawnMgr)>;
+using AppUidPropertyPtr = std::unique_ptr<AppSpawningCtx, decltype(&CleanupAppUidProperty)>;
 
 class AppSpawnAppUidDacTest : public testing::Test {
 public:
@@ -157,6 +195,9 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_CustomSandbox_001, TestSize.Lev
     AppSpawningCtx *property = BuildAppUidProperty("com.test.customsandbox",
         CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, true);
     ASSERT_NE(property, nullptr);
+    auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
+    ASSERT_NE(dacInfo, nullptr);
+    dacInfo->gid = CUSTOM_SANDBOX_UID;
 
     // enable the real custom sandbox condition so the userId-like 10x uid passes the range check
     SetNoShareFsEnable(true);
@@ -179,6 +220,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_CustomSandbox_001, TestSize.Lev
     EXPECT_EQ(AppUidMockFindIoctlCall(setAppUidCmd, &call), 1);
     EXPECT_EQ(call.value, CUSTOM_SANDBOX_APPUID);
 
+    ExpectPrimaryGid(CUSTOM_SANDBOX_UID);
     CleanupAppUidProperty(property);
     DeleteAppSpawnMgr(mgr);
 }
@@ -630,6 +672,29 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_HdacWrite_SetAppUid_IoctlFail_001, TestSi
     AppUidMockSetIoctlRet(0);  // restore default
 }
 
+/* Kernel appUid write failure must degrade: warn and keep the spawn alive (spec EB-1). */
+HWTEST_F(AppSpawnAppUidDacTest, AppUid_HdacWrite_FailureDegrade_001, TestSize.Level1)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    ASSERT_NE(mgr, nullptr);
+    AppSpawningCtx *property = BuildAppUidProperty("com.test.degrade", NORMAL_APP_UID, NORMAL_APP_UID, false);
+    ASSERT_NE(property, nullptr);
+
+    AppUidMockReset();
+    AppUidMockSetIoctlRet(-1);  // kernel appUid write fails
+    int ret = SetAppUidGid(mgr, property);
+    AppUidMockSetIoctlRet(0);  // restore default
+    // degrade: warning only, the spawn keeps running
+    EXPECT_EQ(ret, 0);
+    // the appUid write was attempted with the right payload before the failure was ignored
+    AppUidIoctlCall ioctlCall = {};
+    EXPECT_EQ(AppUidMockFindIoctlCall(AppUidMockEncodeIoctlCmd(1, APPUID_HM_SET_APPUID), &ioctlCall), 1);
+    EXPECT_EQ(ioctlCall.value, NORMAL_APP_UID);
+
+    CleanupAppUidProperty(property);
+    DeleteAppSpawnMgr(mgr);
+}
+
 /*
  * @tc.name: AppUid_NormalizeDacAppUid_BootImgStage_001
  * @tc.desc: the image-process path only runs BOOT_IMG hooks; the hook
@@ -746,6 +811,9 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_ShareUid_001, TestSize.Level1)
     AppSpawningCtx *property = BuildAppUidProperty("com.test.uidboundary",
         CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, false);
     ASSERT_NE(property, nullptr);
+    auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
+    ASSERT_NE(dacInfo, nullptr);
+    dacInfo->gid = CUSTOM_SANDBOX_UID;
     SetNoShareFsEnable(true);
     EXPECT_EQ(SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, APP_FLAGS_SHAREUID_ENABLED), 0);
     EXPECT_EQ(SetAppUidGid(mgr, property), 0);
@@ -755,6 +823,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_ShareUid_001, TestSize.Level1)
     AppUidIoctlCall ioctlCall = {};
     EXPECT_EQ(AppUidMockFindIoctlCall(AppUidMockEncodeIoctlCmd(1, APPUID_HM_SET_APPUID), &ioctlCall), 1);
     EXPECT_EQ(ioctlCall.value, CUSTOM_SANDBOX_APPUID);
+    ExpectPrimaryGid(CUSTOM_SANDBOX_UID);
     CleanupAppUidProperty(property);
     DeleteAppSpawnMgr(mgr);
 }
@@ -960,6 +1029,121 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_InvalidGroups_001, TestSize.Lev
     EXPECT_EQ(AppUidMockSetresuidCallCount(), 1);
     CleanupAppUidProperty(property);
     DeleteAppSpawnMgr(mgr);
+}
+
+/* Shared GID boundaries are isolated from UID checks by keeping UID valid. */
+HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_SharedGidBoundary_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    SetNoShareFsEnable(true);
+    const uint32_t flags[] = {APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SHAREUID_ENABLED};
+    const uint32_t invalidGids[] = {0, CUSTOM_SANDBOX_UID - 1, UINT32_MAX};
+    const uint32_t sharedIds[] = {CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_UID + 1, CUSTOM_SANDBOX_UID + 9};
+    for (uint32_t flag : flags) {
+        AppUidPropertyPtr property(BuildAppUidProperty("com.test.sharedgid",
+            CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, false), CleanupAppUidProperty);
+        ASSERT_NE(property, nullptr);
+        ASSERT_EQ(SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, flag), 0);
+        auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property.get(), TLV_DAC_INFO));
+        ASSERT_NE(dacInfo, nullptr);
+        for (uint32_t gid : invalidGids) {
+            dacInfo->gid = gid;
+            ExpectDacRejected(mgr.get(), property.get());
+        }
+        for (uint32_t id : sharedIds) {
+            dacInfo->uid = id;
+            dacInfo->gid = id;
+            AppUidMockReset();
+            ASSERT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
+            ExpectAppliedIdentity(id, id, CUSTOM_SANDBOX_APPUID);
+        }
+    }
+}
+
+/* Low GIDs must remain invalid for ordinary applications on both products. */
+HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NormalGidBoundary_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    const uint32_t invalidGids[] = {0, CUSTOM_SANDBOX_UID, MIN_APP_GID - 1, UINT32_MAX};
+    for (bool isPc : {false, true}) {
+        SetNoShareFsEnable(isPc);
+        AppUidPropertyPtr property(BuildAppUidProperty("com.test.normalgid",
+            NORMAL_APP_UID, NORMAL_APP_UID, false), CleanupAppUidProperty);
+        ASSERT_NE(property, nullptr);
+        auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property.get(), TLV_DAC_INFO));
+        ASSERT_NE(dacInfo, nullptr);
+        for (uint32_t gid : invalidGids) {
+            dacInfo->gid = gid;
+            ExpectDacRejected(mgr.get(), property.get());
+        }
+        dacInfo->gid = MIN_APP_GID;
+        AppUidMockReset();
+        ASSERT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
+        ExpectAppliedIdentity(NORMAL_APP_UID, MIN_APP_GID, NORMAL_APP_UID);
+    }
+}
+
+/* A flag alone must not lower the GID bound when PC shared-UID mode is off. */
+HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NonPcSharedGidRejected_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    SetNoShareFsEnable(false);
+    const uint32_t flags[] = {APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SHAREUID_ENABLED};
+    const uint32_t invalidGids[] = {CUSTOM_SANDBOX_UID - 1, CUSTOM_SANDBOX_UID, MIN_APP_GID - 1};
+    for (uint32_t flag : flags) {
+        AppUidPropertyPtr property(BuildAppUidProperty("com.test.nonpcgid",
+            NORMAL_APP_UID, NORMAL_APP_UID, false), CleanupAppUidProperty);
+        ASSERT_NE(property, nullptr);
+        ASSERT_EQ(SetAppSpawnMsgFlag(property->message, TLV_MSG_FLAGS, flag), 0);
+        auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property.get(), TLV_DAC_INFO));
+        ASSERT_NE(dacInfo, nullptr);
+        for (uint32_t gid : invalidGids) {
+            dacInfo->gid = gid;
+            ExpectDacRejected(mgr.get(), property.get());
+        }
+    }
+}
+
+/* A shared primary GID must not bypass the supplementary group-count limit. */
+HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_SharedGidGroupCount_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    SetNoShareFsEnable(true);
+    AppUidPropertyPtr property(BuildAppUidProperty("com.test.sharedgidcount",
+        CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, true), CleanupAppUidProperty);
+    ASSERT_NE(property, nullptr);
+    auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property.get(), TLV_DAC_INFO));
+    ASSERT_NE(dacInfo, nullptr);
+    dacInfo->gid = CUSTOM_SANDBOX_UID;
+    dacInfo->gidCount = APP_MAX_GIDS + 1;
+    ExpectDacRejected(mgr.get(), property.get());
+    dacInfo->gidCount = APP_MAX_GIDS;
+    AppUidMockReset();
+    ASSERT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
+    ExpectAppliedIdentity(CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID);
+}
+
+/* UID/GID in the shared range must not relax the independent appUid check. */
+HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_SharedGidInvalidAppUid_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    SetNoShareFsEnable(true);
+    AppUidPropertyPtr property(BuildAppUidProperty("com.test.sharedgidappid",
+        CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, true), CleanupAppUidProperty);
+    ASSERT_NE(property, nullptr);
+    auto *dacInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property.get(), TLV_DAC_INFO));
+    ASSERT_NE(dacInfo, nullptr);
+    dacInfo->gid = CUSTOM_SANDBOX_UID;
+    const uint32_t invalidAppUids[] = {0, CUSTOM_SANDBOX_UID, MIN_APP_UID - 1, UINT32_MAX};
+    for (uint32_t appUid : invalidAppUids) {
+        dacInfo->appUid = appUid;
+        ExpectDacRejected(mgr.get(), property.get());
+    }
 }
 
 }  // namespace
