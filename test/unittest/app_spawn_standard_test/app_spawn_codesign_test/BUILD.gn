@@ -70,10 +70,12 @@ if (!defined(ohos_lite)) {
       "${appspawn_innerkits_path}/permission/appspawn_mount_permission.c",
       "${appspawn_path}/modules/sandbox/appspawn_permission.c",
       "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
       "${appspawn_path}/common/appspawn_trace.cpp",
       "${appspawn_path}/modules/common/appspawn_adapter.cpp",
       "${appspawn_path}/modules/common/appspawn_silk.c",
     ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
 
     # Test specific sources
     sources += [

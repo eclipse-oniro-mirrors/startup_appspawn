@@ -108,12 +108,14 @@ if (!defined(ohos_lite)) {
 
     sources = appuid_base_sources
     sources += appspawn_sandbox_src
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
     sources += [
       "${appspawn_path}/interfaces/innerkits/permission/appspawn_mount_permission.c",
       "${appspawn_path}/modules/ace_adapter/appspawn_checkpoint.c",
       "${appspawn_path}/modules/common/appspawn_adapter.cpp",
       "${appspawn_path}/modules/common/appspawn_cgroup.c",
       "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
       "${appspawn_path}/modules/common/appspawn_custom_config.cpp",
       "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/common/appspawn_kill_reason.c",

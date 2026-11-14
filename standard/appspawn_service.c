@@ -1675,6 +1675,7 @@ APPSPAWN_STATIC AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *proper
     AppSpawnedProcess *appInfo = AddSpawnedProcess(property->pid, GetBundleName(property),
         appIndex, isDebuggable, tokenid);
     APPSPAWN_CHECK(appInfo != NULL, return NULL, "Failed to add spawned process");
+    appInfo->isDaemonBin = IsDaemonBinProperty(property);
 
     AppSpawnMsgDacInfo *dacInfo = GetAppProperty(property, TLV_DAC_INFO);
     appInfo->uid = (dacInfo != NULL) ? dacInfo->uid : 0;
@@ -2476,6 +2477,7 @@ static void ProcessRecvMsg(AppSpawnConnection *connection, AppSpawnMsgNode *mess
             DeleteAppSpawnMsg(&message);
             break;
         }
+        case MSG_SPAWN_SERVICE_BIN:
         case MSG_SPAWN_NATIVE_PROCESS:  // spawn msg
         case MSG_APP_SPAWN: {
             ProcessSpawnReqMsg(connection, message);

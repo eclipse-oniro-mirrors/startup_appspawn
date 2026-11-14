@@ -41,6 +41,12 @@ APPSPAWN_STATIC int AsanSpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCt
 }
 #endif
 
+#if defined(__aarch64__)
+#define ASAN_LIB_DIR "/system/lib64"
+#else
+#define ASAN_LIB_DIR "/system/lib"
+#endif
+
 using namespace testing;
 using namespace testing::ext;
 using namespace OHOS;
@@ -266,7 +272,7 @@ HWTEST_F(AppSpawnAsanDetectorTest, SetAsanEnabledEnv02, TestSize.Level1)
 
         ret = SetAsanEnabledEnv(mgr, property);
         EXPECT_EQ(ret, 0);
-        EXPECT_STREQ(getenv("LD_PRELOAD"), "/system/lib64/libclang_rt.asan.so");
+        EXPECT_STREQ(getenv("LD_PRELOAD"), ASAN_LIB_DIR "/libclang_rt.asan.so");
         EXPECT_STREQ(getenv("ASAN_OPTIONS"), "include=/system/etc/asan.options");
         EXPECT_EQ(getenv("HWASAN_OPTIONS"), nullptr);
         EXPECT_EQ(getenv("TSAN_OPTIONS"), nullptr);
@@ -628,7 +634,7 @@ HWTEST_F(AppSpawnAsanDetectorTest, AsanSpawnInitSpawningEnv02, TestSize.Level1)
         ret = AsanSpawnInitSpawningEnv(mgr, property);
         EXPECT_EQ(ret, 0);
         EXPECT_NE(property->client.flags & APP_COLD_START, 0);
-        EXPECT_STREQ(getenv("LD_PRELOAD"), "/system/lib64/libclang_rt.asan.so");
+        EXPECT_STREQ(getenv("LD_PRELOAD"), ASAN_LIB_DIR "/libclang_rt.asan.so");
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);

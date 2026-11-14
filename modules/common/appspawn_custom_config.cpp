@@ -131,6 +131,8 @@ APPSPAWN_STATIC int32_t LoadCustomSandboxEnv(const char* envFilePath)
 APPSPAWN_STATIC int SpawnSetCustomSandboxEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Spawning: set SpawnSetCustomSandboxEnv.");
+    APPSPAWN_CHECK_LOGV(!IsDaemonBinProperty(property), return APPSPAWN_OK,
+        "SpawnSetCustomSandboxEnv: skip daemon");
     if (CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX)) {
         int32_t ret = LoadCustomSandboxEnv(ENV_FILE_PATH);
         APPSPAWN_LOGV("Finished LoadCustomSandboxEnv result: %{public}d", ret);

@@ -83,6 +83,8 @@ private:
     int ProcessInputCmd(std::string &cmd);
     int AddExtTlv(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
     int BuildMsgFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
+    int AddStandardTlvsOrDefault(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
+    int BuildDaemonMsgFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
     int AddBundleInfoFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
     int AddDacInfoFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
     int AddInternetPermissionInfoFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);

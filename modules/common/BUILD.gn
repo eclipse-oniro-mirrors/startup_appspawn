@@ -32,6 +32,7 @@ ohos_shared_library("appspawn_common") {
     "appspawn_adapter.cpp",
     "appspawn_cgroup.c",
     "appspawn_common.c",
+    "spawn_primitives.c",
     "appspawn_namespace.c",
     "appspawn_silk.c",
     "appspawn_kill_reason.c",

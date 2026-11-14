@@ -121,10 +121,12 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/modules/common/appspawn_begetctl.c",
       "${appspawn_path}/modules/common/appspawn_cgroup.c",
       "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
       "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/common/appspawn_namespace.c",
       "${appspawn_path}/modules/common/appspawn_silk.c",
     ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
     sources += appspawn_sandbox_src
 
     # client
@@ -252,10 +254,12 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/modules/common/appspawn_begetctl.c",
       "${appspawn_path}/modules/common/appspawn_cgroup.c",
       "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
       "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/common/appspawn_namespace.c",
       "${appspawn_path}/modules/common/appspawn_silk.c",
     ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
     sources += appspawn_sandbox_src
 
     # client

@@ -125,28 +125,28 @@ protected:
 HWTEST_F(AppSpawnCapabilityTest, App_Spawn_SetCapabilities_CustomSandbox_NoDangerCaps, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX}));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     ExpectCapabilities(0, 0, 0);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, CustomSandboxPreservesFownerAndExtendedAmbient, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER}));
-    ASSERT_EQ(SetAmbientCapabilities(property_, NET_RAW_CAP), 0);
+    ASSERT_EQ(SetAppAmbientCapabilities(property_, NET_RAW_CAP), 0);
     ExpectAmbientCapabilities(FOWNER_CAP | NET_RAW_CAP, 2);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, NormalAppPreservesDacAndNetRaw, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({}, NET_RAW_PERMISSION));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     ExpectCapabilities(DAC_CAP | NET_RAW_CAP, DAC_CAP, 1);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, NormalAppPreservesExtendedAmbientCaps, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_SET_CAPS_FOWNER}));
-    ASSERT_EQ(SetAmbientCapabilities(property_, NET_RAW_CAP), 0);
+    ASSERT_EQ(SetAppAmbientCapabilities(property_, NET_RAW_CAP), 0);
     ExpectAmbientCapabilities(DAC_CAP | FOWNER_CAP | NET_RAW_CAP, 3);
 }
 
@@ -154,8 +154,8 @@ HWTEST_F(AppSpawnCapabilityTest, App_Spawn_SetCapabilities_NonNoShareFs_Unchange
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER}, NET_RAW_PERMISSION));
     SetNoShareFsEnable(false);
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
-    EXPECT_EQ(SetAmbientCapabilities(property_, DAC_CAP | NET_RAW_CAP), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
+    EXPECT_EQ(SetAppAmbientCapabilities(property_, DAC_CAP | NET_RAW_CAP), 0);
     ExpectCapabilities(0, 0, 0);
 }
 
@@ -163,7 +163,7 @@ HWTEST_F(AppSpawnCapabilityTest, IsolatedSandboxPreservesBehavior, TestSize.Leve
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_ISOLATED_SANDBOX_TYPE,
         APP_FLAGS_SET_CAPS_FOWNER}, NET_RAW_PERMISSION));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     ExpectCapabilities(0, 0, 0);
 }
 
@@ -177,7 +177,7 @@ HWTEST_F(AppSpawnCapabilityTest, SpawnModesPreserveCapabilityGates, TestSize.Lev
         SCOPED_TRACE(static_cast<int>(mode));
         mgr_->content.mode = mode;
         state_ = {};
-        ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+        ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
         // NeedExtPerm enables APP/NATIVE (including cold runs); others set zero E/P/I and skip ambient.
         bool enabled = mode == MODE_FOR_APP_SPAWN || mode == MODE_FOR_APP_COLD_RUN ||
             mode == MODE_FOR_NATIVE_SPAWN || mode == MODE_FOR_NATIVE_COLD_RUN;
@@ -190,7 +190,7 @@ HWTEST_F(AppSpawnCapabilityTest, CapsetFailureStopsAmbientSetup, TestSize.Level0
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER}));
     state_.capsetResult = -1;
-    EXPECT_EQ(SetCapabilities(mgr_, property_), -EPERM);
+    EXPECT_EQ(SetAppCapabilities(mgr_, property_), -EPERM);
     ExpectCapabilities(FOWNER_CAP, 0, 0);
 }
 
@@ -198,7 +198,7 @@ HWTEST_F(AppSpawnCapabilityTest, FownerAmbientFailurePropagates, TestSize.Level0
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER}));
     state_.ambientResult = -1;
-    EXPECT_EQ(SetCapabilities(mgr_, property_), -1);
+    EXPECT_EQ(SetAppCapabilities(mgr_, property_), -1);
     ExpectCapabilities(FOWNER_CAP, FOWNER_CAP, 1);
 }
 
@@ -206,7 +206,7 @@ HWTEST_F(AppSpawnCapabilityTest, NormalAmbientFailurePropagates, TestSize.Level0
 {
     ASSERT_TRUE(PrepareAppSpawnContext({}));
     state_.ambientResult = -1;
-    EXPECT_EQ(SetCapabilities(mgr_, property_), -1);
+    EXPECT_EQ(SetAppCapabilities(mgr_, property_), -1);
     ExpectCapabilities(DAC_CAP, DAC_CAP, 1);
 }
 
@@ -214,42 +214,42 @@ HWTEST_F(AppSpawnCapabilityTest, ExtendedAmbientFailurePropagates, TestSize.Leve
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX}));
     state_.ambientResult = -1;
-    EXPECT_EQ(SetAmbientCapabilities(property_, NET_RAW_CAP), -1);
+    EXPECT_EQ(SetAppAmbientCapabilities(property_, NET_RAW_CAP), -1);
     ExpectAmbientCapabilities(NET_RAW_CAP, 1);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, App_Spawn_SetAmbientCapabilities_CustomSandbox_NoDangerCaps, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX}));
-    ASSERT_EQ(SetAmbientCapabilities(property_, 0), 0);
+    ASSERT_EQ(SetAppAmbientCapabilities(property_, 0), 0);
     ExpectAmbientCapabilities(0, 0);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, App_Spawn_SetAmbientCapabilities_Normal_KeepsDangerCaps, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({}));
-    ASSERT_EQ(SetAmbientCapabilities(property_, 0), 0);
+    ASSERT_EQ(SetAppAmbientCapabilities(property_, 0), 0);
     ExpectAmbientCapabilities(DAC_CAP, 1);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, App_Spawn_SetCapabilities_Normal_KeepsDangerCaps, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({}));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     ExpectCapabilities(DAC_CAP, DAC_CAP, 1);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, CustomSandboxPreservesFowner, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER}));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     ExpectCapabilities(FOWNER_CAP, FOWNER_CAP, 1);
 }
 
 HWTEST_F(AppSpawnCapabilityTest, CustomSandboxPreservesNetRaw, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX}, NET_RAW_PERMISSION));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     // Production NET_RAW is not configured as ambient.
     ExpectCapabilities(NET_RAW_CAP, 0, 0);
 }
@@ -257,7 +257,7 @@ HWTEST_F(AppSpawnCapabilityTest, CustomSandboxPreservesNetRaw, TestSize.Level0)
 HWTEST_F(AppSpawnCapabilityTest, CustomSandboxPreservesFownerAndNetRaw, TestSize.Level0)
 {
     ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER}, NET_RAW_PERMISSION));
-    ASSERT_EQ(SetCapabilities(mgr_, property_), 0);
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
     ExpectCapabilities(FOWNER_CAP | NET_RAW_CAP, FOWNER_CAP, 1);
 }
 } // namespace OHOS

@@ -20,6 +20,7 @@
 #include "appspawn_utils.h"
 #include "parameter.h"
 #include "securec.h"
+#include "spawn_policy.h"
 
 // for stub
 extern bool may_init_gwp_asan(bool forceInit);
@@ -209,6 +210,9 @@ static void SetHWAsanOptions(const AppSpawningCtx *property)
 APPSPAWN_STATIC int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Prepare spawn app %{public}s", GetProcessName(property));
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    APPSPAWN_CHECK_LOGV(pl->asanEnvEnable, return 0,
+        "AsanSpawnGetSpawningFlag: skip by policy %{public}s", pl->name);
 #ifdef ASAN_DETECTOR
     if (CheckSupportColdStart(GetBundleName(property)) == 0 ||
         CheckAppMsgFlagsSet(property, APP_FLAGS_HWASAN_ENABLED)) {
@@ -241,7 +245,8 @@ APPSPAWN_STATIC int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCt
 
 APPSPAWN_STATIC int AsanSpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
-    if (GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS) {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS || !pl->asanEnvEnable) {
         return 0;
     }
 #ifndef ASAN_DETECTOR

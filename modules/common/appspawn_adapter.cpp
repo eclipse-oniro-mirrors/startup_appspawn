@@ -20,6 +20,8 @@
 #include "appspawn_manager.h"
 #include "appspawn_utils.h"
 #include "cJSON.h"
+#include "spawn_policy.h"
+#include "spawn_primitives.h"
 #include "token_setproc.h"
 #include "tokenid_kit.h"
 #include "securec.h"
@@ -132,10 +134,17 @@ void SetHapDomainInfo(const AppSpawnMgr *content, const AppSpawningCtx *property
 }
 #endif
 
-int SetSelinuxCon(const AppSpawnMgr *content, const AppSpawningCtx *property)
+int SetAppSelinuxCon(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
 #ifdef WITH_SELINUX
-    APPSPAWN_LOGV("SetSelinuxCon IsDeveloperModeOn %{public}d", IsDeveloperModeOn(property));
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (pl->selinuxFrom == POLICY_SRC_SELINUX_SUDO) {
+        int ret = SetExecSelinuxCon(pl->selinuxCtx);
+        APPSPAWN_CHECK(ret == 0, return ret, "SetExecSelinuxCon(daemon) %{public}s failed: %{public}d",
+            pl->selinuxCtx, ret);
+        return 0;
+    }
+    APPSPAWN_LOGV("SetAppSelinuxCon IsDeveloperModeOn %{public}d", IsDeveloperModeOn(property));
     if (GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS) {
         if (!IsDeveloperModeOn(property)) {
             APPSPAWN_LOGE("Denied Launching a native process: not in developer mode");
@@ -153,7 +162,7 @@ int SetSelinuxCon(const AppSpawnMgr *content, const AppSpawningCtx *property)
     int32_t ret = hapContext.HapDomainSetcontext(hapDomainInfo);
     APPSPAWN_CHECK(ret == 0, return APPSPAWN_ACCESS_TOKEN_INVALID,
         "Set domain context failed, ret: %{public}d %{public}s", ret, GetProcessName(property));
-    APPSPAWN_LOGV("SetSelinuxCon success for %{public}s", GetProcessName(property));
+    APPSPAWN_LOGV("SetAppSelinuxCon success for %{public}s", GetProcessName(property));
 #endif
     return 0;
 }
@@ -197,20 +206,28 @@ static const char *TryGetAllowPtracePolicy(const AppSpawningCtx *property)
 }
 #endif
 
+#ifdef WITH_SECCOMP
+#ifdef NORMAL_SANDBOX
+static const char *GetNormalSandboxPolicyName(const AppSpawningCtx *property)
+{
+    // Set seccomp policy for normal process; allow_ptrace policy takes precedence.
+    const char *policy = TryGetAllowPtracePolicy(property);
+    return (policy != nullptr) ? policy : APP_NORMAL;
+}
+#endif
+#endif
+
 int SetSeccompFilter(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    APPSPAWN_CHECK_LOGV(pl->secCompEnable, return 0, "SetSeccompFilter: seccomp policy disabled, skip");
 #ifdef WITH_SECCOMP
     APPSPAWN_CHECK(property != nullptr, return 0, "property is NULL");
     const char *appName = APP_NAME;
     SeccompFilterType type = APP;
 
 #ifdef NORMAL_SANDBOX
-    // Set seccomp policy for normal process.
-    appName = APP_NORMAL;
-    const char *policy = TryGetAllowPtracePolicy(property);
-    if (policy != nullptr) {
-        appName = policy;
-    }
+    appName = GetNormalSandboxPolicyName(property);
 #endif
 
     if (IsNWebSpawnMode(content)) {
@@ -294,11 +311,16 @@ static void InitAppCommonEnv(const AppSpawningCtx *property)
 
 int32_t SetEnvInfo(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (!pl->envEnable) {
+        APPSPAWN_CHECK_LOGV(pl->envEnable, return 0, "SetEnvInfo: skip by policy %{public}s", pl->name);
+        return 0;
+    }
     InitAppCommonEnv(property);
 
     uint32_t size = 0;
     char *envStr = reinterpret_cast<char *>(GetAppPropertyExt(property, "AppEnv", &size));
-    if (size == 0 || envStr == NULL) {
+    if (size == 0 || envStr == nullptr) {
         return 0;
     }
     int ret = 0;

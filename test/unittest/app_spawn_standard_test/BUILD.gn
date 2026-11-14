@@ -101,16 +101,19 @@ if (!defined(ohos_lite)) {
     # modules sources
     sources += [
       "${appspawn_path}/modules/ace_adapter/ace_adapter.cpp",
+      "${appspawn_path}/modules/ace_adapter/appspawn_servicebin_adapter.cpp",
       "${appspawn_path}/modules/ace_adapter/command_lexer.cpp",
       "${appspawn_path}/modules/common/appspawn_adapter.cpp",
       "${appspawn_path}/modules/common/appspawn_begetctl.c",
       "${appspawn_path}/modules/common/appspawn_cgroup.c",
       "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
       "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/common/appspawn_namespace.c",
       "${appspawn_path}/modules/common/appspawn_silk.c",
       "${appspawn_path}/modules/nweb_adapter/nwebspawn_adapter.cpp",
     ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
     sources += appspawn_sandbox_src
 
     # add stub
@@ -295,12 +298,15 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/modules/common/appspawn_begetctl.c",
       "${appspawn_path}/modules/common/appspawn_cgroup.c",
       "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
       "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/common/appspawn_encaps.c",
       "${appspawn_path}/modules/common/appspawn_namespace.c",
+      "${appspawn_path}/modules/ace_adapter/appspawn_servicebin_adapter.cpp",
       "${appspawn_path}/modules/common/appspawn_silk.c",
       "${appspawn_path}/modules/nweb_adapter/nwebspawn_adapter.cpp",
     ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
     sources += appspawn_sandbox_src
 
     # add stub
@@ -318,6 +324,7 @@ if (!defined(ohos_lite)) {
     include_dirs += [ "${appspawn_path}/test/unittest" ]
     sources += [
       "${appspawn_path}/test/unittest/app_spawn_standard_test/app_spawn_common_test.cpp",
+      "${appspawn_path}/test/unittest/app_spawn_standard_test/app_spawn_daemon_spawn_test.cpp",
       "${appspawn_path}/test/unittest/app_spawn_test_helper.cpp",
     ]
 

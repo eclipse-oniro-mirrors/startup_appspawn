@@ -58,6 +58,7 @@ ohos_executable("appspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/spawn_policy.c",
   ]
 
   defines = []
@@ -197,6 +198,7 @@ ohos_executable("cjappspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/spawn_policy.c",
   ]
 
   defines = [ "CJAPP_SPAWN" ]
@@ -270,6 +272,7 @@ ohos_executable("nativespawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/spawn_policy.c",
   ]
 
   defines = [ "NATIVE_SPAWN" ]
@@ -358,6 +361,7 @@ ohos_executable("nwebspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/spawn_policy.c",
   ]
 
   defines = ["NWEB_SPAWN"]
@@ -448,6 +452,7 @@ ohos_executable("hybridspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/spawn_policy.c",
   ]
 
   defines = [ "HYBRID_SPAWN" ]

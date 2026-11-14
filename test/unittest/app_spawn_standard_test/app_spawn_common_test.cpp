@@ -94,7 +94,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_01, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -126,7 +126,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_02, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         property->client.flags |= APP_DEVELOPER_MODE;
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -157,7 +157,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_03, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -190,7 +190,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_04, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_DEBUGGABLE), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -223,7 +223,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_05, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_DLP_MANAGER_FULL_CONTROL), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -256,7 +256,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_06, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_DLP_MANAGER_READ_ONLY), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -291,7 +291,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_07, TestSize.Level0)
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_EXTENSION_SANDBOX), 0);
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -324,7 +324,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_08, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_EXTENSION_SANDBOX), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -357,7 +357,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_09, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -392,7 +392,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetSelinuxCon_10, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SELINUX_LABEL), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -425,7 +425,7 @@ HWTEST_F(AppSpawnCommonTest, Nweb_Spawn_SetSelinuxCon_01, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -458,7 +458,7 @@ HWTEST_F(AppSpawnCommonTest, Nweb_Spawn_SetSelinuxCon_02, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -491,7 +491,7 @@ HWTEST_F(AppSpawnCommonTest, Native_Spawn_SetSelinuxCon_01, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -526,7 +526,7 @@ HWTEST_F(AppSpawnCommonTest, Native_Spawn_SetSelinuxCon_02, TestSize.Level0)
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get app property");
         EXPECT_NE(CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE), 0);
 
-        ret = SetSelinuxCon(mgr, property);
+        ret = SetAppSelinuxCon(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2616,7 +2616,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities, TestSize.Level0)
             "Failed to create req %{public}s", NWEBSPAWN_SERVER_NAME);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2643,7 +2643,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_01, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2670,7 +2670,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_02, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2697,7 +2697,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_03, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2724,7 +2724,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_04, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_DEBUGSERVER);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2751,7 +2751,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_05, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_DEBUGSERVER);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2778,7 +2778,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_06, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_DEBUGSERVER);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2806,7 +2806,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_07, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2835,7 +2835,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_08, TestSize.Level0)
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_DEBUGSERVER);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2864,7 +2864,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_01, TestSize.Level
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2895,7 +2895,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_02, TestSize.Level
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_SET_CAPS_FOWNER);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2926,7 +2926,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_03, TestSize.Level
         AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_CUSTOM_SANDBOX);
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -2977,7 +2977,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_001, TestSize.Level0)
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
 
         property->allowDumpable = false;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3005,7 +3005,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_002, TestSize.Level0)
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
 
         property->allowDumpable = true;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3034,7 +3034,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_003, TestSize.Level0)
 
         property->allowDumpable = false;
         property->client.flags = APP_DEVELOPER_MODE;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3063,7 +3063,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_004, TestSize.Level0)
 
         property->allowDumpable = true;
         property->client.flags = APP_DEVELOPER_MODE;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3097,7 +3097,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_005, TestSize.Level0)
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
 
         property->allowDumpable = false;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3131,7 +3131,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_006, TestSize.Level0)
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
 
         property->allowDumpable = true;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3166,7 +3166,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_007, TestSize.Level0)
 
         property->allowDumpable = false;
         property->client.flags = APP_DEVELOPER_MODE;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -3200,7 +3200,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_008, TestSize.Level0)
 
         property->allowDumpable = true;
         property->client.flags = APP_DEVELOPER_MODE;
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4002,7 +4002,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_ExtPermGids_001, TestSize.Level
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
 
         AppSpawnMsgDacInfo *dacInfo = (AppSpawnMsgDacInfo *)GetAppProperty(property, TLV_DAC_INFO);
         APPSPAWN_CHECK(dacInfo != nullptr, break, "No dacInfo");
@@ -4037,7 +4037,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_001, TestSize.Leve
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4067,7 +4067,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_002, TestSize.Leve
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4097,7 +4097,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_003, TestSize.Leve
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4128,7 +4128,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_004, TestSize.Leve
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetAmbientCapabilities(property, 0);
+        ret = SetAppAmbientCapabilities(property, 0);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4160,7 +4160,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetAmbientCapabilities_005, TestSize.Leve
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetAmbientCapabilities(property, CAP_TO_MASK(CAP_NET_RAW));
+        ret = SetAppAmbientCapabilities(property, CAP_TO_MASK(CAP_NET_RAW));
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4195,7 +4195,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_001, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4233,7 +4233,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_002, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4268,7 +4268,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_003, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4303,7 +4303,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_004, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4344,7 +4344,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_005, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4377,7 +4377,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_006, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4410,7 +4410,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_007, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4448,7 +4448,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_008, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4486,7 +4486,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_009, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4524,7 +4524,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetCapabilities_010, TestSize.Level0)
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK(property != nullptr, break, "Failed to get property");
 
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4570,7 +4570,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_ExtPerm_Integration_001, TestSize.Level0)
         EXPECT_EQ(extCaps, (uint64_t)CAP_TO_MASK(CAP_NET_RAW));
 
         // Verify SetCapabilities processes the result
-        ret = SetCapabilities(mgr, property);
+        ret = SetAppCapabilities(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4651,7 +4651,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidUid_001, TestSize.Level0
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4687,7 +4687,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGid_001, TestSize.Level0
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4723,7 +4723,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGidCount_001, TestSize.L
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4758,7 +4758,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxBoundary_001, TestSize.Le
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4774,7 +4774,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_NullProperty_001, TestSize.Leve
 {
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
     EXPECT_NE(mgr, nullptr);
-    int ret = SetUidGid(mgr, nullptr);
+    int ret = SetAppUidGid(mgr, nullptr);
     DeleteAppSpawnMgr(mgr);
     ASSERT_EQ(ret, APPSPAWN_TLV_NONE);
 }
@@ -4868,7 +4868,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_ValidParams_NoRegression_001, T
         APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, break, "Failed to create msg");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4921,7 +4921,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMinBoundary_001, TestSize.Le
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4956,7 +4956,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountMaxBoundary_001, TestSi
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -4986,7 +4986,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_WithUserId_001, TestSize.Level0
         APPSPAWN_CHECK(ret == 0, break, "Failed to add userid ext info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -5022,7 +5022,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidBelowMin_001, TestSize.Level
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -5058,7 +5058,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidBelowMin_001, TestSize.Level
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -5094,7 +5094,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountOverMax_001, TestSize.L
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);
@@ -5130,7 +5130,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxInvalid_001, TestSize.Lev
         APPSPAWN_CHECK(ret == 0, break, "Failed to set dac info");
         property = g_testHelper.GetAppProperty(clientHandle, reqHandle);
         APPSPAWN_CHECK_ONLY_EXPER(property != nullptr, break);
-        ret = SetUidGid(mgr, property);
+        ret = SetAppUidGid(mgr, property);
     } while (0);
     DeleteAppSpawningCtx(property);
     AppSpawnClientDestroy(clientHandle);

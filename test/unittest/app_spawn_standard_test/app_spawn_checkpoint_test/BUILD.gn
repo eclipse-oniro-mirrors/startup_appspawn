@@ -69,6 +69,7 @@ if (!defined(ohos_lite)) {
 
     # Dependent code sources
     sources += [
+      "${appspawn_path}/common/appspawn_trace.cpp",
       "${appspawn_path}/modules/modulemgr/appspawn_modulemgr.c",
       "${appspawn_path}/standard/appspawn_msgmgr.c",
       "${appspawn_path}/standard/appspawn_appmgr.c",
@@ -98,6 +99,7 @@ if (!defined(ohos_lite)) {
       "config_policy:configpolicy_util",
       "googletest:gmock_main",
       "hilog:libhilog",
+      "hitrace:hitrace_meter",  # Required by appspawn_trace.cpp
       "init:libbegetutil",
     ]
   }

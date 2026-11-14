@@ -38,6 +38,8 @@
 #define MAX_THREAD 10
 #define MAX_SEND 200
 #define PTY_PATH_SIZE 128
+#define DEFAULT_TEST_DAC_ID 20010029
+#define BIN_KIND_DAEMON "daemon"
 
 namespace OHOS {
 namespace AppSpawnModuleTest {
@@ -322,6 +324,84 @@ int AppSpawnTestCommander::BuildMsgFromJson(const cJSON *appInfoConfig, AppSpawn
     return AddExtTlv(appInfoConfig, reqHandle);
 }
 
+int AppSpawnTestCommander::AddStandardTlvsOrDefault(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle)
+{
+    int ret = 0;
+    if (cJSON_GetObjectItemCaseSensitive(appInfoConfig, "bundle-info") == nullptr) {
+        ret = AppSpawnReqMsgSetBundleInfo(reqHandle, 0, processName_.c_str());
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add default bundle info %{public}s",
+            processName_.c_str());
+    } else {
+        ret = AddBundleInfoFromJson(appInfoConfig, reqHandle);
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add bundle info");
+    }
+
+    if (cJSON_GetObjectItemCaseSensitive(appInfoConfig, "access-token") == nullptr) {
+        ret = AppSpawnReqMsgSetAppAccessToken(reqHandle, 0x20003039ULL);
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add default access token");
+    } else {
+        ret = AddAccessTokenFromJson(appInfoConfig, reqHandle);
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add access token");
+    }
+
+    if (cJSON_GetObjectItemCaseSensitive(appInfoConfig, "domain-info") == nullptr) {
+        ret = AppSpawnReqMsgSetAppDomainInfo(reqHandle, 1, "system_core");
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add default domain info");
+    } else {
+        ret = AddDomainInfoFromJson(appInfoConfig, reqHandle);
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add domain info");
+    }
+
+    if (cJSON_GetObjectItemCaseSensitive(appInfoConfig, "dac-info") == nullptr) {
+        // CheckAppSpawnMsg 对 daemon 同样强制要求 DAC TLV；当前实现不改写该值，这里只需占位。
+        AppDacInfo dacInfo = {};
+        dacInfo.uid = DEFAULT_TEST_DAC_ID;
+        dacInfo.gid = DEFAULT_TEST_DAC_ID;
+        dacInfo.gidCount = 1;
+        dacInfo.gidTable[0] = DEFAULT_TEST_DAC_ID;
+        ret = AppSpawnReqMsgSetAppDacInfo(reqHandle, &dacInfo);
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add default dac info");
+    } else {
+        ret = AddDacInfoFromJson(appInfoConfig, reqHandle);
+        APPSPAWN_CHECK(ret == 0, return ret, "Failed to add dac info");
+    }
+    return 0;
+}
+
+static void GetBinKindFlagFromJson(const cJSON *appInfoConfig, int32_t *binKindFlag)
+{
+    const char *binKind = GetStringFromJsonObj(appInfoConfig, "bin-kind");
+    if (binKind == nullptr) {
+        return;
+    }
+    printf("receive bin-kind: %s \n", binKind);
+    if (strcmp(binKind, BIN_KIND_DAEMON) == 0) {
+        *binKindFlag = APP_FLAGS_DAEMON_BIN;
+    }
+    return;
+}
+
+int AppSpawnTestCommander::BuildDaemonMsgFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle)
+{
+    int ret = AddStandardTlvsOrDefault(appInfoConfig, reqHandle);
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to add standard tlvs for daemon msg");
+
+    std::string binPath = GetStringFromJsonObj(appInfoConfig, "daemon-bin-path");
+    if (binPath.empty()) {
+        printf("daemon-bin-path is empty \n");
+        return -1;
+    }
+    ret = AppSpawnReqMsgAddStringInfo(reqHandle, MSG_EXT_NAME_DAEMON_BIN_PATH, binPath.c_str());
+    APPSPAWN_CHECK(ret == 0, return -1, "Failed to add daemon bin path %{public}s", binPath.c_str());
+
+    int32_t binKindFlag = -1;
+    GetBinKindFlagFromJson(appInfoConfig, &binKindFlag);
+    if (binKindFlag != -1) {
+        (void)AppSpawnReqMsgSetAppFlag(reqHandle, static_cast<AppFlagsIndex>(binKindFlag));
+    }
+    return 0;
+}
+
 int AppSpawnTestCommander::CreateOtherMsg(AppSpawnReqMsgHandle &reqHandle, pid_t pid)
 {
     if (msgType_ == MSG_GET_RENDER_TERMINATION_STATUS) {
@@ -351,6 +431,9 @@ static uint32_t GetMsgTypeFromJson(const cJSON *json)
     }
     if (strcmp(msgType, "MSG_SPAWN_WORKER_PROCESS") == 0) {
         return MSG_SPAWN_WORKER_PROCESS;
+    }
+    if (strcmp(msgType, "MSG_SPAWN_SERVICE_BIN") == 0) {
+        return MSG_SPAWN_SERVICE_BIN;
     }
     if (strcmp(msgType, "MSG_GET_RENDER_TERMINATION_STATUS") == 0) {
         return MSG_GET_RENDER_TERMINATION_STATUS;
@@ -383,10 +466,7 @@ int AppSpawnTestCommander::CreateMsg(AppSpawnReqMsgHandle &reqHandle,
     if (appInfoConfig_ == nullptr) {
         appInfoConfig_ = cJSON_Parse(defaultConfig);
     }
-    if (appInfoConfig_ == nullptr) {
-        printf("Invalid app info \n");
-        return APPSPAWN_SYSTEM_ERROR;
-    }
+    APPSPAWN_CHECK(appInfoConfig_ != nullptr, return APPSPAWN_SYSTEM_ERROR, "Invalid app info");
     processName_ = GetStringFromJsonObj(appInfoConfig_, "process-name");
     if (processName_.empty()) {
         processName_ = "com.example.myapplication";
@@ -407,8 +487,12 @@ int AppSpawnTestCommander::CreateMsg(AppSpawnReqMsgHandle &reqHandle,
     for (uint32_t j = 0; j < count; j++) {
         (void)AppSpawnReqMsgSetAppFlag(reqHandle, static_cast<AppFlagsIndex>(msgFlags[j]));
     }
-    (void)AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_IGNORE_SANDBOX);
-    ret = BuildMsgFromJson(appInfoConfig_, reqHandle);
+    if (msgType_ == MSG_SPAWN_SERVICE_BIN) {
+        ret = BuildDaemonMsgFromJson(appInfoConfig_, reqHandle);
+    } else {
+        (void)AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_IGNORE_SANDBOX);
+        ret = BuildMsgFromJson(appInfoConfig_, reqHandle);
+    }
     APPSPAWN_CHECK(ret == 0, AppSpawnReqMsgFree(reqHandle);
         return ret, "Failed to build req %{public}s", processName_.c_str());
     return ret;
@@ -426,6 +510,7 @@ static void PrintSpawnResult(uint32_t msgType, const std::string &processName,
         {MSG_SPAWN_NATIVE_PROCESS,  "native app"},
         {MSG_SPAWN_IMAGE_PROCESS,   "image process"},
         {MSG_SPAWN_WORKER_PROCESS,  "worker process"},
+        {MSG_SPAWN_SERVICE_BIN,     "daemon"},
     };
     for (const auto &item : labels) {
         if (msgType == item.msgType) {
@@ -434,6 +519,7 @@ static void PrintSpawnResult(uint32_t msgType, const std::string &processName,
             } else {
                 printf("Spawn %s %s fail, result 0x%x \n", item.label, processName.c_str(), result.result);
             }
+            fflush(stdout);
             return;
         }
     }
@@ -443,6 +529,7 @@ static void PrintSpawnResult(uint32_t msgType, const std::string &processName,
     } else {
         printf("Dump server %s result %d \n", server, ret);
     }
+    fflush(stdout);
 }
 
 int AppSpawnTestCommander::SendMsg()

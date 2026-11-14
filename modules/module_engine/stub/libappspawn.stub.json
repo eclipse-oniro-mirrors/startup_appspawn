@@ -16,5 +16,6 @@
     { "name": "DumpAppSpawnMsg" },
     { "name": "AppSpawnDump" },
     { "name": "RegisterExpandSandboxCfgHandler"},
-    { "name": "GetAppSpawnMgr" }
+    { "name": "GetAppSpawnMgr" },
+    { "name": "ResolvePolicy" }
 ]
