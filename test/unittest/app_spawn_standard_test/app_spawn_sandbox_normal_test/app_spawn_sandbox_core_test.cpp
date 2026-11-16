@@ -440,26 +440,6 @@ HWTEST_F(AppSpawnSandboxCoreTest, SetDecWithDir_01, TestSize.Level0)
     DeleteAppSpawningCtx(appProperty);
 }
 
-/**
- * @tc.name: SetDecDenyWithDir_01
- * @tc.desc: Test setting DEC deny with directory
- * @tc.type: FUNC
- * @tc.require: issueI5NTX6
- */
-HWTEST_F(AppSpawnSandboxCoreTest, SetDecDenyWithDir_01, TestSize.Level0)
-{
-    g_testHelperCore.SetProcessName("com.ohos.test.app");
-    g_testHelperCore.SetTestApl("normal");
-
-    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
-    ASSERT_NE(appProperty, nullptr);
-
-    AppSpawn::SandboxCore::SetDecDenyWithDir(appProperty);
-    ASSERT_NE(appProperty, nullptr);
-
-    DeleteAppSpawningCtx(appProperty);
-}
-
 // ==================== 私有文件相关测试 ====================
 
 /**

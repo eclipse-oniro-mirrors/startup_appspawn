@@ -44,6 +44,7 @@ extern "C" {
 #define HM_SET_PREFIX_ID         8
 #define HM_ADD_PATH_MARK         11
 #define HM_SET_DEC_IGNORE_CASE_ID 12
+#define HM_ADD_UGC_CONTROL_MARK  15
 
 #define SANDBOX_MODE_READ    0x00000001
 #define SANDBOX_MODE_WRITE  (SANDBOX_MODE_READ << 1)
@@ -104,6 +105,7 @@ typedef struct DecDenyPathTemplate {
 #define SET_DEC_POLICY_CMD         _IOWR(HM_DEC_IOCTL_BASE, HM_SET_POLICY_ID, IoctlDecPolicyBatch)
 #define SET_DEC_PREFIX_CMD         _IOWR(HM_DEC_IOCTL_BASE, HM_SET_PREFIX_ID, IoctlDecPolicyBatch)
 #define SET_DEC_IGNORE_CASE_CMD    _IOWR(HM_DEC_IOCTL_BASE, HM_SET_DEC_IGNORE_CASE_ID, IoctlDecPolicyBatch)
+#define ADD_UGC_CONTROL_MARK_CMD   _IOW(HM_DEC_IOCTL_BASE, HM_ADD_UGC_CONTROL_MARK, IoctlDecPolicyBatch)
 
 /* Public functions */
 void SetDecPolicyInfos(DecPolicyInfo *decPolicyInfos);

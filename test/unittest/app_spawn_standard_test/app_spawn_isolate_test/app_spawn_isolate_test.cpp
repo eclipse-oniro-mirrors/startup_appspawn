@@ -63,6 +63,13 @@ static void FreeSandboxPathMarkConfigFields(SandboxPathMarkConfig *config)
         config->mounts = nullptr;
         config->mountCount = 0;
     }
+    if (config->pathFlagNames != nullptr) {
+        for (uint32_t i = 0; i < config->pathCount; i++) {
+            free(config->pathFlagNames[i]);
+        }
+        free(config->pathFlagNames);
+        config->pathFlagNames = nullptr;
+    }
     if (config->paths != nullptr) {
         for (uint32_t i = 0; i < config->pathCount; i++) {
             free(config->paths[i].path);
@@ -106,7 +113,7 @@ HWTEST_F(AppSpawnIsolateTest, ParsePathConfig_BothSections, TestSize.Level0)
         "{\"path\":\"/data/isolate2\",\"flags\":[\"isolate\",\"ugc\"]}"
         "],"
         "\"paths\":["
-        "{\"path\":\"/data/dec1\",\"flags\":[\"ugc\"]}"
+        "{\"path\":\"/data/dec1\",\"flag\":\"ugc\",\"mode\":1}"
         "]"
         "}";
     cJSON *root = cJSON_Parse(jsonStr);
@@ -153,10 +160,10 @@ HWTEST_F(AppSpawnIsolateTest, ParsePathConfig_UnknownFlag, TestSize.Level0)
 }
 
 /*
- * SetConstraintPaths batches paths in groups of KERNEL_BATCH_SIZE (8).
+ * SetUgcControlScope batches paths in groups of KERNEL_BATCH_SIZE (8).
  * With 10 entries, ioctl should be called twice (8 + 2).
  */
-HWTEST_F(AppSpawnIsolateTest, SetConstraintPaths_Batching, TestSize.Level0)
+HWTEST_F(AppSpawnIsolateTest, SetUgcControlScope_Batching, TestSize.Level0)
 {
     IoctlFunc ioctlFunc = [](int fd, int req, va_list args) -> int {
         g_ioctlCallCount++;
@@ -179,7 +186,7 @@ HWTEST_F(AppSpawnIsolateTest, SetConstraintPaths_Batching, TestSize.Level0)
         paths[i].flag = false;
     }
 
-    SetConstraintPaths(paths, 10);
+    SetUgcControlScope(paths, 10);
     EXPECT_EQ(g_ioctlCallCount, 2);  // 8 + 2 = 2 batches
 
     UpdateIoctlFunc(nullptr);
