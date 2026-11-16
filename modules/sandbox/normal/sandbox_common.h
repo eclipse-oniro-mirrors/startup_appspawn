@@ -68,7 +68,8 @@ public:
     static std::string GetSandboxRootPath(const AppSpawningCtx *appProperty, cJSON *config); // GetSbxPathByConfig
 
     // 文件操作
-    static int CreateDirRecursive(const std::string &path, mode_t mode); // MakeDirRecursive
+    static int CreateDirRecursive(const std::string &path, mode_t mode,
+        const AppSpawningCtx *appProperty = nullptr); // MakeDirRecursive
     static void CreateDirRecursiveWithClock(const std::string &path, mode_t mode); // MakeDirRecursiveWithClock
     static void SetSandboxPathChmod(cJSON *jsonConfig, const std::string &sandboxRoot); // DoSandboxChmod
 
@@ -117,7 +118,7 @@ private:
     static void StoreCJsonConfig(cJSON *root, SandboxCommonDef::SandboxConfigType type);
 
     // 文件操作
-    static void CreateFileIfNotExist(const char *file); // CheckAndCreatFile
+    static void CreateFileIfNotExist(const AppSpawningCtx *appProperty, const char *file); // CheckAndCreatFile
 
     // 获取挂载配置参数信息
     static bool GetSwitchStatus(cJSON *config); // GetSbxSwitchStatusByConfig

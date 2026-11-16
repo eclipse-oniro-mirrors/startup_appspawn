@@ -289,7 +289,7 @@ APPSPAWN_STATIC int MountSharedMapItem(const AppSpawningCtx *property, const App
         return 0;
     }
 
-    ret = MakeDirRec(sandboxPath, DIR_MODE, 1);
+    ret = OHOS::AppSpawn::SandboxCommon::CreateDirRecursive(sandboxPath, DIR_MODE, property);
     if (ret != 0) {
         APPSPAWN_LOGE("mkdir %{public}s failed, errno %{public}d", sandboxPath, errno);
         return APPSPAWN_SANDBOX_ERROR_MKDIR_FAIL;

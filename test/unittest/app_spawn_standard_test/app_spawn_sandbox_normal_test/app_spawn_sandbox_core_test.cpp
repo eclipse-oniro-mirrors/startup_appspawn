@@ -374,7 +374,7 @@ HWTEST_F(AppSpawnSandboxCoreTest, DoSandboxRootFolderCreateAdapt_01, TestSize.Le
     g_testHelperCore.SetTestApl("normal");
 
     std::string sandboxPackagePath = "/data/test/sandbox";
-    int ret = AppSpawn::SandboxCore::DoSandboxRootFolderCreateAdapt(sandboxPackagePath);
+    int ret = AppSpawn::SandboxCore::DoSandboxRootFolderCreateAdapt(nullptr, sandboxPackagePath);
     EXPECT_EQ(ret, 0);
 }
 

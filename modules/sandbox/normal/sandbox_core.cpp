@@ -1084,7 +1084,9 @@ int32_t SandboxCore::DoAllSymlinkPointslink(const AppSpawningCtx *appProperty, c
         std::string linkName(linkNameChr);
         targetName = SandboxCommon::ConvertToRealPath(appProperty, targetName);
         linkName = sandboxRoot + SandboxCommon::ConvertToRealPath(appProperty, linkName);
-        MakeDirRec(linkName.c_str(), SandboxCommonDef::DIR_MODE, 0);
+        // Create only the symlink's parent directory (equivalent to MakeDirRec with lastPath=0)
+        std::string linkParent = linkName.substr(0, linkName.rfind('/'));
+        (void)SandboxCommon::CreateDirRecursive(linkParent, SandboxCommonDef::DIR_MODE, appProperty);
         APPSPAWN_LOGV("symlink target %{public}s link %{public}s", targetName.c_str(), linkName.c_str());
         int ret = symlink(targetName.c_str(), linkName.c_str());
         APPSPAWN_CHECK_ONLY_LOG(!(ret && (errno != EEXIST)),
@@ -1097,13 +1099,14 @@ int32_t SandboxCore::DoAllSymlinkPointslink(const AppSpawningCtx *appProperty, c
     return SandboxCommon::HandleArrayForeach(symlinkPoints, processor);
 }
 
-int32_t SandboxCore::DoSandboxRootFolderCreateAdapt(std::string &sandboxPackagePath)
+int32_t SandboxCore::DoSandboxRootFolderCreateAdapt(const AppSpawningCtx *appProperty,
+    std::string &sandboxPackagePath)
 {
 #ifndef APPSPAWN_TEST
     int rc = mount(nullptr, "/", nullptr, MS_REC | MS_SLAVE, nullptr);
     APPSPAWN_CHECK(rc == 0, return rc, "set propagation slave failed");
 #endif
-    (void)SandboxCommon::CreateDirRecursive(sandboxPackagePath, SandboxCommonDef::FILE_MODE);
+    (void)SandboxCommon::CreateDirRecursive(sandboxPackagePath, SandboxCommonDef::FILE_MODE, appProperty);
 
     // bind mount "/" to /mnt/sandbox/<currentUserId>/<packageName> path
     // rootfs: to do more resources bind mount here to get more strict resources constraints
@@ -1384,6 +1387,23 @@ int32_t SandboxCore::SetSandboxProperty(AppSpawningCtx *appProperty, std::string
     return ret;
 }
 
+/**
+ * @brief Choose the creation mode of an app sandbox root directory.
+ */
+static mode_t GetSandboxRootMode(const AppSpawningCtx *appProperty, const std::string &sandboxPackagePath)
+{
+    // Non-NoShareFs platforms and non-custom-sandbox apps keep the original 0711 root mode.
+    if (!IsNoShareFsEnable() || !CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CUSTOM_SANDBOX)) {
+        return SandboxCommonDef::DIR_MODE;
+    }
+    // Pre-create user-level and isolated ancestors with 0711
+    std::string parentPath = sandboxPackagePath.substr(0, sandboxPackagePath.rfind('/'));
+    if (SandboxCommon::CreateDirRecursive(parentPath, SandboxCommonDef::DIR_MODE) != 0) {
+        return SandboxCommonDef::DIR_MODE;
+    }
+    return SandboxCommonDef::WEAK_SANDBOX_DIR_MODE;
+}
+
 int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx *appProperty, uint32_t sandboxNsFlags)
 {
     APPSPAWN_CHECK(appProperty != nullptr, return -1, "Invalid appspawn client");
@@ -1396,7 +1416,8 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     APPSPAWN_CHECK(dacInfo != nullptr, return APPSPAWN_SANDBOX_INVALID, "No dac info in msg app property");
 
     std::string sandboxPackagePath = SandboxCommon::GetSandboxRootPath(appProperty, nullptr);
-    SandboxCommon::CreateDirRecursiveWithClock(sandboxPackagePath.c_str(), SandboxCommonDef::FILE_MODE);
+    mode_t sandboxMode = GetSandboxRootMode(appProperty, sandboxPackagePath);
+    SandboxCommon::CreateDirRecursiveWithClock(sandboxPackagePath.c_str(), sandboxMode);
 
     bool dlpStatus = (CheckAppPermissionFlagSet(appProperty,
         static_cast<uint32_t>(GetPermissionIndex(nullptr, SandboxCommonDef::ACCESS_DLP_FILE_MODE.c_str()))) != 0);
@@ -1417,7 +1438,7 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     UpdateMsgFlagsWithPermission(appProperty, SandboxCommonDef::APP_ALLOW_IOURING, APP_FLAGS_ALLOW_IOURING);
     // check app sandbox switch
     if (!SandboxCommon::IsTotalSandboxEnabled(appProperty) || !SandboxCommon::IsAppSandboxEnabled(appProperty)) {
-        rc = DoSandboxRootFolderCreateAdapt(sandboxPackagePath);
+        rc = DoSandboxRootFolderCreateAdapt(appProperty, sandboxPackagePath);
     } else {
         rc = DoSandboxRootFolderCreate(content, appProperty, sandboxPackagePath);
     }
@@ -1507,7 +1528,7 @@ int32_t SandboxCore::SetAppSandboxPropertyNweb(AppSpawnMgr *content, AppSpawning
     // check app sandbox switch
     if ((SandboxCommon::IsTotalSandboxEnabled(appProperty) == false) ||
         (SandboxCommon::IsAppSandboxEnabled(appProperty) == false)) {
-        rc = DoSandboxRootFolderCreateAdapt(sandboxPackagePath);
+        rc = DoSandboxRootFolderCreateAdapt(appProperty, sandboxPackagePath);
     } else if (!sandboxSharedStatus) {
         rc = DoSandboxRootFolderCreate(content, appProperty, sandboxPackagePath);
     }
