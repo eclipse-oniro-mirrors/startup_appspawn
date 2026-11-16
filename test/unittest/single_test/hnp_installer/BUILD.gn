@@ -38,12 +38,19 @@ if (!defined(ohos_lite)) {
     ]
 
     sources = [
+      "${appspawn_path}/service/hnp/base/hnp_file.c",
+      "${appspawn_path}/service/hnp/base/hnp_json.c",
       "${appspawn_path}/service/hnp/base/hnp_log.c",
+      "${appspawn_path}/service/hnp/base/hnp_sal.c",
+      "${appspawn_path}/service/hnp/base/hnp_zip.c",
       "${appspawn_path}/service/hnp/installer/src/hnp_installer.c",
       "src/hnp_installer_test.cpp",
     ]
 
-    defines = [ "APPSPAWN_TEST" ]
+    defines = [
+      "APPSPAWN_TEST",
+      "CODE_SIGNATURE_ENABLE",
+    ]
 
     deps = [ "${appspawn_path}/util:libappspawn_util" ]
 

@@ -841,4 +841,216 @@ HWTEST_F(HnpJsonTest, DoRebuildHnpInfoCfgTest_003, TestSize.Level0)
     (void)snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
     (void)remove(cfgPath);
 }
+
+// ==================== HnpCurrentVersionGet tests ====================
+
+/**
+ * @brief HnpCurrentVersionGet with NULL name
+ *        Covers: line 728-729 (name == NULL -> return NULL)
+ */
+HWTEST_F(HnpJsonTest, HnpCurrentVersionGet_NullName_001, TestSize.Level0)
+{
+    char *version = HnpCurrentVersionGet(nullptr, 100);
+    EXPECT_EQ(version, nullptr);
+}
+
+/**
+ * @brief HnpCurrentVersionGet with non-existent config file
+ *        Covers: line 739-741 (ReadFileToStream fails -> return NULL)
+ */
+HWTEST_F(HnpJsonTest, HnpCurrentVersionGet_NoConfig_001, TestSize.Level0)
+{
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, 99999);
+    remove(cfgPath);
+    char *version = HnpCurrentVersionGet("test_hnp", 99999);
+    EXPECT_EQ(version, nullptr);
+}
+
+/**
+ * @brief HnpCurrentVersionGet with valid config file
+ *        Covers: line 744-774 (parse JSON, find version)
+ */
+HWTEST_F(HnpJsonTest, HnpCurrentVersionGet_Valid_001, TestSize.Level0)
+{
+    int uid = 100;
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
+    const char *content = "[{\"hap\":\"com.test.hap\",\"hnp\":[{\"name\":\"test_hnp\","
+        "\"current_version\":\"1.0\",\"install_version\":\"1.0\"}]}]";
+    EXPECT_EQ(CreateTestFile(cfgPath, content), 0);
+
+    char *version = HnpCurrentVersionGet("test_hnp", uid);
+    EXPECT_NE(version, nullptr);
+    if (version != nullptr) {
+        EXPECT_STREQ(version, "1.0");
+        free(version);
+    }
+    remove(cfgPath);
+}
+
+/**
+ * @brief HnpCurrentVersionGet with name not found
+ *        Covers: line 773-774 (not found -> return NULL)
+ */
+HWTEST_F(HnpJsonTest, HnpCurrentVersionGet_NotFound_001, TestSize.Level0)
+{
+    int uid = 100;
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
+    const char *content = "[{\"hap\":\"com.test.hap\",\"hnp\":[{\"name\":\"test_hnp\","
+        "\"current_version\":\"1.0\",\"install_version\":\"1.0\"}]}]";
+    EXPECT_EQ(CreateTestFile(cfgPath, content), 0);
+
+    char *version = HnpCurrentVersionGet("nonexistent_hnp", uid);
+    EXPECT_EQ(version, nullptr);
+    remove(cfgPath);
+}
+
+// ==================== HnpCurrentVersionUninstallCheck tests ====================
+
+/**
+ * @brief HnpCurrentVersionUninstallCheck with NULL name
+ *        Covers: line 779-780 (name == NULL -> return NULL)
+ */
+HWTEST_F(HnpJsonTest, HnpCurrentVersionUninstallCheck_NullName_001, TestSize.Level0)
+{
+    char *version = HnpCurrentVersionUninstallCheck(nullptr, 100);
+    EXPECT_EQ(version, nullptr);
+}
+
+/**
+ * @brief HnpCurrentVersionUninstallCheck with valid config
+ *        Covers: line 794-812 (parse JSON, find uninstall version)
+ */
+HWTEST_F(HnpJsonTest, HnpCurrentVersionUninstallCheck_Valid_001, TestSize.Level0)
+{
+    int uid = 100;
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
+    const char *content = "[{\"hap\":\"com.test.hap\",\"hnp\":[{\"name\":\"test_hnp\","
+        "\"current_version\":\"1.0\",\"install_version\":\"1.0\"}]}]";
+    EXPECT_EQ(CreateTestFile(cfgPath, content), 0);
+
+    char *version = HnpCurrentVersionUninstallCheck("test_hnp", uid);
+    EXPECT_NE(version, nullptr);
+    if (version != nullptr) {
+        EXPECT_STREQ(version, "1.0");
+        free(version);
+    }
+    remove(cfgPath);
+}
+
+// ==================== HnpPackageInfoHnpDelete tests ====================
+
+/**
+ * @brief HnpPackageInfoHnpDelete with non-existent config file
+ *        Covers: line 572-574 (file not found -> return 0)
+ */
+HWTEST_F(HnpJsonTest, HnpPackageInfoHnpDelete_NoConfig_001, TestSize.Level0)
+{
+    int ret = HnpPackageInfoHnpDelete("com.test.hap", "test_hnp", "1.0", 99999);
+    EXPECT_EQ(ret, 0);
+}
+
+/**
+ * @brief HnpPackageInfoHnpDelete with valid config
+ *        Covers: line 581-602 (parse JSON, delete hnp item, write back)
+ */
+HWTEST_F(HnpJsonTest, HnpPackageInfoHnpDelete_Valid_001, TestSize.Level0)
+{
+    int uid = 100;
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
+    const char *content = "[{\"hap\":\"com.test.hap\",\"hnp\":[{\"name\":\"test_hnp\","
+        "\"current_version\":\"1.0\",\"install_version\":\"1.0\"}]}]";
+    EXPECT_EQ(CreateTestFile(cfgPath, content), 0);
+
+    int ret = HnpPackageInfoHnpDelete("com.test.hap", "test_hnp", "1.0", uid);
+    EXPECT_EQ(ret, 0);
+    remove(cfgPath);
+}
+
+// ==================== HnpPackageInfoDelete tests ====================
+
+/**
+ * @brief HnpPackageInfoDelete with non-existent config file
+ *        Covers: line 617-619 (file not found -> return 0)
+ */
+HWTEST_F(HnpJsonTest, HnpPackageInfoDelete_NoConfig_001, TestSize.Level0)
+{
+    int ret = HnpPackageInfoDelete("com.test.hap", 99999);
+    EXPECT_EQ(ret, 0);
+}
+
+/**
+ * @brief HnpPackageInfoDelete with valid config
+ *        Covers: line 625-639 (parse JSON, delete hap item, write back)
+ */
+HWTEST_F(HnpJsonTest, HnpPackageInfoDelete_Valid_001, TestSize.Level0)
+{
+    int uid = 100;
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
+    const char *content = "[{\"hap\":\"com.test.hap\",\"hnp\":[{\"name\":\"test_hnp\","
+        "\"current_version\":\"1.0\",\"install_version\":\"1.0\"}]}]";
+    EXPECT_EQ(CreateTestFile(cfgPath, content), 0);
+
+    int ret = HnpPackageInfoDelete("com.test.hap", uid);
+    EXPECT_EQ(ret, 0);
+    remove(cfgPath);
+}
+
+// ==================== HnpPackageInfoGet tests ====================
+
+/**
+ * @brief HnpPackageInfoGet with non-existent config file
+ *        Covers: line 510-512 (json == NULL -> return ret)
+ */
+HWTEST_F(HnpJsonTest, HnpPackageInfoGet_NoConfig_001, TestSize.Level0)
+{
+    HnpPackageInfo *packageInfo = nullptr;
+    int count = 0;
+    int ret = HnpPackageInfoGet("com.test.hap", &packageInfo, &count, 99999);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(count, 0);
+}
+
+/**
+ * @brief HnpPackageInfoGet with valid config
+ *        Covers: line 516-554 (find hap, iterate hnp items)
+ */
+HWTEST_F(HnpJsonTest, HnpPackageInfoGet_Valid_001, TestSize.Level0)
+{
+    int uid = 100;
+    char cfgPath[PATH_MAX] = {0};
+    snprintf_s(cfgPath, PATH_MAX, PATH_MAX, HNP_PACKAGE_INFO_JSON_FILE_PATH, uid);
+    const char *content = "[{\"hap\":\"com.test.hap\",\"hnp\":[{\"name\":\"test_hnp\","
+        "\"current_version\":\"1.0\",\"install_version\":\"none\"}]}]";
+    EXPECT_EQ(CreateTestFile(cfgPath, content), 0);
+
+    HnpPackageInfo *packageInfo = nullptr;
+    int count = 0;
+    int ret = HnpPackageInfoGet("com.test.hap", &packageInfo, &count, uid);
+    EXPECT_EQ(ret, 0);
+    if (packageInfo != nullptr) {
+        free(packageInfo);
+    }
+    remove(cfgPath);
+}
+
+// ==================== CanRecovery tests ====================
+
+/**
+ * @brief CanRecovery with non-existent config
+ *        Covers: line 465 (json == NULL -> return true)
+ */
+HWTEST_F(HnpJsonTest, CanRecovery_NoConfig_001, TestSize.Level0)
+{
+    HnpCfgInfo hnpCfg = {};
+    hnpCfg.uid = 99999;
+    bool ret = CanRecovery("com.test.hap", &hnpCfg);
+    EXPECT_TRUE(ret);
+}
+
 }
