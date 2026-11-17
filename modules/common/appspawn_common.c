@@ -69,6 +69,7 @@
 #endif
 #ifdef WITH_SELINUX
 #include "selinux/selinux.h"
+#include "policycoreutils.h"
 #endif
 
 #define PROVISION_TYPE_DEBUG "debug"
@@ -834,6 +835,15 @@ static int SpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 static int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Spawning: set appEnv");
+    // Order: InitAppCommonEnv (USER var) → SetUserLevelEnvConfig (per-user
+    // appenv.conf) → SetEnvInfo (per-app AppEnv JSON, overrides user-level).
+    // SetUserLevelEnvConfig and SetEnvInfo each have their own guards
+    // (IsAppSpawnMode / APP_FLAGS_CUSTOM_SANDBOX / envEnable policy);
+    // InitAppCommonEnv is unconditional (USER var is needed for all apps).
+    InitAppCommonEnv(property);
+#ifdef CUSTOM_SANDBOX
+    SetUserLevelEnvConfig(content, property);
+#endif
     int ret = SetEnvInfo(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
     return 0;
@@ -995,14 +1005,21 @@ static int SpawnEnsureAppenvDir(AppSpawnMgr *content, AppSpawningCtx *property)
         g_appenvDirPrefix, userIdStr, g_appenvDirSuffix);
     APPSPAWN_CHECK(len > 0 && (size_t)len < sizeof(dirPath), return 0,
         "SpawnEnsureAppenvDir: path too long for userId %{public}s", userIdStr);
-    // mkdir (EEXIST ok if a prior boot/restorecon created it); then enforce mode + owner
+    // mkdir (EEXIST ok if a prior boot/restorecon created it); mode is enforced
+    // by mkdir's mode arg + process umask, no redundant chmod needed. Then
+    // restorecon (relabel to file_contexts-matched type, no-op if no rule),
+    // then chown to deviceinfo:deviceinfo. Order: mkdir → restorecon → chown
+    // — relabel must happen before chown so chown's label-affecting op (if any)
+    // doesn't race with restorecon.
     if (mkdir(dirPath, APPENV_DIR_MODE) != 0 && errno != EEXIST) {
         APPSPAWN_LOGE("SpawnEnsureAppenvDir: mkdir %{public}s failed: %{public}d", dirPath, errno);
         return 0;
     }
-    if (chmod(dirPath, APPENV_DIR_MODE) != 0) {
-        APPSPAWN_LOGW("SpawnEnsureAppenvDir: chmod %{public}s failed: %{public}d", dirPath, errno);
+#ifdef WITH_SELINUX
+    if (Restorecon(dirPath) != 0) {
+        APPSPAWN_LOGW("SpawnEnsureAppenvDir: Restorecon %{public}s failed: %{public}d", dirPath, errno);
     }
+#endif
     if (chown(dirPath, APPENV_DIR_OWNER_UID, APPENV_DIR_OWNER_GID) != 0) {
         APPSPAWN_LOGW("SpawnEnsureAppenvDir: chown %{public}s failed: %{public}d", dirPath, errno);
     }

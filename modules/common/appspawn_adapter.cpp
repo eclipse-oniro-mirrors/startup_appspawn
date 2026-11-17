@@ -297,7 +297,7 @@ int SetInternetPermission(const AppSpawningCtx *property)
     return 0;
 }
 
-static void InitAppCommonEnv(const AppSpawningCtx *property)
+void InitAppCommonEnv(const AppSpawningCtx *property)
 {
     AppDacInfo *appInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     if (appInfo == NULL) {
@@ -317,7 +317,7 @@ static constexpr size_t DEVICE_ENV_CONFIG_MAX_LINE = 4096;
 static constexpr const char *APPENV_DIR_PREFIX = "/data/service/el1/";
 static constexpr const char *APPENV_DIR_USERID_SUFFIX = "/appenv/appenv.conf";
 
-static void SetDeviceEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx *property)
+void SetUserLevelEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     if (!IsAppSpawnMode(content)) {
         return;
@@ -328,7 +328,7 @@ static void SetDeviceEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx 
     char *userIdStr = reinterpret_cast<char *>(
         GetAppPropertyExt(property, MSG_EXT_NAME_USERID, nullptr));
     if (userIdStr == nullptr || userIdStr[0] == '\0') {
-        APPSPAWN_LOGW("SetDeviceEnvConfig: userId is null, skip device env");
+        APPSPAWN_LOGW("SetUserLevelEnvConfig: userId is null, skip device env");
         return;
     }
     std::string path = std::string(APPENV_DIR_PREFIX) + userIdStr + APPENV_DIR_USERID_SUFFIX;
@@ -356,7 +356,7 @@ static void SetDeviceEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx 
         }
         count++;
     }
-    APPSPAWN_LOGI("device env config loaded from %{public}s, count %{public}u", path.c_str(), count);
+    APPSPAWN_LOGI("user-level env config loaded from %{public}s, count %{public}u", path.c_str(), count);
 }
 #endif // CUSTOM_SANDBOX
 
@@ -367,10 +367,6 @@ int32_t SetEnvInfo(const AppSpawnMgr *content, const AppSpawningCtx *property)
         APPSPAWN_CHECK_LOGV(pl->envEnable, return 0, "SetEnvInfo: skip by policy %{public}s", pl->name);
         return 0;
     }
-#ifdef CUSTOM_SANDBOX
-    SetDeviceEnvConfig(content, property);
-#endif
-    InitAppCommonEnv(property);
 
     uint32_t size = 0;
     char *envStr = reinterpret_cast<char *>(GetAppPropertyExt(property, "AppEnv", &size));

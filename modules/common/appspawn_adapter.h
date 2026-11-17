@@ -29,6 +29,17 @@ int SetUidGidFilter(const AppSpawnMgr *content);
 int SetSeccompFilter(const AppSpawnMgr *content, const AppSpawningCtx *property);
 int SetInternetPermission(const AppSpawningCtx *property);
 int32_t SetEnvInfo(const AppSpawnMgr *content, const AppSpawningCtx *property);
+
+// Set USER env var from appUid (always compiled; called by SpawnSetAppEnv).
+void InitAppCommonEnv(const AppSpawningCtx *property);
+
+// Set user-level env vars from /data/service/el1/<userId>/appenv/appenv.conf.
+// Only compiled under CUSTOM_SANDBOX (PC-only); non-PC builds omit the call
+// site under the same #ifdef, so the symbol is absent and no link error occurs.
+#ifdef CUSTOM_SANDBOX
+void SetUserLevelEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx *property);
+#endif
+
 int32_t LoadSeLinuxConfig(void);
 
 // stub for extend func
