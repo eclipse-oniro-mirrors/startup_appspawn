@@ -350,10 +350,8 @@ void SetUserLevelEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx *pro
         }
         std::string key = line.substr(0, pos);
         std::string value = line.substr(pos + 1);
-        if (setenv(key.c_str(), value.c_str(), 1) != 0) {
-            APPSPAWN_LOGW("setenv %{public}s failed, errno %{public}d", key.c_str(), errno);
-            continue;
-        }
+        APPSPAWN_CHECK_LOGW(setenv(key.c_str(), value.c_str(), 1) == 0, continue,
+            "setenv %{public}s failed, errno %{public}d", key.c_str(), errno);
         count++;
     }
     APPSPAWN_LOGI("user-level env config loaded from %{public}s, count %{public}u", path.c_str(), count);

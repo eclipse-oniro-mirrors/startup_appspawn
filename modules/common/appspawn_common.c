@@ -996,9 +996,7 @@ APPSPAWN_STATIC int SpawnEnsureAppenvDir(AppSpawnMgr *content, AppSpawningCtx *p
     static char createdUserIds[APPENV_DIR_DEDUPE_CAP][APPENV_DIR_USERID_MAX_LEN + 1] = {0};
     static int createdCount = 0;
     for (int i = 0; i < createdCount; i++) {
-        if (strcmp(createdUserIds[i], userIdStr) == 0) {
-            return 0;
-        }
+        APPSPAWN_ONLY_EXPER(strcmp(createdUserIds[i], userIdStr) == 0, return 0);
     }
     char dirPath[PATH_MAX] = {0};
     int len = snprintf_s(dirPath, sizeof(dirPath), sizeof(dirPath) - 1, "%s%s%s",
@@ -1016,13 +1014,11 @@ APPSPAWN_STATIC int SpawnEnsureAppenvDir(AppSpawnMgr *content, AppSpawningCtx *p
         return 0;
     }
 #ifdef WITH_SELINUX
-    if (Restorecon(dirPath) != 0) {
-        APPSPAWN_LOGW("SpawnEnsureAppenvDir: Restorecon %{public}s failed: %{public}d", dirPath, errno);
-    }
+    APPSPAWN_CHECK_ONLY_LOGW(Restorecon(dirPath) == 0,
+        "SpawnEnsureAppenvDir: Restorecon %{public}s failed: %{public}d", dirPath, errno);
 #endif
-    if (chown(dirPath, APPENV_DIR_OWNER_UID, APPENV_DIR_OWNER_GID) != 0) {
-        APPSPAWN_LOGW("SpawnEnsureAppenvDir: chown %{public}s failed: %{public}d", dirPath, errno);
-    }
+    APPSPAWN_CHECK_ONLY_LOGW(chown(dirPath, APPENV_DIR_OWNER_UID, APPENV_DIR_OWNER_GID) == 0,
+        "SpawnEnsureAppenvDir: chown %{public}s failed: %{public}d", dirPath, errno);
     APPSPAWN_LOGI("SpawnEnsureAppenvDir: ensured %{public}s (mode 0755, owner deviceinfo:deviceinfo)", dirPath);
     if (createdCount < APPENV_DIR_DEDUPE_CAP) {
         int copied = snprintf_s(createdUserIds[createdCount], sizeof(createdUserIds[createdCount]),

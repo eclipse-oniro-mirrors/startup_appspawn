@@ -47,9 +47,9 @@ using namespace testing;
 using namespace testing::ext;
 
 namespace {
-/* UID_BASE from util/include/appspawn_utils.h = 200000. InitAppCommonEnv
- * derives userId = appUid / UID_BASE. appUid 20010029 -> userId 100. */
-constexpr uint32_t UID_BASE = 200000;
+/* UID_BASE is defined as 200000 in util/include/appspawn_utils.h (included
+ * above). InitAppCommonEnv derives userId = appUid / UID_BASE.
+ * appUid 20010029 -> userId 100. */
 constexpr uint32_t TEST_APPUID_USER100 = 20010029;  // userId = 100
 constexpr const char *TEST_USERID = "100";
 /* Distinct userId for the SpawnEnsureAppenvDir dedup/idempotency test: the
