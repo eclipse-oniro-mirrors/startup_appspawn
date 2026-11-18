@@ -60,6 +60,7 @@ AppSpawnMgr *CreateAppSpawnMgr(int mode)
     appMgr->hisyseventInfo = NULL;
 #endif
     OH_ListInit(&appMgr->appQueue);
+    OH_ListInit(&appMgr->subspawnQueue);
     OH_ListInit(&appMgr->diedQueue);
     OH_ListInit(&appMgr->appSpawnQueue);
     OH_ListInit(&appMgr->dataGroupCtxQueue);
@@ -102,6 +103,7 @@ void DeleteAppSpawnMgr(AppSpawnMgr *mgr)
 {
     APPSPAWN_CHECK_ONLY_EXPER(mgr != NULL, return);
     OH_ListRemoveAll(&mgr->appQueue, NULL);
+    OH_ListRemoveAll(&mgr->subspawnQueue, NULL);
     OH_ListRemoveAll(&mgr->diedQueue, NULL);
     OH_ListRemoveAll(&mgr->appSpawnQueue, SpawningQueueDestroy);
     OH_ListRemoveAll(&mgr->extData, ExtDataDestroy);
@@ -123,12 +125,15 @@ void DeleteAppSpawnMgr(AppSpawnMgr *mgr)
 void TraversalSpawnedProcess(AppTraversal traversal, void *data)
 {
     APPSPAWN_CHECK_ONLY_EXPER(g_appSpawnMgr != NULL && traversal != NULL, return);
-    ListNode *node = g_appSpawnMgr->appQueue.next;
-    while (node != &g_appSpawnMgr->appQueue) {
-        ListNode *next = node->next;
-        AppSpawnedProcess *appInfo = ListEntry(node, AppSpawnedProcess, node);
-        traversal(g_appSpawnMgr, appInfo, data);
-        node = next;
+    ListNode *queues[] = {&g_appSpawnMgr->appQueue, &g_appSpawnMgr->subspawnQueue};
+    for (size_t i = 0; i < ARRAY_LENGTH(queues); ++i) {
+        ListNode *node = queues[i]->next;
+        while (node != queues[i]) {
+            ListNode *next = node->next;
+            AppSpawnedProcess *appInfo = ListEntry(node, AppSpawnedProcess, node);
+            traversal(g_appSpawnMgr, appInfo, data);
+            node = next;
+        }
     }
 }
 
@@ -152,7 +157,7 @@ static int AppInfoCompareProc(ListNode *node, ListNode *newNode)
     return node1->pid - node2->pid;
 }
 
-AppSpawnedProcess *AddSpawnedProcess(pid_t pid, const char *processName, uint32_t appIndex, bool isDebuggable,
+static AppSpawnedProcess *CreateSpawnedProcess(pid_t pid, const char *processName, uint32_t appIndex, bool isDebuggable,
     uint64_t tokenid)
 {
     APPSPAWN_CHECK(g_appSpawnMgr != NULL && processName != NULL, return NULL, "Invalid mgr or process name");
@@ -176,7 +181,25 @@ AppSpawnedProcess *AddSpawnedProcess(pid_t pid, const char *processName, uint32_
 
     OH_ListInit(&node->node);
     APPSPAWN_DUMPI("Add %{public}s,pid=%{public}d success", processName, pid);
+    return node;
+}
+
+AppSpawnedProcess *AddSpawnedProcess(pid_t pid, const char *processName, uint32_t appIndex, bool isDebuggable,
+    uint64_t tokenid)
+{
+    AppSpawnedProcess *node = CreateSpawnedProcess(pid, processName, appIndex, isDebuggable, tokenid);
+    APPSPAWN_CHECK_ONLY_EXPER(node != NULL, return NULL);
     OH_ListAddWithOrder(&g_appSpawnMgr->appQueue, &node->node, AppInfoCompareProc);
+    return node;
+}
+
+AppSpawnedProcess *AddSubspawnProcess(pid_t pid, const char *processName, uint32_t appIndex, bool isDebuggable,
+    uint64_t tokenid)
+{
+    AppSpawnedProcess *node = CreateSpawnedProcess(pid, processName, appIndex, isDebuggable, tokenid);
+    APPSPAWN_CHECK_ONLY_EXPER(node != NULL, return NULL);
+    node->isSubspawn = true;
+    OH_ListAddWithOrder(&g_appSpawnMgr->subspawnQueue, &node->node, AppInfoCompareProc);
     return node;
 }
 
@@ -206,11 +229,18 @@ void TerminateSpawnedProcess(AppSpawnedProcess *node)
     g_appSpawnMgr->diedAppCount++;
 }
 
+AppSpawnedProcess *GetSubspawnProcess(pid_t pid)
+{
+    APPSPAWN_CHECK_ONLY_EXPER(g_appSpawnMgr != NULL, return NULL);
+    ListNode *node = OH_ListFind(&g_appSpawnMgr->subspawnQueue, &pid, AppInfoPidComparePro);
+    return node == NULL ? NULL : ListEntry(node, AppSpawnedProcess, node);
+}
+
 AppSpawnedProcess *GetSpawnedProcess(pid_t pid)
 {
     APPSPAWN_CHECK_ONLY_EXPER(g_appSpawnMgr != NULL, return NULL);
     ListNode *node = OH_ListFind(&g_appSpawnMgr->appQueue, &pid, AppInfoPidComparePro);
-    APPSPAWN_CHECK_ONLY_EXPER(node != NULL, return NULL);
+    APPSPAWN_CHECK_ONLY_EXPER(node != NULL, return GetSubspawnProcess(pid));
     return ListEntry(node, AppSpawnedProcess, node);
 }
 
@@ -322,6 +352,9 @@ AppSpawningCtx *CreateAppSpawningCtx(void)
     property->message = NULL;
     property->pid = 0;
     property->state = APP_STATE_IDLE;
+    for (size_t i = 0; i < ARRAY_LENGTH(property->subspawnFds); ++i) {
+        property->subspawnFds[i] = -1;
+    }
     property->allowDumpable = false;
     property->spmRefAdded = 0;
     property->lockBundleRefAdded = false;  // Initialize flag to false
@@ -454,6 +487,8 @@ void ProcessAppSpawnDumpMsg(const AppSpawnMsgNode *message)
     OH_ListTraversal((ListNode *)&g_appSpawnMgr->appSpawnQueue, NULL, DumpAppSpawnQueue, 0);
     APPSPAWN_DUMP("APP queue: ");
     OH_ListTraversal((ListNode *)&g_appSpawnMgr->appQueue, "App queue", DumpAppQueue, 0);
+    APPSPAWN_DUMP("SUBSPAWN queue: ");
+    OH_ListTraversal((ListNode *)&g_appSpawnMgr->subspawnQueue, "Subspawn queue", DumpAppQueue, 0);
     APPSPAWN_DUMP("APP died queue: ");
     OH_ListTraversal((ListNode *)&g_appSpawnMgr->diedQueue, "App died queue", DumpAppQueue, 0);
     APPSPAWN_DUMP("Ext data: ");

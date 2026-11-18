@@ -28,6 +28,7 @@
 
 #include "appspawn.h"
 #include "appspawn_msg.h"
+#include "appspawn_server.h"
 #include "appspawn_utils.h"
 #include "cJSON.h"
 #include "command_lexer.h"
@@ -90,7 +91,35 @@ static const char *APPSPAWN_TEST_USAGE = "usage: AppSpawnTest <options> \n"
     "  --type xx                send msg type \n"
     "  --pid xx                 render terminate pid\n"
     "  --mode nwebspawn         send message to nwebspawn service\n"
-    "  --mode nativespawn       send message to nativespawn service\n";
+    "  --mode nativespawn       send message to nativespawn service\n"
+    "  --mode subspawn          subspawn module test (CREATE/FORK/SHUTDOWN)\n"
+    "  --once                   send a single request then exit\n"
+    "  --state xx               file holding the instance socket/pid\n";
+
+// Values stored in AppSpawnTestCommander::appSpawn_ by --mode parsing.
+constexpr uint32_t SPAWN_MODE_NWEBSPAWN = 0;
+constexpr uint32_t SPAWN_MODE_APP = 1;
+constexpr uint32_t SPAWN_MODE_NATIVESPAWN = 2;
+constexpr uint32_t SPAWN_MODE_HYBRIDSPAWN = 3;
+
+static int ShowUsage()
+{
+    printf("%s\n", APPSPAWN_TEST_USAGE);
+    return 1;
+}
+
+void AppSpawnTestCommander::ParseModeArg(const char *value)
+{
+    if (strcmp(value, "nwebspawn") == 0) {
+        appSpawn_ = SPAWN_MODE_NWEBSPAWN;
+    } else if (strcmp(value, "nativespawn") == 0) {
+        appSpawn_ = SPAWN_MODE_NATIVESPAWN;
+    } else if (strcmp(value, "subspawn") == 0) {
+        subspawnMode_ = 1;
+    } else {
+        appSpawn_ = SPAWN_MODE_APP;
+    }
+}
 
 int AppSpawnTestCommander::ProcessArgs(int argc, char *const argv[])
 {
@@ -113,13 +142,12 @@ int AppSpawnTestCommander::ProcessArgs(int argc, char *const argv[])
             sendMsg = 1;
         } else if (strcmp(argv[i], "--mode") == 0 && ((i + 1) < argc)) {
             i++;
-            if (strcmp(argv[i], "nwebspawn") == 0) {
-                appSpawn_ = 0;
-            } else if (strcmp(argv[i], "nativespawn") == 0) {
-                appSpawn_ = 2; // 2 is nwebspawn
-            } else {
-                appSpawn_ = 1;
-            }
+            ParseModeArg(argv[i]);
+            sendMsg = 1;
+        } else if (strcmp(argv[i], "--state") == 0 && ((i + 1) < argc)) {
+            // Persists the instance socket/pid across CREATE -> FORK -> SHUTDOWN invocations.
+            i++;
+            subspawnStateFile_ = argv[i];
             sendMsg = 1;
         } else if (strcmp(argv[i], "--type") == 0 && ((i + 1) < argc)) {
             i++;
@@ -131,15 +159,17 @@ int AppSpawnTestCommander::ProcessArgs(int argc, char *const argv[])
             terminatePid_ = atoi(argv[i]);
             sendMsg = 1;
         } else if (strcmp(argv[i], "--help") == 0) {
-            printf("%s\n", APPSPAWN_TEST_USAGE);
-            return 1;
+            return ShowUsage();
         } else if (strcmp(argv[i], "--send") == 0 || strcmp(argv[i], "send") == 0) {
+            sendMsg = 1;
+        } else if (strcmp(argv[i], "--once") == 0) {
+            // Send a single request and exit, so module tests can be scripted.
+            once_ = 1;
             sendMsg = 1;
         }
     }
     if (sendMsg == 0) {
-        printf("%s\n", APPSPAWN_TEST_USAGE);
-        return 1;
+        return ShowUsage();
     }
     return 0;
 }
@@ -186,6 +216,8 @@ int AppSpawnTestCommander::AddDacInfoFromJson(const cJSON *appInfoConfig, AppSpa
 
     AppDacInfo info = {};
     info.uid = GetIntValueFromJsonObj(config, "uid", 0);
+    info.appUid = cJSON_HasObjectItem(config, "app-uid") ?
+        GetIntValueFromJsonObj(config, "app-uid", 0) : info.uid;
     info.gid = GetIntValueFromJsonObj(config, "gid", 0);
     info.gidCount = GetUint32ArrayFromJson(config, "gid-table", info.gidTable, APP_MAX_GIDS);
     char *userName = GetStringFromJsonObj(config, "user-name");
@@ -310,13 +342,16 @@ int AppSpawnTestCommander::BuildMsgFromJson(const cJSON *appInfoConfig, AppSpawn
     ret = AddCheckPointInfoFromJson(appInfoConfig, reqHandle);
     APPSPAWN_CHECK(ret == 0, return ret, "Failed to checkpoint info %{public}s", processName_.c_str());
 
-    std::string ownerId = GetStringFromJsonObj(appInfoConfig, "owner-id");
+    /* GetStringFromJsonObj returns NULL when the key is absent; guard before building std::string. */
+    const char *ownerIdValue = GetStringFromJsonObj(appInfoConfig, "owner-id");
+    std::string ownerId = (ownerIdValue != nullptr) ? ownerIdValue : "";
     if (!ownerId.empty()) {
         ret = AppSpawnReqMsgSetAppOwnerId(reqHandle, ownerId.c_str());
         APPSPAWN_CHECK(ret == 0, return ret, "Failed to ownerid %{public}s", processName_.c_str());
     }
 
-    std::string renderCmd = GetStringFromJsonObj(appInfoConfig, "render-cmd");
+    const char *renderCmdValue = GetStringFromJsonObj(appInfoConfig, "render-cmd");
+    std::string renderCmd = (renderCmdValue != nullptr) ? renderCmdValue : "";
     if (!renderCmd.empty()) {
         ret = AppSpawnReqMsgAddStringInfo(reqHandle, MSG_EXT_NAME_RENDER_CMD, renderCmd.c_str());
         APPSPAWN_CHECK(ret == 0, return -1, "Failed to add renderCmd %{public}s", renderCmd.c_str());
@@ -441,17 +476,29 @@ static uint32_t GetMsgTypeFromJson(const cJSON *json)
     if (strcmp(msgType, "MSG_DUMP") == 0) {
         return MSG_DUMP;
     }
+    if (strcmp(msgType, "MSG_SUBSPAWN_CREATE") == 0) {
+        return MSG_SUBSPAWN_CREATE;
+    }
+    if (strcmp(msgType, "MSG_SUBSPAWN_SHUTDOWN") == 0) {
+        return MSG_SUBSPAWN_SHUTDOWN;
+    }
     return MSG_APP_SPAWN;
+}
+
+int AppSpawnTestCommander::EnsureClientHandle()
+{
+    if (clientHandle_ != nullptr) {
+        return APPSPAWN_SYSTEM_ERROR;
+    }
+    return AppSpawnClientInit(appSpawn_ == SPAWN_MODE_APP ? APPSPAWN_SERVER_NAME :
+        (appSpawn_ == SPAWN_MODE_NATIVESPAWN ? NATIVESPAWN_SERVER_NAME :
+        (appSpawn_ == SPAWN_MODE_HYBRIDSPAWN ? HYBRIDSPAWN_SERVER_NAME : NWEBSPAWN_SERVER_NAME)), &clientHandle_);
 }
 
 int AppSpawnTestCommander::CreateMsg(AppSpawnReqMsgHandle &reqHandle,
     const char *defaultConfig, uint32_t defMsgType)
 {
-    int ret = APPSPAWN_SYSTEM_ERROR;
-    if (clientHandle_ == NULL) {
-        ret = AppSpawnClientInit(appSpawn_ == 1 ? APPSPAWN_SERVER_NAME : (appSpawn_  == 2 ? NATIVESPAWN_SERVER_NAME :
-            (appSpawn_ == 3 ? HYBRIDSPAWN_SERVER_NAME : NWEBSPAWN_SERVER_NAME)), &clientHandle_);
-    }
+    int ret = EnsureClientHandle();
     reqHandle = INVALID_REQ_HANDLE;
     if (appInfoConfig_) {
         cJSON_Delete(appInfoConfig_);
@@ -490,7 +537,10 @@ int AppSpawnTestCommander::CreateMsg(AppSpawnReqMsgHandle &reqHandle,
     if (msgType_ == MSG_SPAWN_SERVICE_BIN) {
         ret = BuildDaemonMsgFromJson(appInfoConfig_, reqHandle);
     } else {
-        (void)AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_IGNORE_SANDBOX);
+        /* Subspawn identity validation requires enforced isolated sandbox, so it rejects IGNORE_SANDBOX. */
+        if (!subspawnMode_) {
+            (void)AppSpawnReqMsgSetAppFlag(reqHandle, APP_FLAGS_IGNORE_SANDBOX);
+        }
         ret = BuildMsgFromJson(appInfoConfig_, reqHandle);
     }
     APPSPAWN_CHECK(ret == 0, AppSpawnReqMsgFree(reqHandle);
@@ -534,6 +584,9 @@ static void PrintSpawnResult(uint32_t msgType, const std::string &processName,
 
 int AppSpawnTestCommander::SendMsg()
 {
+    if (subspawnMode_) {
+        return SendSubspawnMsg();
+    }
     const char *server = appSpawn_ == 1 ? APPSPAWN_SERVER_NAME : (appSpawn_ == 2 ? NATIVESPAWN_SERVER_NAME :
         (appSpawn_ == 3 ? HYBRIDSPAWN_SERVER_NAME : NWEBSPAWN_SERVER_NAME));
     printf("Send msg to server '%s' \n", server);
@@ -558,6 +611,128 @@ int AppSpawnTestCommander::SendMsg()
     terminatePid_ = 0;
     printf("Please input cmd: \n");
     return 0;
+}
+
+int AppSpawnTestCommander::SaveSubspawnState(const char *socketName, pid_t pid)
+{
+    if (subspawnStateFile_.empty()) {
+        return 0;
+    }
+    cJSON *root = cJSON_CreateObject();
+    APPSPAWN_CHECK(root != nullptr, return -1, "Failed to create subspawn state");
+    cJSON_AddStringToObject(root, "socket-name", socketName);
+    cJSON_AddNumberToObject(root, "pid", static_cast<double>(pid));
+    char *text = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    APPSPAWN_CHECK(text != nullptr, return -1, "Failed to render subspawn state");
+    FILE *fp = fopen(subspawnStateFile_.c_str(), "w");
+    if (fp == nullptr) {
+        cJSON_free(text);
+        return -1;
+    }
+    size_t len = strlen(text);
+    size_t written = fwrite(text, 1, len, fp);
+    (void)fclose(fp);
+    cJSON_free(text);
+    return (written == len) ? 0 : -1;
+}
+
+int AppSpawnTestCommander::LoadSubspawnState()
+{
+    APPSPAWN_CHECK(!subspawnStateFile_.empty(), return -1, "--state is required for fork/shutdown");
+    cJSON *root = GetJsonObjFromFile(subspawnStateFile_.c_str());
+    APPSPAWN_CHECK(root != nullptr, return -1, "Failed to load state %{public}s", subspawnStateFile_.c_str());
+    const char *socketName = GetStringFromJsonObj(root, "socket-name");
+    if (socketName != nullptr) {
+        subspawnSocketName_ = socketName;
+    }
+    subspawnPid_ = static_cast<pid_t>(GetIntValueFromJsonObj(root, "pid", 0));
+    cJSON_Delete(root);
+    APPSPAWN_CHECK(!subspawnSocketName_.empty(), return -1, "State has no socket-name");
+    return 0;
+}
+
+int AppSpawnTestCommander::SendSubspawnCreateMsg()
+{
+    AppSpawnReqMsgHandle reqHandle = INVALID_REQ_HANDLE;
+    int ret = CreateMsg(reqHandle, g_defaultAppInfo.c_str(), MSG_SUBSPAWN_CREATE);
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to build MSG_SUBSPAWN_CREATE");
+    AppSpawnResult result = {};
+    /* The request handle is consumed by the send, including on failure. */
+    ret = AppSpawnClientSendMsg(clientHandle_, reqHandle, &result);
+    APPSPAWN_LOGI("Subspawn CREATE transport=%{public}d result=0x%{public}x pid=%{public}d",
+        ret, result.result, result.pid);
+    APPSPAWN_CHECK(ret == 0, return ret, "Subspawn CREATE transport failed");
+    APPSPAWN_CHECK(result.result == 0, return result.result, "Subspawn CREATE failed");
+    const cJSON *dac = cJSON_GetObjectItemCaseSensitive(appInfoConfig_, "dac-info");
+    uint32_t uid = GetIntValueFromJsonObj(dac, "uid", 0);
+    // The current protocol returns a PID; the SDK contract derives the socket from the CREATE UID.
+    subspawnSocketName_ = SUBSPAWN_SOCKET_PREFIX + std::to_string(uid);
+    subspawnPid_ = result.pid;
+    return SaveSubspawnState(subspawnSocketName_.c_str(), subspawnPid_);
+}
+
+int AppSpawnTestCommander::SendSubspawnForkMsg()
+{
+    int ret = LoadSubspawnState();
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to load subspawn state");
+    if (clientHandle_ != nullptr) {
+        AppSpawnClientDestroy(clientHandle_);
+        clientHandle_ = nullptr;
+    }
+    ret = AppSpawnClientInitSubspawn(subspawnSocketName_.c_str(), &clientHandle_);
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to connect instance %{public}s", subspawnSocketName_.c_str());
+    AppSpawnReqMsgHandle reqHandle = INVALID_REQ_HANDLE;
+    /* The instance reuses the stock MSG_APP_SPAWN path; the fixture decides the payload. */
+    ret = CreateMsg(reqHandle, g_defaultAppInfo.c_str());
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to build fork request");
+    AppSpawnResult result = {ret, 0};
+    ret = AppSpawnClientSendMsg(clientHandle_, reqHandle, &result);
+    APPSPAWN_LOGI("Subspawn FORK transport=%{public}d result=0x%{public}x childPid=%{public}d",
+        ret, result.result, result.pid);
+    return ret == 0 ? result.result : ret;
+}
+
+int AppSpawnTestCommander::SendSubspawnShutdownMsg()
+{
+    int ret = LoadSubspawnState();
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to load subspawn state");
+    APPSPAWN_CHECK(subspawnPid_ > 0, return APPSPAWN_ARG_INVALID, "State has no valid subspawn pid");
+    if (clientHandle_ != nullptr) {
+        AppSpawnClientDestroy(clientHandle_);
+        clientHandle_ = nullptr;
+    }
+    ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle_);
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to connect main appspawn");
+    AppSpawnReqMsgHandle reqHandle = INVALID_REQ_HANDLE;
+    ret = CreateMsg(reqHandle, g_defaultAppInfo.c_str(), MSG_SUBSPAWN_SHUTDOWN);
+    APPSPAWN_CHECK(ret == 0, return ret, "Failed to build MSG_SUBSPAWN_SHUTDOWN");
+    ret = AppSpawnReqMsgAddExtInfo(reqHandle, MSG_EXT_NAME_SUBSPAWN_PID,
+        reinterpret_cast<const uint8_t *>(&subspawnPid_), sizeof(subspawnPid_));
+    APPSPAWN_CHECK(ret == 0, AppSpawnReqMsgFree(reqHandle); return ret, "Failed to add subspawn shutdown pid");
+    AppSpawnResult result = {ret, 0};
+    ret = AppSpawnClientSendMsg(clientHandle_, reqHandle, &result);
+    APPSPAWN_LOGI("Subspawn SHUTDOWN transport=%{public}d result=0x%{public}x", ret, result.result);
+    return ret == 0 ? result.result : ret;
+}
+
+int AppSpawnTestCommander::SendSubspawnMsg()
+{
+    /* The operation comes from the fixture's msg-type, matching the existing --file convention. */
+    if (msgType_ == MAX_TYPE_INVALID && !testFileName_.empty()) {
+        cJSON *config = GetJsonObjFromFile(testFileName_.c_str());
+        if (config != nullptr) {
+            msgType_ = GetMsgTypeFromJson(config);
+            cJSON_Delete(config);
+        }
+    }
+    if (msgType_ == MSG_SUBSPAWN_CREATE) {
+        return SendSubspawnCreateMsg();
+    }
+    if (msgType_ == MSG_SUBSPAWN_SHUTDOWN) {
+        return SendSubspawnShutdownMsg();
+    }
+    return SendSubspawnForkMsg();
 }
 
 int AppSpawnTestCommander::StartSendMsg()
@@ -685,6 +860,13 @@ int AppSpawnTestCommander::Run()
     if (clientHandle_ == NULL) {
         ret = AppSpawnClientInit(name, &clientHandle_);
         APPSPAWN_CHECK(ret == 0, return -1, "Failed to create client %{public}s", name);
+    }
+
+    if (once_) {
+        ret = SendMsg();
+        AppSpawnClientDestroy(clientHandle_);
+        clientHandle_ = nullptr;
+        return ret;
     }
 
     InitPtyInterface();

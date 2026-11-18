@@ -125,6 +125,12 @@ group("appspawn_all") {
         "standard:nwebspawn",
       ]
     }
+    if (appspawn_support_subspawn) {  # for support subspawn
+      deps += [
+        "modules/subspawn_adapter:appspawn_subspawn",
+        "standard:subspawn",
+      ]
+    }
     if (appspawn_support_hybrid) {  # for support hybridspawn
       deps += [
         ":hybridspawn.cfg",

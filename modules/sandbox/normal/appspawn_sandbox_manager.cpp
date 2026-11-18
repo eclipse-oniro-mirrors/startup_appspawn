@@ -28,6 +28,15 @@ int32_t SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx *property)
     APPSPAWN_CHECK(property != nullptr, return -1, "Invalid appspawn client");
     APPSPAWN_CHECK(content != nullptr, return -1, "Invalid appspawn content");
 
+    if (IsSubSpawnMode(content)) {
+        return 0;
+    }
+    if (property->message != nullptr && property->message->msgHeader.msgType == MSG_SUBSPAWN_CREATE) {
+        APPSPAWN_CHECK(CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE),
+        return APPSPAWN_SANDBOX_INVALID,
+            "Subspawn isolate sandbox configuration is unavailable or disabled");
+    }
+
     int ret = 0;
     // no sandbox
     if (CheckAppMsgFlagsSet(property, APP_FLAGS_NO_SANDBOX)) {
@@ -36,6 +45,7 @@ int32_t SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx *property)
     if ((content->content.sandboxNsFlags & CLONE_NEWPID) == CLONE_NEWPID) {
         ret = getprocpid();
         if (ret < 0) {
+            APPSPAWN_LOGE("Failed to get proc pid in new pid namespace result %{public}d", ret);
             return ret;
         }
     }
@@ -64,7 +74,7 @@ int32_t SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx *property)
 
 static int SpawnMountDirToShared(AppSpawnMgr *content, AppSpawningCtx *property)
 {
-    if (!IsNWebSpawnMode(content)) {
+    if (!IsNWebSpawnMode(content) && !IsSubSpawnMode(content)) {
         // mount dynamic directory
         MountToShared(content, property);
     }
@@ -80,6 +90,9 @@ static int UninstallDebugSandbox(AppSpawnMgr *content, AppSpawningCtx *property)
 
 static int InstallDebugSandbox(AppSpawnMgr *content, AppSpawningCtx *property)
 {
+    if (IsSubSpawnMode(content) || GetAppSpawnMsgType(property) == MSG_SUBSPAWN_CREATE) {
+        return 0;
+    }
     APPSPAWN_CHECK(property != nullptr && content != nullptr, return -1,
         "Invalid appspawn client or property");
     return OHOS::AppSpawn::SandboxCore::InstallDebugSandbox(content, property);
@@ -93,6 +106,7 @@ MODULE_CONSTRUCTOR(void)
     (void)AddPreloadHook(HOOK_PRIO_COMMON, OHOS::AppSpawn::SandboxCore::LoadCloneAppGrantDownloadConfig);
     (void)AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_COMMON, SpawnMountDirToShared);
     (void)AddAppSpawnHook(STAGE_CHILD_EXECUTE, HOOK_PRIO_SANDBOX, SetAppSandboxProperty);
+    (void)AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_SANDBOX, SetAppSandboxProperty);
     (void)AddAppSpawnHook(STAGE_PARENT_UNINSTALL, HOOK_PRIO_SANDBOX, UninstallDebugSandbox);
     (void)AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_SANDBOX, InstallDebugSandbox);
     (void)AddServerStageHook(STAGE_SERVER_EXIT, HOOK_PRIO_SANDBOX,

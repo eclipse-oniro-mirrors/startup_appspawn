@@ -329,4 +329,5 @@ MODULE_CONSTRUCTOR(void)
     AddPreloadHook(HOOK_PRIO_COMMON, SpawnLoadPathConfig);
     /* Path marking should be done between sandbox and setuid. */
     AddAppSpawnHook(STAGE_CHILD_EXECUTE, HOOK_PRIO_SANDBOX_MARK_PATH, SpawnSetPathMark);
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_SANDBOX_MARK_PATH, SpawnSetPathMark);
 }

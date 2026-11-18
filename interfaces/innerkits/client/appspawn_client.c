@@ -37,6 +37,7 @@
 #include "appspawndf_utils.h"
 
 #define USER_LOCK_STATUS_SIZE 8
+static const char g_subspawnSocketPrefix[] = "/data/service/el1/startup/subspawn_";
 static pthread_mutex_t g_mutex = PTHREAD_MUTEX_INITIALIZER;
 static AppSpawnReqMsgMgr *g_clientInstance[CLIENT_MAX] = {NULL};
 static pthread_mutex_t g_spawnListenMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -49,6 +50,22 @@ static bool g_nativeSpawnListenStart = false;
 static pthread_mutex_t g_hybridSpawnListenMutex = PTHREAD_MUTEX_INITIALIZER;
 static int g_hybridSpawnListenFd = 0;
 static bool g_hybridSpawnListenStart = false;
+
+bool IsSupportSubSpawn(void)
+{
+    return CheckEnabled("const.startup.appspawn_support_subspawn.enable", "1");
+}
+
+char *GetSubSpawnSocketName(int uid)
+{
+    APPSPAWN_CHECK(uid >= 0, return NULL, "Invalid subspawn uid %{public}d", uid);
+    char *socketName = malloc(APP_SUBSPAWN_SOCKET_NAME_LEN);
+    APPSPAWN_CHECK(socketName != NULL, return NULL, "Failed to allocate subspawn socket name");
+    int ret = snprintf_s(socketName, APP_SUBSPAWN_SOCKET_NAME_LEN, APP_SUBSPAWN_SOCKET_NAME_LEN - 1,
+        "%s%d", g_subspawnSocketPrefix, uid);
+    APPSPAWN_CHECK(ret > 0, free(socketName); return NULL, "Failed to format subspawn socket name");
+    return socketName;
+}
 
 APPSPAWN_STATIC void SpawnListen(AppSpawnReqMsgMgr *reqMgr, const char *processName);
 
@@ -122,9 +139,8 @@ APPSPAWN_STATIC const char *GetSocketName(uint32_t type)
     return socketName;
 }
 
-APPSPAWN_STATIC int CreateClientSocket(uint32_t type, uint32_t timeout)
+APPSPAWN_STATIC int CreateClientSocketWithPath(const char *socketName, uint32_t timeout, bool absolutePath)
 {
-    const char *socketName = GetSocketName(type);
     int socketFd = socket(AF_UNIX, SOCK_STREAM, 0);  // SOCK_SEQPACKET
     APPSPAWN_CHECK(socketFd >= 0, return -1,
         "Socket socket fd: %{public}s error: %{public}d", socketName, errno);
@@ -145,7 +161,8 @@ APPSPAWN_STATIC int CreateClientSocket(uint32_t type, uint32_t timeout)
         ret = APPSPAWN_SYSTEM_ERROR;
         struct sockaddr_un addr;
         socklen_t pathSize = sizeof(addr.sun_path);
-        int pathLen = snprintf_s(addr.sun_path, pathSize, (pathSize - 1), "%s%s", APPSPAWN_SOCKET_DIR, socketName);
+        int pathLen = snprintf_s(addr.sun_path, pathSize, (pathSize - 1), "%s%s",
+            absolutePath ? "" : APPSPAWN_SOCKET_DIR, socketName);
         APPSPAWN_CHECK(pathLen > 0, break, "Format path %{public}s error: %{public}d", socketName, errno);
         addr.sun_family = AF_LOCAL;
         socklen_t socketAddrLen = (socklen_t)(offsetof(struct sockaddr_un, sun_path) + (socklen_t)pathLen + 1);
@@ -157,6 +174,35 @@ APPSPAWN_STATIC int CreateClientSocket(uint32_t type, uint32_t timeout)
     } while (0);
     CloseClientSocket(socketFd);
     return -1;
+}
+
+APPSPAWN_STATIC int CreateClientSocket(uint32_t type, uint32_t timeout)
+{
+    return CreateClientSocketWithPath(GetSocketName(type), timeout, false);
+}
+
+static bool IsValidSubspawnSocketName(const char *socketName)
+{
+    if (socketName == NULL || strnlen(socketName, APP_SUBSPAWN_SOCKET_NAME_LEN) >= APP_SUBSPAWN_SOCKET_NAME_LEN ||
+        strncmp(socketName, g_subspawnSocketPrefix, sizeof(g_subspawnSocketPrefix) - 1) != 0) {
+        return false;
+    }
+    const char *uidString = socketName + sizeof(g_subspawnSocketPrefix) - 1;
+    if (*uidString == '\0' || (*uidString == '0' && uidString[1] != '\0')) {
+        return false;
+    }
+    uint32_t uid = 0;
+    for (; *uidString != '\0'; uidString++) {
+        if (*uidString < '0' || *uidString > '9') {
+            return false;
+        }
+        uint32_t digit = (uint32_t)(*uidString - '0');
+        if (uid > (UINT32_MAX - digit) / 10) { // Decimal UID must fit the wire DAC field.
+            return false;
+        }
+        uid = uid * 10 + digit;
+    }
+    return true;
 }
 
 APPSPAWN_STATIC int UpdateSocketTimeout(uint32_t timeout, int socketFd)
@@ -277,7 +323,9 @@ APPSPAWN_STATIC void TryCreateSocket(AppSpawnReqMsgMgr *reqMgr, bool needSleep)
     uint32_t retryCount = 1;
     while (retryCount <= reqMgr->maxRetryCount) {
         if (reqMgr->socketId < 0) {
-            reqMgr->socketId = CreateClientSocket(reqMgr->type, reqMgr->timeout);
+            reqMgr->socketId = reqMgr->type == CLIENT_FOR_SUBSPAWN ?
+                CreateClientSocketWithPath(reqMgr->socketName, reqMgr->timeout, true) :
+                CreateClientSocket(reqMgr->type, reqMgr->timeout);
         }
         if (reqMgr->socketId < 0) {
             APPSPAWN_LOGV("Failed to create socket, try again");
@@ -418,6 +466,9 @@ int AppSpawnClientInit(const char *serviceName, AppSpawnClientHandle *handle)
 {
     APPSPAWN_CHECK(serviceName != NULL, return APPSPAWN_ARG_INVALID, "Invalid service name");
     APPSPAWN_CHECK(handle != NULL, return APPSPAWN_ARG_INVALID, "Invalid handle for %{public}s", serviceName);
+    if (strncmp(serviceName, g_subspawnSocketPrefix, sizeof(g_subspawnSocketPrefix) - 1) == 0) {
+        return AppSpawnClientInitSubspawn(serviceName, handle);
+    }
     APPSPAWN_LOGV("AppSpawnClientInit serviceName %{public}s", serviceName);
     AppSpawnClientType type = CLIENT_FOR_APPSPAWN;
     if (strcmp(serviceName, CJAPPSPAWN_SERVER_NAME) == 0) {
@@ -435,6 +486,29 @@ int AppSpawnClientInit(const char *serviceName, AppSpawnClientHandle *handle)
     int ret = InitClientInstance(type);
     APPSPAWN_CHECK(ret == 0, return APPSPAWN_SYSTEM_ERROR, "Failed to create reqMgr");
     *handle = (AppSpawnClientHandle)g_clientInstance[type];
+    return 0;
+}
+
+int AppSpawnClientInitSubspawn(const char *socketName, AppSpawnClientHandle *handle)
+{
+    APPSPAWN_CHECK(handle != NULL, return APPSPAWN_ARG_INVALID, "Invalid subspawn client handle");
+    *handle = NULL;
+    APPSPAWN_CHECK(IsValidSubspawnSocketName(socketName), return APPSPAWN_ARG_INVALID,
+        "Invalid subspawn socket name");
+    AppSpawnReqMsgMgr *reqMgr = calloc(1, sizeof(AppSpawnReqMsgMgr) + RECV_BLOCK_LEN);
+    APPSPAWN_CHECK(reqMgr != NULL, return APPSPAWN_SYSTEM_ERROR, "Failed to allocate subspawn client");
+    int ret = strcpy_s(reqMgr->socketName, sizeof(reqMgr->socketName), socketName);
+    APPSPAWN_CHECK(ret == 0, free(reqMgr); return APPSPAWN_ARG_INVALID, "Failed to copy subspawn socket name");
+    reqMgr->type = CLIENT_FOR_SUBSPAWN;
+    reqMgr->msgNextId = 1;
+    reqMgr->timeout = GetSpawnTimeout(TIMEOUT_DEF, false);
+    reqMgr->maxRetryCount = MAX_RETRY_SEND_COUNT;
+    reqMgr->socketId = -1;
+    ret = pthread_mutex_init(&reqMgr->mutex, NULL);
+    APPSPAWN_CHECK(ret == 0, free(reqMgr); return APPSPAWN_SYSTEM_ERROR, "Failed to initialize subspawn mutex");
+    OH_ListInit(&reqMgr->recvBlock.node);
+    reqMgr->recvBlock.blockSize = RECV_BLOCK_LEN;
+    *handle = (AppSpawnClientHandle)reqMgr;
     return 0;
 }
 

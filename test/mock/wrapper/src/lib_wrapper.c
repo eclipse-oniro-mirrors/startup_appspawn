@@ -370,6 +370,16 @@ void UpdateOpenFunc(OpenFunc func)
 int __wrap_open(const char *pathname, int flags, ...)
 {
     mode_t mode = 0;
+    if ((flags & O_CREAT) != 0
+#ifdef O_TMPFILE
+        || (flags & O_TMPFILE) == O_TMPFILE
+#endif
+    ) {
+        va_list args;
+        va_start(args, flags);
+        mode = va_arg(args, mode_t);
+        va_end(args);
+    }
     if (g_open) {
         return g_open(pathname, flags, mode);
     } else {

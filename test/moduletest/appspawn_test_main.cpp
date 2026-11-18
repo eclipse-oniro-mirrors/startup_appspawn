@@ -39,11 +39,10 @@ int main(int argc, char *const argv[])
     if (argc <= 0) {
         return 0;
     }
-
     OHOS::AppSpawnModuleTest::AppSpawnTestCommander commander;
     int ret = commander.ProcessArgs(argc, argv);
     if (ret == 0) {
-        commander.Run();
+        return commander.Run() == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
     }
     return 0;
 }

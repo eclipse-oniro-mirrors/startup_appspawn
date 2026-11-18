@@ -55,6 +55,7 @@ if (!defined(ohos_lite)) {
     # Target code sources
     sources = [
       "${appspawn_path}/standard/appspawn_service.c",
+      "${appspawn_path}/standard/subspawn_manager.c",
     ]
 
     # Dependent code sources

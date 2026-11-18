@@ -148,17 +148,17 @@ HWTEST_F(AppSpawnModuleInterfaceTest, App_Spawn_App_Spawn_Hook_001, TestSize.Lev
 
         for (int k = 0; k <= HOOK_PRIO_LOWEST + 1000; k += 1000) { // 1000
             ret = AddAppSpawnHook(static_cast<AppSpawnHookStage>(i), k, TestAppSpawn);
-            EXPECT_EQ(ret == 0, (i >= STAGE_PARENT_PRE_FORK) && (i <= STAGE_CHILD_PRE_RUN));
+            EXPECT_EQ(ret == 0, (i >= STAGE_PARENT_PRE_FORK) && (i < STAGE_MAX));
         }
         ret = AddAppSpawnHook(static_cast<AppSpawnHookStage>(i), 0, nullptr);
         EXPECT_EQ(ret == 0, 0);
 
-        if (i == STAGE_CHILD_PRE_RUN || i == STAGE_CHILD_EXECUTE) {
+        if (i == STAGE_CHILD_PRE_RUN || i == STAGE_CHILD_EXECUTE || i == STAGE_CREATE_SUBSPAWN_EXECUTE) {
             printf("App_Spawn_App_Spawn_Hook_001 %d \n", i);
             continue;
         }
         ret = AppSpawnHookExecute(static_cast<AppSpawnHookStage>(i), 0, content, client);
-        EXPECT_EQ(ret == 0, (i >= STAGE_PARENT_PRE_FORK) && (i <= STAGE_CHILD_PRE_RUN));
+        EXPECT_EQ(ret == 0, (i >= STAGE_PARENT_PRE_FORK) && (i < STAGE_MAX));
 
         ret = AppSpawnHookExecute(static_cast<AppSpawnHookStage>(i), 0, nullptr, client);
         EXPECT_NE(ret, 0);

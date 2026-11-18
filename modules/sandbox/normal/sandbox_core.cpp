@@ -1130,7 +1130,8 @@ int32_t SandboxCore::DoSandboxRootFolderCreate(AppSpawnMgr *content, const AppSp
     arg.destPath = sandboxRootPath;
 
 #ifdef APPSPAWN_SANDBOX_ROOT_TMPFS
-    if (CheckAppMsgFlagsSet(appProperty, APP_FLAGS_UNLOCKED_STATUS) && IsAppSpawnMode(content)) {
+    if (CheckAppMsgFlagsSet(appProperty, APP_FLAGS_UNLOCKED_STATUS) && IsAppSpawnMode(content) &&
+        !IsSubspawnInstanceCreate(content, appProperty)) {
         arg.srcPath = "tmpfs";
         arg.destPath = sandboxRootPath;
         arg.fsType = "tmpfs";

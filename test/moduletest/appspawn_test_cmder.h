@@ -41,6 +41,8 @@ public:
         exit_ = 0;
         appSpawn_ = 1;
         dumpFlags = 0;
+        subspawnMode_ = 0;
+        once_ = 0;
         msgType_ = MAX_TYPE_INVALID;
         terminatePid_ = 0;
     }
@@ -49,6 +51,8 @@ public:
         exit_ = 0;
         appSpawn_ = serverType;
         dumpFlags = 0;
+        subspawnMode_ = 0;
+        once_ = 0;
         msgType_ = MAX_TYPE_INVALID;
         terminatePid_ = 0;
     }
@@ -72,6 +76,13 @@ public:
                     uint32_t defMsgType = MAX_TYPE_INVALID);
     int StartSendMsg();
     int SendMsg();
+    /* Subspawn module test (FEAT-20261020-001): CREATE -> FORK -> SHUTDOWN against one instance. */
+    int SendSubspawnMsg();
+    int SendSubspawnCreateMsg();
+    int SendSubspawnForkMsg();
+    int SendSubspawnShutdownMsg();
+    int SaveSubspawnState(const char *socketName, pid_t pid);
+    int LoadSubspawnState();
     AppSpawnClientHandle GetClientHandle()
     {
         return clientHandle_;
@@ -81,6 +92,8 @@ private:
     std::vector<std::string> split(const std::string &str, const std::string &pattern);
     int InitPtyInterface();
     int ProcessInputCmd(std::string &cmd);
+    void ParseModeArg(const char *value);
+    int EnsureClientHandle();
     int AddExtTlv(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
     int BuildMsgFromJson(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
     int AddStandardTlvsOrDefault(const cJSON *appInfoConfig, AppSpawnReqMsgHandle reqHandle);
@@ -105,12 +118,17 @@ private:
     uint32_t dumpFlags : 1;
     uint32_t exit_ : 1;
     uint32_t appSpawn_ : 2;
+    uint32_t subspawnMode_ : 1;
+    uint32_t once_ : 1;
     uint32_t msgType_;
     pid_t terminatePid_;
     uint32_t threadCount_{1};
     std::string ptyName_{};
     std::string testFileName_{};
     std::string processName_{};
+    std::string subspawnStateFile_{};
+    std::string subspawnSocketName_{};
+    pid_t subspawnPid_{0};
     cJSON *appInfoConfig_{nullptr};
     AppSpawnClientHandle clientHandle_{nullptr};
     ThreadMgr threadMgr_{nullptr};

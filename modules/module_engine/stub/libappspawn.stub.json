@@ -1,6 +1,7 @@
 [
     { "name": "AddServerStageHook" },
     { "name": "AddProcessMgrHook" },
+    { "name": "ProcessMgrHookExecute" },
     { "name": "AddAppSpawnHook" },
     { "name": "AppSpawnHookExecute" },
     { "name": "AppSpawnEnvClear" },
@@ -17,5 +18,13 @@
     { "name": "AppSpawnDump" },
     { "name": "RegisterExpandSandboxCfgHandler"},
     { "name": "GetAppSpawnMgr" },
-    { "name": "ResolvePolicy" }
+    { "name": "ResolvePolicy" },
+    { "name": "GetSubspawnStartInfo" },
+    { "name": "SubspawnSetStartResult" },
+    { "name": "ReapSubspawnProcess" },
+    { "name": "CheckAppSpawnMsg" },
+    { "name": "AddSpawnedProcess" },
+    { "name": "GetAppSpawnMsgFromBuffer" },
+    { "name": "DecodeAppSpawnMsg" },
+    { "name": "DeleteAppSpawnMsg" }
 ]

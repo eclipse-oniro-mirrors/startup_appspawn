@@ -20,6 +20,7 @@
 #include "appspawndf_utils.h"
 #include "appspawn_client.h"
 #include "appspawn_msg.h"
+#include "appspawn_service.h"
 #include "securec.h"
 #include "appspawn_utils.h"
 
@@ -33,6 +34,13 @@ void *DlopenStub(const char *pathname, int mode)
     return nullptr;
 }
 void DisallowInternet(void) {}
+
+// This target links the common adapter without the spawn service.
+const SubspawnStartInfo *GetSubspawnStartInfo(void)
+{
+    static const SubspawnStartInfo startInfo = {};
+    return &startInfo;
+}
 #ifdef __cplusplus
 }
 #endif

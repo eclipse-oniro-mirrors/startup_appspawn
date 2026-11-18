@@ -466,6 +466,9 @@ APPSPAWN_STATIC int ParseDataGroupList(AppSpawnMgr *content, const AppSpawningCt
 
 int UpdateDataGroupDirs(AppSpawnMgr *content)
 {
+    if (IsSubSpawnMode(content)) {
+        return 0;
+    }
     if (content == nullptr) {
         return APPSPAWN_ARG_INVALID;
     }

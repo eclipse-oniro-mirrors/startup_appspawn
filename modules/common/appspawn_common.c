@@ -16,6 +16,7 @@
 #include <grp.h>
 #include <inttypes.h>
 #include <limits.h>
+#include <signal.h>
 #include <linux/ioctl.h>
 #include <sys/capability.h>
 #include <stdbool.h>
@@ -53,6 +54,7 @@
 #include "parameter.h"
 #include "securec.h"
 #include "cJSON.h"
+#include "appspawn_error.h"
 #ifdef APPSPAWN_HISYSEVENT
 #include "hisysevent_adapter.h"
 #endif
@@ -83,6 +85,8 @@
 #define MIN_VALID_SHARED_UID 100
 #define MIN_VALID_SHARED_GID 100
 #define MIN_VALID_APP_GID 10000
+#define MIN_ISOLATED_UID 110000
+#define MAX_ISOLATED_UID 119999
 #define APP_SIGN_TYPE_DEFAULT "none"
 #define XPM_DEV_PATH "/dev/xpm"
 #define XPM_SET_JITFORT_ENABLE _IOW('x', 0x3, unsigned long)
@@ -110,6 +114,8 @@ int __attribute__((weak)) SetUserId(char *userIdStr)
     return 0;
 }
 
+static const uint64_t g_subspawnCapabilityMask = CAP_TO_MASK(CAP_SETUID) |
+    CAP_TO_MASK(CAP_SETGID) | CAP_TO_MASK(CAP_KILL);
 void __attribute__((weak)) SetAgentIdFromMsg(const AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("SetAgentIdFromMsg is not implemented (weak stub), agentId is NOT written to kernel");
@@ -130,7 +136,16 @@ int __attribute__((weak)) GetAppUid(uint32_t *appUid)
 
 APPSPAWN_STATIC int SetProcessName(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    char subspawnName[MAX_LEN_SHORT_NAME] = {0};
     const char *processName = GetProcessName(property);
+    if (IsSubspawnInstanceCreate(content, property)) {
+        const AppSpawnMsgDacInfo *dacInfo = GetAppProperty(property, TLV_DAC_INFO);
+        APPSPAWN_CHECK(dacInfo != NULL, return APPSPAWN_TLV_NONE, "Missing subspawn DAC info");
+        int ret = snprintf_s(subspawnName, sizeof(subspawnName), sizeof(subspawnName) - 1,
+            SUBSPAWN_SERVER_NAME "_%u", dacInfo->uid % UID_BASE);
+        APPSPAWN_CHECK(ret > 0, return APPSPAWN_SYSTEM_ERROR, "Failed to format subspawn process name");
+        processName = subspawnName;
+    }
     APPSPAWN_CHECK(processName != NULL, return -EINVAL, "Can not get process name");
     // 解析时已经检查
     size_t len = strlen(processName);
@@ -272,14 +287,27 @@ static bool NeedExtPerm(const AppSpawnMgr *content, const AppSpawningCtx *proper
 {
     return IsNoShareFsEnable() &&
         !CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE) &&
-        (IsAppSpawnMode(content) || IsNativeSpawnMode(content));
+        (IsAppSpawnMode(content) || IsNativeSpawnMode(content) || IsSubSpawnMode(content));
+}
+
+static int SetSubspawnAmbientCapabilities(void)
+{
+    APPSPAWN_CHECK(prctl(PR_CAP_AMBIENT, PR_CAP_AMBIENT_CLEAR_ALL, 0, 0, 0) == 0,
+        return APPSPAWN_SUBSPAWN_PRESET_FAILED, "Failed to clear subspawn ambient capabilities");
+    const int retained[] = {CAP_SETUID, CAP_SETGID, CAP_KILL};
+    for (size_t i = 0; i < ARRAY_LENGTH(retained); ++i) {
+        APPSPAWN_CHECK(SetAmbientCapability(retained[i]) == 0,
+            return APPSPAWN_SUBSPAWN_PRESET_FAILED, "Failed to preserve subspawn exec capabilities");
+    }
+    return 0;
 }
 
 APPSPAWN_STATIC int SetAppCapabilities(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    bool creatingInstance = IsSubspawnInstanceCreate(content, property);
     const SpawnPolicy *pl = ResolvePolicy(property);
-    const bool isDaemonCaps = (pl->capsFrom == POLICY_SRC_SUDO);
-    bool needExtPerm = !isDaemonCaps && NeedExtPerm(content, property);
+    const bool isDaemonCaps = (pl->capsFrom == POLICY_SRC_SUDO) && !creatingInstance;
+    bool needExtPerm = !creatingInstance && !isDaemonCaps && NeedExtPerm(content, property);
     uint64_t extAmbientCaps = 0;
     uint64_t extPermCaps = 0;
     if (needExtPerm) {
@@ -302,10 +330,19 @@ APPSPAWN_STATIC int SetAppCapabilities(const AppSpawnMgr *content, const AppSpaw
     const uint64_t permitted = isDaemonCaps ? pl->capsMask : 0x3fffffffff;
     const uint64_t effective = isDaemonCaps ? pl->capsMask : 0x3fffffffff;
 #endif
-    int ret = SetCapabilities(inheriTable, permitted, effective);
-    APPSPAWN_CHECK(ret == 0, return ret, "Failed to capset via primitive, ret: %{public}d", ret);
+    int ret;
+    if (creatingInstance) {
+        ret = SetCapabilities(g_subspawnCapabilityMask, g_subspawnCapabilityMask, g_subspawnCapabilityMask);
+    } else {
+        ret = SetCapabilities(inheriTable, permitted, effective);
+    }
+    APPSPAWN_CHECK(ret == 0, return creatingInstance ? APPSPAWN_SUBSPAWN_PRESET_FAILED : ret,
+        "Failed to capset via primitive, ret: %{public}d", ret);
 
-    if (needExtPerm) {
+    if (creatingInstance) {
+        ret = SetSubspawnAmbientCapabilities();
+        APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
+    } else if (needExtPerm) {
         bool isRet = SetAppAmbientCapabilities(property, extAmbientCaps);
         APPSPAWN_CHECK(!isRet, return -1, "Failed to set ambient");
     }
@@ -544,6 +581,7 @@ APPSPAWN_STATIC void GetExtPermGids(const AppSpawningCtx *property,
  * @brief Compatibility for the caller not passing appUid: fallback to uid when appUid is 0.
  *        Invalid non-zero values are rejected by SetAppUidGid, not fixed here.
  */
+
 APPSPAWN_STATIC int NormalizeDacAppUid(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     UNUSED(content);
@@ -581,13 +619,20 @@ APPSPAWN_STATIC int SetAppUidGid(const AppSpawnMgr *content, const AppSpawningCt
         "appUid %{public}u uid %{public}u or gid %{public}u gidCount %{public}u is invalid",
         dacInfo->appUid, dacInfo->uid, dacInfo->gid, dacInfo->gidCount);
 
+    bool creatingInstance = IsSubspawnInstanceCreate(content, property);
+    if (IsSubSpawnMode(content)) {
+        uint32_t isolatedUid = dacInfo->uid % UID_BASE;
+        APPSPAWN_CHECK(isolatedUid >= MIN_ISOLATED_UID && isolatedUid <= MAX_ISOLATED_UID,
+            return APPSPAWN_MSG_INVALID, "Subspawn uid %{public}u is outside the isolated range", dacInfo->uid);
+    }
     // append gids configured per-permission (gated same as cap path)
-    if (NeedExtPerm(content, property)) {
+    if (!creatingInstance && NeedExtPerm(content, property)) {  // SUBSPAWN cerating
         GetExtPermGids(property, dacInfo->gidTable, &dacInfo->gidCount, APP_MAX_GIDS);
     }
 
     // set gids
-    int ret = setgroups(dacInfo->gidCount, (const gid_t *)(&dacInfo->gidTable[0]));
+    int ret = creatingInstance ? setgroups(0, NULL) :
+        setgroups(dacInfo->gidCount, (const gid_t *)(&dacInfo->gidTable[0]));
     APPSPAWN_CHECK(ret == 0, return errno,
         "setgroups failed: %{public}d, gids.size=%{public}u", errno, dacInfo->gidCount);
 
@@ -614,6 +659,10 @@ APPSPAWN_STATIC int SetAppUidGid(const AppSpawnMgr *content, const AppSpawningCt
         */
         ret = setresuid(dacInfo->uid, dacInfo->uid, dacInfo->uid);
         APPSPAWN_CHECK(ret == 0, return errno, "setuid(%{public}u) failed: %{public}d", dacInfo->uid, errno);
+
+        if (creatingInstance) {
+            return 0;
+        }
     }
 
     char *userIdStr = (char *)GetAppSpawnMsgExtInfo(property->message, MSG_EXT_NAME_USERID, NULL);
@@ -647,7 +696,7 @@ APPSPAWN_STATIC int SetAppAgentId(AppSpawnMgr *content, AppSpawningCtx *property
     if (!IsNoShareFsEnable()) {
         return 0;
     }
-    if(!IsAppSpawnMode(content) && !IsNativeSpawnMode(content)) {
+    if(!IsAppSpawnMode(content) && !IsNativeSpawnMode(content) && !IsSubSpawnMode(content)) {
         return 0;
     }
     SetAgentIdFromMsg(property);
@@ -686,6 +735,9 @@ static void SetProcessQos(void)
 
 APPSPAWN_STATIC int SetSchedPriority(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    if (IsSubspawnInstanceCreate(content, property)) {
+        return 0;
+    }
     const SpawnPolicy *pl = ResolvePolicy(property);
     if (!pl->schedEnable) {
         return 0;  // daemon: no app scheduling
@@ -833,6 +885,17 @@ static int SpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
     return 0;
 }
 
+static int SpawnInitSubspawnEnv(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    // PrepareInstanceChild must run before any token, sandbox or privilege setup.
+    APPSPAWN_CHECK(IsSubspawnInstanceCreate(content, property) &&
+        property->subspawnFds[SUBSPAWN_MEM_FD_INDEX] >= 0 && property->subspawnFds[SUBSPAWN_PIPE_FD_INDEX] >= 0 &&
+        property->subspawnFds[SUBSPAWN_LISTEN_FD_INDEX] >= 0 &&
+        property->subspawnFds[SUBSPAWN_PIPE_FD_INDEX] == property->forkCtx.fd[1],
+        return APPSPAWN_SUBSPAWN_PRESET_FAILED, "Subspawn bootstrap descriptors were not prepared");
+    return SpawnInitSpawningEnv(content, property);
+}
+
 static int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Spawning: set appEnv");
@@ -857,6 +920,10 @@ static int SpawnEnableCache(AppSpawnMgr *content, AppSpawningCtx *property)
 
 static void SpawnLoadSilk(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    if (IsSubspawnInstanceCreate(content, property) || IsSubSpawnMode(content)) {
+        APPSPAWN_LOGV("SpawnLoadSilk: subspawn create or SubSpawnMode not support");
+        return;
+    }
     const SpawnPolicy *pl = ResolvePolicy(property);
     if (!pl->silkEnable) {
         return;  // daemon: no silk
@@ -915,6 +982,8 @@ static int SpawnSetProperties(AppSpawnMgr *content, AppSpawningCtx *property)
     FinishAppspawnTrace();
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
+    /* WaitForDebugger and InitSecCompClientEnhance are required on both
+       subspawn CREATE and in-instance FORK paths. */
     ret = WaitForDebugger(property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
 
@@ -929,6 +998,10 @@ static int SpawnSetProperties(AppSpawnMgr *content, AppSpawningCtx *property)
 
 static int PreLoadSetSeccompFilter(AppSpawnMgr *content)
 {
+    // The CREATE child already installed the dedicated subspawn policy.
+    if (IsSubSpawnMode(content)) {
+        return 0;
+    }
     // set uid gid filetr
     int ret = SetUidGidFilter(content);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
@@ -976,7 +1049,8 @@ static int SpawnLoadConfig(AppSpawnMgr *content)
 
 static int SpawnLoadSeLinuxConfig(AppSpawnMgr *content)
 {
-    APPSPAWN_CHECK_LOGV(LoadSeLinuxConfig() == 0, return -1, "Failed to load selinux config");
+    int ret = LoadSeLinuxConfig();
+    APPSPAWN_CHECK_LOGV(ret == 0, return -1, "Failed to load selinux config");
     return 0;
 }
 
@@ -1055,6 +1129,11 @@ APPSPAWN_STATIC int RecordStartTime(AppSpawnMgr *content, AppSpawningCtx *proper
     return 0;
 }
 
+enum {
+    SUBSPAWN_CAP_WORD_BITS = 32,
+    SUBSPAWN_CAP_WORDS = 2,
+};
+
 MODULE_CONSTRUCTOR(void)
 {
     APPSPAWN_LOGV("Load common module ...");
@@ -1083,4 +1162,13 @@ MODULE_CONSTRUCTOR(void)
     AddAppSpawnHook(STAGE_PARENT_POST_FORK, HOOK_PRIO_HIGHEST, CloseFdArgs);
     AddAppSpawnHook(STAGE_CHILD_PRE_COLDBOOT, HOOK_PRIO_HIGHEST, SetFdEnv);
     AddAppSpawnHook(STAGE_CHILD_PRE_RUN, HOOK_PRIO_HIGHEST, RecordStartTime);
+
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_PRE_FORK, HOOK_PRIO_HIGHEST + 1, SpawnGetSpawningFlag);
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_HIGHEST, SpawnInitSubspawnEnv);
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_HIGHEST + 1, SpawnEnableCache);
+
+#ifdef APPSPAWN_HITRACE_OPTION
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_COMMON, FilterAppSpawnTrace);
+#endif
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_PROPERTY, SpawnSetProperties);
 }

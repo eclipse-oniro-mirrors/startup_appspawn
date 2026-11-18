@@ -20,6 +20,7 @@
 #include <sys/capability.h>
 
 #include "appspawn.h"
+#include "appspawn_error.h"
 #include "appspawn_manager.h"
 #include "appspawn_utils.h"
 #include "appspawn_client.h"
@@ -32,6 +33,7 @@ namespace {
 constexpr uint64_t DAC_CAP = CAP_TO_MASK(CAP_DAC_OVERRIDE);
 constexpr uint64_t FOWNER_CAP = CAP_TO_MASK(CAP_FOWNER);
 constexpr uint64_t NET_RAW_CAP = CAP_TO_MASK(CAP_NET_RAW);
+constexpr uint64_t SUBSPAWN_CAPS = CAP_TO_MASK(CAP_SETUID) | CAP_TO_MASK(CAP_SETGID) | CAP_TO_MASK(CAP_KILL);
 constexpr char NET_RAW_PERMISSION[] = R"({"permissions":[{"ohos.permission.kernel.NET_RAW":true}]})";
 }
 
@@ -59,10 +61,11 @@ public:
     }
 
     // Serialize flags and permission JSON through the real request/decoder path.
-    bool PrepareAppSpawnContext(std::initializer_list<AppFlagsIndex> flags, const char *permissions = nullptr)
+    bool PrepareAppSpawnContext(std::initializer_list<AppFlagsIndex> flags, const char *permissions = nullptr,
+        AppSpawnMsgType msgType = MSG_APP_SPAWN)
     {
         AppSpawnReqMsgHandle req = INVALID_REQ_HANDLE;
-        if (AppSpawnReqMsgCreate(MSG_APP_SPAWN, "com.example.capabilitytest", &req) != 0) {
+        if (AppSpawnReqMsgCreate(msgType, "com.example.capabilitytest", &req) != 0) {
             return false;
         }
         for (auto flag : flags) {
@@ -121,6 +124,30 @@ protected:
     CapabilityTestState state_ = {};
     bool previousNoShareFs_ = false;
 };
+
+HWTEST_F(AppSpawnCapabilityTest, SubspawnCreateSetsOnlyBootstrapCapabilities, TestSize.Level0)
+{
+    ASSERT_TRUE(PrepareAppSpawnContext({APP_FLAGS_CUSTOM_SANDBOX, APP_FLAGS_SET_CAPS_FOWNER},
+        NET_RAW_PERMISSION, MSG_SUBSPAWN_CREATE));
+    ASSERT_EQ(SetAppCapabilities(mgr_, property_), 0);
+    ExpectCapabilities(SUBSPAWN_CAPS, SUBSPAWN_CAPS, 3u);
+    EXPECT_EQ(state_.ambientClearCalls, 1u);
+}
+
+HWTEST_F(AppSpawnCapabilityTest, SubspawnCreateStopsOnCapabilityFailure, TestSize.Level0)
+{
+    ASSERT_TRUE(PrepareAppSpawnContext({}, nullptr, MSG_SUBSPAWN_CREATE));
+    state_.capsetResult = -1;
+    EXPECT_EQ(SetAppCapabilities(mgr_, property_), APPSPAWN_SUBSPAWN_PRESET_FAILED);
+    ExpectCapabilities(SUBSPAWN_CAPS, 0, 0);
+    EXPECT_EQ(state_.ambientClearCalls, 0u);
+
+    state_ = {};
+    state_.ambientResult = -1;
+    EXPECT_EQ(SetAppCapabilities(mgr_, property_), APPSPAWN_SUBSPAWN_PRESET_FAILED);
+    ExpectCapabilities(SUBSPAWN_CAPS, CAP_TO_MASK(CAP_SETUID), 1u);
+    EXPECT_EQ(state_.ambientClearCalls, 1u);
+}
 
 HWTEST_F(AppSpawnCapabilityTest, App_Spawn_SetCapabilities_CustomSandbox_NoDangerCaps, TestSize.Level0)
 {

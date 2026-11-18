@@ -190,4 +190,5 @@ MODULE_CONSTRUCTOR(void)
 {
     APPSPAWN_LOGV("Register controlled app hook");
     (void)AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_SANDBOX, LoadControlledAppList);
+    (void)AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_PRE_FORK, HOOK_PRIO_SANDBOX, LoadControlledAppList);
 }

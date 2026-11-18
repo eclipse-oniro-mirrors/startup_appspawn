@@ -31,6 +31,7 @@ typedef struct {
     uint64_t inheritable;
     uint64_t ambient;
     unsigned int capsetCalls;
+    unsigned int ambientClearCalls;
     unsigned int ambientCalls;
     int capsetResult;
     int ambientResult;

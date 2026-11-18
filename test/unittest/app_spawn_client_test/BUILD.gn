@@ -17,9 +17,13 @@ import("//build/test.gni")
 ohos_unittest("AppSpawn_client_ut") {
   module_out_path = "appspawn/appspawn"
   deps = []
+  ldflags = [
+    "-Wl,--wrap=GetParameter",
+    "-Wl,--wrap=connect",
+  ]
   if (appspawn_unittest_coverage) {
     cflags = [ "--coverage" ]
-    ldflags = [ "--coverage" ]
+    ldflags += [ "--coverage" ]
     cflags_cc = [ "--coverage" ]
   }
   defines = [
@@ -68,6 +72,7 @@ ohos_unittest("AppSpawn_client_ut") {
       "${appspawn_path}/standard/appspawn_fd_manager.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
     "${appspawn_path}/util/src/appspawn_utils.c",
     "${appspawn_path}/util/src/appspawndf_utils.cpp",
   ]
@@ -75,6 +80,7 @@ ohos_unittest("AppSpawn_client_ut") {
   sources += [
     "${appspawn_path}/test/unittest/app_spawn_client_test/app_spawn_client_test.cpp",
     "${appspawn_path}/test/unittest/app_spawn_client_test/app_spawn_interface_test.cpp",
+    "${appspawn_path}/test/unittest/app_spawn_client_test/app_spawn_subspawn_client_test.cpp",
     "${appspawn_path}/test/unittest/app_spawn_test_helper.cpp",
   ]
 

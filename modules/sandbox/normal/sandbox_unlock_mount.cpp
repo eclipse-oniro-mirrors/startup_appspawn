@@ -275,6 +275,9 @@ int DoSharedMountForUser(int uid)
  */
 int HandleUnlockMountForUser(AppSpawnMgr *mgr)
 {
+    if (IsSubSpawnMode(mgr)) {
+        return 0;
+    }
     if (mgr == nullptr) {
         return APPSPAWN_ARG_INVALID;
     }

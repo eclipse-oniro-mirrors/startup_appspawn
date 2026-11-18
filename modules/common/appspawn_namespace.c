@@ -177,7 +177,6 @@ APPSPAWN_STATIC int GetNsPidFd(pid_t pid)
 
 APPSPAWN_STATIC int PreLoadEnablePidNs(AppSpawnMgr *content)
 {
-    APPSPAWN_LOGI("Enable pid namespace flags: 0x%{public}x", content->content.sandboxNsFlags);
     if (IsColdRunMode(content)) {
         return 0;
     }
@@ -266,4 +265,5 @@ MODULE_CONSTRUCTOR(void)
     AddPreloadHook(HOOK_PRIO_LOWEST, PreLoadEnablePidNs);
     AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_LOWEST, PreForkSetPidNamespace);
     AddAppSpawnHook(STAGE_PARENT_POST_FORK, HOOK_PRIO_HIGHEST, PostForkSetPidNamespace);
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_PRE_FORK, HOOK_PRIO_LOWEST, PreForkSetPidNamespace);
 }

@@ -398,6 +398,88 @@ ohos_fuzztest("AppspawnClientDestroyFuzzTest") {
   sources = [ "appspawnclientdestroy_fuzzer/appspawn_client_destroy_fuzzer.cpp" ]
 }
 
+ohos_fuzztest("AppSpawnClientInitSubspawnFuzzTest") {
+  module_out_path = module_output_path
+  fuzz_config_file =
+      "${appspawn_path}/test/fuzztest/appspawnclientinitsubspawn_fuzzer"
+
+  include_dirs = [ "${appspawn_path}/interfaces/innerkits/include" ]
+
+  deps = [ "${appspawn_path}/interfaces/innerkits/client:appspawn_client" ]
+  external_deps = [ "bounds_checking_function:libsec_static" ]
+
+  defines = []
+
+  cflags = [
+    "-g",
+    "-O0",
+    "-Wno-unused-variable",
+    "-fno-omit-frame-pointer",
+  ]
+  sources = [
+    "appspawnclientinitsubspawn_fuzzer/appspawnclient_initsubspawn_fuzzer.cpp",
+  ]
+}
+
+ohos_fuzztest("AppSpawnGetSubSpawnSocketNameFuzzTest") {
+  module_out_path = module_output_path
+  fuzz_config_file =
+      "${appspawn_path}/test/fuzztest/appspawngetsubspawnsocketname_fuzzer"
+
+  include_dirs = [ "${appspawn_path}/interfaces/innerkits/include" ]
+
+  deps = [ "${appspawn_path}/interfaces/innerkits/client:appspawn_client" ]
+  external_deps = [ "bounds_checking_function:libsec_static" ]
+
+  defines = []
+
+  cflags = [
+    "-g",
+    "-O0",
+    "-Wno-unused-variable",
+    "-fno-omit-frame-pointer",
+  ]
+  sources = [ "appspawngetsubspawnsocketname_fuzzer/appspawn_getsubspawnsocketname_fuzzer.cpp" ]
+}
+
+ohos_fuzztest("AppSpawnSubspawnPreloadFuzzTest") {
+  module_out_path = module_output_path
+  fuzz_config_file =
+      "${appspawn_path}/test/fuzztest/appspawnsubspawnpreload_fuzzer"
+
+  include_dirs = [
+    "${appspawn_path}/interfaces/innerkits/include",
+    "${appspawn_path}/modules/module_engine/include",
+    "${appspawn_path}/modules/subspawn_adapter",
+    "${appspawn_path}/util/include",
+  ]
+
+  deps = []
+  external_deps = [
+    "bounds_checking_function:libsec_static",
+    "cJSON:cjson",
+    "hilog:libhilog",
+    "napi:ace_napi",
+  ]
+
+  defines = []
+
+  cflags = [
+    "-g",
+    "-O0",
+    "-Wno-unused-variable",
+    "-fno-omit-frame-pointer",
+  ]
+  ldflags = [
+    "-Wl,--wrap=dlns_get",
+    "-Wl,--wrap=dlopen_ns",
+  ]
+  sources = [
+    "${appspawn_path}/modules/subspawn_adapter/subspawn_preload.c",
+    "appspawnsubspawnpreload_fuzzer/appspawn_subspawnpreload_fuzzer.cpp",
+  ]
+}
+
 group("app_spawn_fuzztest") {
   testonly = true
   deps = []
@@ -420,5 +502,8 @@ group("app_spawn_fuzztest") {
   deps += [ ":AppSpawnClientMaxPermissionIndexFuzzTest" ]
   deps += [ ":AppSpawnClientPermissionByIndexFuzzTest" ]
   deps += [ ":AppspawnClientDestroyFuzzTest" ]
+  deps += [ ":AppSpawnClientInitSubspawnFuzzTest" ]
+  deps += [ ":AppSpawnGetSubSpawnSocketNameFuzzTest" ]
+  deps += [ ":AppSpawnSubspawnPreloadFuzzTest" ]
 }
 ###############################################################################

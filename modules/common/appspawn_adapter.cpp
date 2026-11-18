@@ -15,6 +15,13 @@
 
 #include "appspawn_adapter.h"
 
+#include <string>
+
+#include "appspawn_error.h"
+#include "appspawn_msg.h"
+#include "appspawn_service.h"
+#include "subspawn_manager.h"
+
 #include "accesstoken_kit.h"
 #include "appspawn_hook.h"
 #include "appspawn_manager.h"
@@ -62,7 +69,8 @@ int SetAppAccessToken(const AppSpawnMgr *content, const AppSpawningCtx *property
     APPSPAWN_CHECK(tokenInfo != NULL, return APPSPAWN_MSG_INVALID,
         "No access token in msg %{public}s", GetProcessName(property));
 
-    if (IsNWebSpawnMode(content) || IsIsolatedNativeSpawnMode(content, property)) {
+    if (IsNWebSpawnMode(content) || IsIsolatedNativeSpawnMode(content, property) ||
+        IsSubspawnInstanceCreate(content, property)) {
         TokenIdKit tokenIdKit;
         tokenId = tokenIdKit.GetRenderTokenID(tokenInfo->accessTokenIdEx);
     } else {
@@ -75,6 +83,11 @@ int SetAppAccessToken(const AppSpawnMgr *content, const AppSpawningCtx *property
         ReportSpawnChildProcessFail(GetProcessName(property), ERR_APPSPAWN_MSG_PARAM_INVALID, APPSPAWN_MSG_INVALID);
 #endif
         return APPSPAWN_ACCESS_TOKEN_INVALID, "token type %{public}d is invalid", type);
+
+    if (IsSubSpawnMode(content)) {
+        APPSPAWN_LOGV("SetAppAccessToken: bypass SetSelfTokenID for subspawn child");
+        return 0;
+    }
 
     ret = SetSelfTokenID(tokenId);
     APPSPAWN_CHECK(ret == 0, return APPSPAWN_ACCESS_TOKEN_INVALID,
@@ -136,6 +149,10 @@ void SetHapDomainInfo(const AppSpawnMgr *content, const AppSpawningCtx *property
 
 int SetAppSelinuxCon(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
+    if (IsSubspawnInstanceCreate(content, property)) {
+        // exec of the subspawn binary performs the service domain transition.
+        return 0;
+    }
 #ifdef WITH_SELINUX
     const SpawnPolicy *pl = ResolvePolicy(property);
     if (pl->selinuxFrom == POLICY_SRC_SELINUX_SUDO) {
@@ -217,29 +234,32 @@ static const char *GetNormalSandboxPolicyName(const AppSpawningCtx *property)
 #endif
 #endif
 
-int SetSeccompFilter(const AppSpawnMgr *content, const AppSpawningCtx *property)
+static bool IsSeccompPolicyEnabled(const AppSpawningCtx *property)
 {
-    const SpawnPolicy *pl = ResolvePolicy(property);
-    APPSPAWN_CHECK_LOGV(pl->secCompEnable, return 0, "SetSeccompFilter: seccomp policy disabled, skip");
+    return ResolvePolicy(property)->secCompEnable != 0;
+}
+
 #ifdef WITH_SECCOMP
-    APPSPAWN_CHECK(property != nullptr, return 0, "property is NULL");
-    const char *appName = APP_NAME;
-    SeccompFilterType type = APP;
-
-#ifdef NORMAL_SANDBOX
-    appName = GetNormalSandboxPolicyName(property);
-#endif
-
-    if (IsNWebSpawnMode(content)) {
-        uint32_t len = 0;
-        char *processTypeChar =
-            reinterpret_cast<char *>(GetAppPropertyExt(property, MSG_EXT_NAME_PROCESS_TYPE, &len));
-        std::string processType = (processTypeChar != NULL) ? std::string(processTypeChar) : "";
-        if (processType == "render") {
-            return 0;
-        }
+static int ApplySubspawnSeccompPolicy()
+{
+    if (prctl(PR_SET_NO_NEW_PRIVS, 1, 0, 0, 0) != 0) {
+        APPSPAWN_LOGE("Failed to set subspawn no-new-privileges flag errno %{public}d", errno);
+        return APPSPAWN_SUBSPAWN_PRESET_FAILED;
     }
+    if (!IsEnableSeccomp()) {
+        APPSPAWN_LOGE("Mandatory subspawn seccomp is disabled by system configuration");
+        return APPSPAWN_SUBSPAWN_PRESET_FAILED;
+    }
+    if (!SetSeccompPolicyWithName(INDIVIDUAL, SUBSPAWN_NAME)) {
+        APPSPAWN_LOGE("Failed to set mandatory subspawn seccomp policy %{public}s errno %{public}d",
+            SUBSPAWN_NAME, errno);
+        return APPSPAWN_SUBSPAWN_PRESET_FAILED;
+    }
+    return 0;
+}
 
+static const char *GetAppSeccompPolicyName(const AppSpawningCtx *property, const char *appName)
+{
 #ifdef SECCOMP_PRIVILEGE
     if (IsDeveloperModeOpen()) {
         // Enable high permission seccomp policy for hishell in developer mode.
@@ -270,7 +290,39 @@ int SetSeccompFilter(const AppSpawnMgr *content, const AppSpawningCtx *property)
     if (CheckAppMsgFlagsSet(property, APP_FLAGS_ALLOW_IOURING) != 0) {
         appName = APP_ALLOW_IOURING;
     }
+    return appName;
+}
+#endif
 
+int SetSeccompFilter(const AppSpawnMgr *content, const AppSpawningCtx *property)
+{
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    APPSPAWN_CHECK_LOGV(pl->secCompEnable, return 0, "SetSeccompFilter: seccomp policy disabled, skip");
+    APPSPAWN_CHECK_LOGV(IsSeccompPolicyEnabled(property), return 0, "SetSeccompFilter: seccomp disabled");
+#ifdef WITH_SECCOMP
+    APPSPAWN_CHECK(property != nullptr, return 0, "property is NULL");
+    const char *appName = APP_NAME;
+    SeccompFilterType type = APP;
+
+    if (IsSubspawnInstanceCreate(content, property)) {
+        return ApplySubspawnSeccompPolicy();
+    }
+
+#ifdef NORMAL_SANDBOX
+    appName = GetNormalSandboxPolicyName(property);
+#endif
+
+    if (IsNWebSpawnMode(content)) {
+        uint32_t len = 0;
+        char *processTypeChar =
+            reinterpret_cast<char *>(GetAppPropertyExt(property, MSG_EXT_NAME_PROCESS_TYPE, &len));
+        std::string processType = (processTypeChar != NULL) ? std::string(processTypeChar) : "";
+        if (processType == "render") {
+            return 0;
+        }
+    }
+
+    appName = GetAppSeccompPolicyName(property, appName);
     if (!SetSeccompPolicyWithName(type, appName)) {
         APPSPAWN_LOGE("Failed to set %{public}s seccomp filter and exit %{public}d", appName, errno);
         return -EINVAL;
@@ -376,7 +428,7 @@ void CheckSpecialSpawnMode(const AppSpawnMgr *content, const AppSpawningCtx *pro
         } else {
             hapDomainInfo->hapFlags |= SELINUX_HAP_ISOLATED_GPU;
         }
-    } else if (IsIsolatedNativeSpawnMode(content, property)) {
+    } else if (IsIsolatedNativeSpawnMode(content, property) || IsIsolatedSubSpawnMode(content, property)) {
         hapDomainInfo->uid = GetHostId(property);
         hapDomainInfo->hapFlags |= SELINUX_HAP_ISOLATED_RENDER;
     }

@@ -52,6 +52,7 @@ extern "C" {
 #define GID_USER_DATA_RW 1008
 
 #define MAX_DATA_IN_TLV 2
+#define APP_SUBSPAWN_SOCKET_NAME_LEN 128
 
 struct TagAppSpawnReqMsgNode;
 typedef enum {
@@ -61,6 +62,7 @@ typedef enum {
     CLIENT_FOR_NATIVESPAWN,
     CLIENT_FOR_HYBRIDSPAWN,
     CLIENT_FOR_APPSPAWNDF,
+    CLIENT_FOR_SUBSPAWN,
     CLIENT_MAX
 } AppSpawnClientType;
 
@@ -78,6 +80,7 @@ typedef struct TagAppSpawnReqMsgMgr {
     uint32_t msgNextId;
     int socketId;
     pthread_mutex_t mutex;
+    char socketName[APP_SUBSPAWN_SOCKET_NAME_LEN]; // Absolute path for independent subspawn clients
     AppSpawnMsgBlock recvBlock;  // 消息接收缓存
 } AppSpawnReqMsgMgr;
 
