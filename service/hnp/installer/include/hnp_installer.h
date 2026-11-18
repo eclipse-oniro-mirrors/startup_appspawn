@@ -81,6 +81,8 @@ int HnpCmdInstall(int argc, char *argv[]);
 
 int HnpCmdUnInstall(int argc, char *argv[]);
 
+int HnpReportApiResult(int ret);
+
 #ifdef __cplusplus
 }
 #endif

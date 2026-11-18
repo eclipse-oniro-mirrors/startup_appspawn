@@ -107,6 +107,8 @@ static int StartHnpProcess(char *const argv[])
     pid = fork();
     if (pid < 0) {
         HNPAPI_LOG("\r\n [HNP API] fork unsuccess!\r\n");
+        (void)close(fd[0]);
+        (void)close(fd[1]);
         return HNP_API_ERRNO_FORK_FAILED;
     } else if (pid == 0) {
         ChildProcessHandler(fd, argv);
