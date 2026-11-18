@@ -34,7 +34,7 @@ void RegChildLooper(AppSpawnContent *content, ChildLoop loop);
 
 #ifdef __cplusplus
 }
-bool IsUnlockStatus(uint32_t uid);
+bool IsUnlockStatus(uint32_t appUid);
 #endif
 
 #endif

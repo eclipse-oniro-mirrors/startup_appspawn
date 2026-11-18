@@ -220,18 +220,18 @@ std::vector<LockBundleInfo> GetAllLockBundles(void)
     return bundles;
 }
 
-APPSPAWN_STATIC bool IsUnlockStatus(uint32_t uid)
+APPSPAWN_STATIC bool IsUnlockStatus(uint32_t appUid)
 {
-    const int userIdBase = UID_BASE;
-    uid = uid / userIdBase;
-    if (uid == 0) {
+    uint32_t userId = appUid / UID_BASE;
+    // Account 0 is treated as unlocked without consulting a lock-status parameter.
+    if (userId == 0) {
         return true;
     }
-    std::string lockStatusParam = "startup.appspawn.lockstatus_" + std::to_string(uid);
+    std::string lockStatusParam = "startup.appspawn.lockstatus_" + std::to_string(userId);
     char userLockStatus[LOCK_STATUS_SIZE] = {0};
     int ret = GetParameter(lockStatusParam.c_str(), "1", userLockStatus, sizeof(userLockStatus));
     APPSPAWN_CHECK_DUMPI(ret > 0 && strcmp(userLockStatus, LOCK_STATUS_UNLOCK) == 0, return false,
-        "lockStatus %{public}u %{public}s", uid, userLockStatus);
+        "lockStatus %{public}u %{public}s", userId, userLockStatus);
     return true;
 }
 
@@ -553,7 +553,7 @@ APPSPAWN_STATIC int AppCleanupHook(const AppSpawnMgr *content, const AppSpawnedP
     APPSPAWN_ONLY_EXPER(appInfo == nullptr || IsNWebSpawnMode(content),
         return 0);
 
-    // Only process when uid > 0 and device is locked
+    // Release the lock bundle reference acquired for this process.
     APPSPAWN_CHECK_LOGV(appInfo->lockBundleRefAdded, return 0, "invalid ref in AppCleanupHook");
     APPSPAWN_CHECK(appInfo->lockPath != nullptr, return 0, "invalid lockPath in AppCleanupHook");
     APPSPAWN_LOGI("AppCleanupHook: cleanup lockPath=%{public}s", appInfo->lockPath);

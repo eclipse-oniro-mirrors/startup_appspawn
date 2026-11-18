@@ -40,7 +40,7 @@ struct KillInfo;
 extern "C" {
 #endif
 
-APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t uid, int reason, int errorCause);
+APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t appUid, int reason, int errorCause);
 APPSPAWN_STATIC int KillReasonReportHook(const AppSpawnMgr *mgr, const AppSpawnedProcessInfo *appInfo);
 
 #ifdef __cplusplus
@@ -156,7 +156,7 @@ int TestIoctlFunc(int fd, int req, va_list args)
     return g_ioctlRet;
 }
 
-AppSpawnedProcess *CreateTestAppInfo(const char *name, pid_t pid, uid_t uid, int killReason)
+AppSpawnedProcess *CreateTestAppInfo(const char *name, pid_t pid, uid_t appUid, int killReason)
 {
     size_t len = strlen(name) + 1;
     AppSpawnedProcess *appInfo = static_cast<AppSpawnedProcess *>(calloc(1, sizeof(AppSpawnedProcess) + len));
@@ -164,7 +164,7 @@ AppSpawnedProcess *CreateTestAppInfo(const char *name, pid_t pid, uid_t uid, int
         return nullptr;
     }
     appInfo->pid = pid;
-    appInfo->appUid = uid;
+    appInfo->appUid = appUid;
     appInfo->max = 0;
     appInfo->exitStatus = 0;
     appInfo->killReason.reason = killReason;
@@ -348,7 +348,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Set_006, TestSize.Level0)
 
 /**
  * @tc.name: App_Spawn_KillReason_Set_007
- * @tc.desc: SetKillReason边界入参：pid=0、uid=0、reason=0以及负值reason均按原值填充下发
+ * @tc.desc: SetKillReason边界入参：pid=0、appUid=0、reason=0以及负值reason均按原值填充下发
  * @tc.type: FUNC
  * @tc.level: Level0
  * @tc.require: Kill reason report
@@ -392,7 +392,7 @@ HWTEST_F(AppSpawnKillReasonTest, App_Spawn_KillReason_Hook_001, TestSize.Level0)
 /**
  * @tc.name: App_Spawn_KillReason_Hook_002
  * @tc.desc: STAGE_SERVER_APP_CLEANUP阶段killReason=REASON_APPSPAWN_STOP时上报，
- *           下发的KillInfo与appInfo的pid/uid/killReason一致
+ *           下发的KillInfo与appInfo的pid/appUid/killReason一致
  * @tc.type: FUNC
  * @tc.level: Level0
  * @tc.require: Kill reason report

@@ -64,7 +64,7 @@ APPSPAWN_STATIC int CollectDomainInfoFromSPM(const AppSpawnMsgNode *oldMsg,
 APPSPAWN_STATIC int CollectOwnerInfoFromSPM(const SpmData *spmData, ListNode *head);
 APPSPAWN_STATIC int RebuildDistributionTypeTlv(uint32_t distributionType, ListNode *head);
 APPSPAWN_STATIC int IncreaseRefCounts(AppSpawningCtx *ctx, const RefcountContext *refCtx);
-APPSPAWN_STATIC int ValidateUidRefCount(const AppSpawnMgr *mgr, const AppSpawningCtx *ctx,
+APPSPAWN_STATIC int ValidateAppUidRefCount(const AppSpawnMgr *mgr, const AppSpawningCtx *ctx,
     const RefcountContext *refCtx);
 APPSPAWN_STATIC int RebuildMessageFromSPM(const AppSpawnMgr *mgr, AppSpawningCtx *ctx);
 APPSPAWN_STATIC int SpmPreloadHook(AppSpawnMgr *mgr);
@@ -296,9 +296,9 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_IncRefCountsForContext_003, TestSize.Lev
 }
 
 // ============================================================================
-// 1.8 ValidateUidRefCount — normal mode (not nweb/isolated): skip check, return 0
+// 1.8 ValidateAppUidRefCount — normal mode (not nweb/isolated): skip check, return 0
 // ============================================================================
-HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_001, TestSize.Level1)
+HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateAppUidRefCount_001, TestSize.Level1)
 {
     AppSpawnMgr *mgr = TestDataFactory::CreateMockAppSpawnMgr(MODE_FOR_APP_SPAWN);
     AppSpawningCtx *ctx = TestDataFactory::CreateMockSpawningCtx();
@@ -311,7 +311,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_001, TestSize.Level1
     refCtx.spmAppUid = 2000;  // mismatch, but normal mode skips SpmGetUidRefCnt
 
     EXPECT_CALL(*mock_, SpmGetUidRefCnt(_, _)).Times(0);
-    int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
+    int ret = ValidateAppUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
     TestDataFactory::FreeAppSpawnMgr(mgr);
@@ -319,9 +319,9 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_001, TestSize.Level1
 }
 
 // ============================================================================
-// 1.9 ValidateUidRefCount — nweb mode + spmAppUid==0: skip check, return 0
+// 1.9 ValidateAppUidRefCount — nweb mode + spmAppUid==0: skip check, return 0
 // ============================================================================
-HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_002, TestSize.Level1)
+HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateAppUidRefCount_002, TestSize.Level1)
 {
     AppSpawnMgr *mgr = TestDataFactory::CreateMockAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
     AppSpawningCtx *ctx = TestDataFactory::CreateMockSpawningCtx();
@@ -334,7 +334,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_002, TestSize.Level1
     refCtx.spmAppUid = 0;  // spmAppUid==0 -> skip check
 
     EXPECT_CALL(*mock_, SpmGetUidRefCnt(_, _)).Times(0);
-    int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
+    int ret = ValidateAppUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
     TestDataFactory::FreeAppSpawnMgr(mgr);
@@ -342,9 +342,9 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_002, TestSize.Level1
 }
 
 // ============================================================================
-// 1.10 ValidateUidRefCount — isolated sandbox + appUid match: skip check, return 0
+// 1.10 ValidateAppUidRefCount — isolated sandbox + appUid match: skip check, return 0
 // ============================================================================
-HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_003, TestSize.Level2)
+HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateAppUidRefCount_003, TestSize.Level2)
 {
     AppSpawnMgr *mgr = TestDataFactory::CreateMockAppSpawnMgr(MODE_FOR_APP_SPAWN);
     AppSpawningCtx *ctx = TestDataFactory::CreateMockSpawningCtx();
@@ -364,7 +364,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_003, TestSize.Level2
     refCtx.spmAppUid = CUSTOM_SANDBOX_APPUID;  // appUid match -> skip check
 
     EXPECT_CALL(*mock_, SpmGetUidRefCnt(_, _)).Times(0);
-    int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
+    int ret = ValidateAppUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
     ctx->message = nullptr;
@@ -453,7 +453,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateSpmDataConsistency_001, TestSize
 
     uint64_t accessTokenIdEx = ((uint64_t)0xABCD0001 << 32) | 12345u;
 
-    // For normal process with matching uid, no uid refcount check needed
+    // Matching token attributes and process UID pass the consistency check for a normal process.
     int ret = ValidateSpmDataConsistency(spmData, accessTokenIdEx, 1000, mgr, ctx);
     EXPECT_EQ(ret, 0);
 
@@ -527,7 +527,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateSpmDataConsistency_004, TestSize
 
     uint64_t accessTokenIdEx = ((uint64_t)0xABCD0001 << 32) | 12345u;
 
-    // Normal process: uidFromMsg=1000 != spmAppUid=2000 => MISMATCH
+    // Normal process: uidFromMsg=1000 != spmData->uid=2000 => MISMATCH
     int ret = ValidateSpmDataConsistency(spmData, accessTokenIdEx, 1000, mgr, ctx);
     EXPECT_EQ(ret, SPM_ERROR_UID_MISMATCH);
 
@@ -537,9 +537,9 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateSpmDataConsistency_004, TestSize
 }
 
 // ============================================================================
-// 1.17 ValidateUidRefCount — nweb mode + uid mismatch + refCnt==1: return 0
+// 1.17 ValidateAppUidRefCount — nweb mode + appUid mismatch + refCnt==1: return 0
 // ============================================================================
-HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_004, TestSize.Level1)
+HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateAppUidRefCount_004, TestSize.Level1)
 {
     AppSpawnMgr *mgr = TestDataFactory::CreateMockAppSpawnMgr(MODE_FOR_NWEB_SPAWN);
     AppSpawningCtx *ctx = TestDataFactory::CreateMockSpawningCtx();
@@ -555,7 +555,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_004, TestSize.Level1
     EXPECT_CALL(*mock_, SpmGetUidRefCnt(CUSTOM_SANDBOX_APPUID, _))
         .WillOnce(DoAll(SetArgPointee<1>(refCnt), Return(0)));
 
-    int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
+    int ret = ValidateAppUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
     TestDataFactory::FreeAppSpawnMgr(mgr);
@@ -563,9 +563,9 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_004, TestSize.Level1
 }
 
 // ============================================================================
-// 1.18 ValidateUidRefCount — isolated sandbox + uid mismatch + refCnt==1: return 0
+// 1.18 ValidateAppUidRefCount — isolated sandbox + appUid mismatch + refCnt==1: return 0
 // ============================================================================
-HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_005, TestSize.Level1)
+HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateAppUidRefCount_005, TestSize.Level1)
 {
     AppSpawnMgr *mgr = TestDataFactory::CreateMockAppSpawnMgr(MODE_FOR_APP_SPAWN);
     AppSpawningCtx *ctx = TestDataFactory::CreateMockSpawningCtx();
@@ -588,7 +588,7 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_ValidateUidRefCount_005, TestSize.Level1
     EXPECT_CALL(*mock_, SpmGetUidRefCnt(CUSTOM_SANDBOX_APPUID, _))
         .WillOnce(DoAll(SetArgPointee<1>(refCnt), Return(0)));
 
-    int ret = ValidateUidRefCount(mgr, ctx, &refCtx);
+    int ret = ValidateAppUidRefCount(mgr, ctx, &refCtx);
     EXPECT_EQ(ret, 0);
 
     ctx->message = nullptr;

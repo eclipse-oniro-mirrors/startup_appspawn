@@ -102,7 +102,7 @@ typedef struct TagAppSpawningCtx {
     uint64_t checkPointId;        // Image process index ID
     uint8_t spmRefAdded;          // Bitmap: which SPM refcounts have been incremented
                                   //   bit0 (0x01): tokenid refcount
-                                  //   bit1 (0x02): uid refcount
+                                  //   bit1 (0x02): appUid refcount
     bool lockBundleRefAdded;  // Flag: whether AddLockBundleRef has been called for _preunlock directory
     char *lockPath;           // Sandbox root path for _preunlock directory (set by MountDirToShared)
 } AppSpawningCtx;
@@ -135,7 +135,7 @@ typedef struct TagAppSpawnedProcess {
     uint64_t tokenid;  // Token ID from message (for SPM refcount management)
     uint8_t spmRefAdded;  // Bitmap: which SPM refcounts have been incremented
                           //   bit0 (0x01): tokenid refcount
-                          //   bit1 (0x02): uid refcount
+                          //   bit1 (0x02): appUid refcount
     AppSpawnKillReason killReason;  // Kill reason for process exit reporting
     bool isDaemonBin;     // 报文标记 APP_FLAGS_DAEMON_BIN 的解析结果：bin（daemon）类型孵化
     char name[0];
@@ -145,7 +145,8 @@ typedef struct TagAppSpawnedProcess {
  * @brief appspawn receives the request for starting an application from the client,
  *        and saves the image process information
  * @param node Linked list head node
- * @param uid User ID of the application process
+ * @param uid Reserved process UID. Left at zero in checkpoint records.
+ * @param appUid Application identity saved from DAC information
  * @param exitStatus Image process exit status
  * @param appIndex AppIndex information of the application
  * @param checkPointId Check point id of the application image process

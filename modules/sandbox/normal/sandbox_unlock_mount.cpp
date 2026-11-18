@@ -130,7 +130,7 @@ APPSPAWN_STATIC MountEntryResult MountSingleConfigEntry(const UnlockMountEntry &
         APPSPAWN_LOGW("mount %{public}s to %{public}s failed, ret=%{public}d, errno=%{public}d",
             srcPath.c_str(), fullDestPath.c_str(), ret, errno);
         APPSPAWN_KLOGE("UnlockMount: mount %{public}s to %{public}s failed", srcPath.c_str(), fullDestPath.c_str());
-        APPSPAWN_KLOGE("uid=%{public}d, ret=%{public}d, errno=%{public}d", bundle.appUid, ret, errno);
+        APPSPAWN_KLOGE("appUid=%{public}u, ret=%{public}d, errno=%{public}d", bundle.appUid, ret, errno);
         result.fail++;
 #ifdef APPSPAWN_HISYSEVENT
         ReportUnlockMountAppFail(bundle.appUid, bundle.bundleName.c_str(),
@@ -175,24 +175,27 @@ APPSPAWN_STATIC void MountQueueWorkerThread(MountQueueContext &ctx, unsigned int
                   workerId, processedTasks);
 }
 
+// Only mount bundles belonging to the account that received the unlock event.
+APPSPAWN_STATIC std::vector<LockBundleInfo> GetUnlockBundlesForUser(int userId)
+{
+    std::vector<LockBundleInfo> filteredBundles;
+    for (const auto &bundle : GetAllLockBundles()) {
+        if (bundle.appUid / UID_BASE == static_cast<uint32_t>(userId)) {
+            filteredBundles.push_back(bundle);
+        }
+    }
+    return filteredBundles;
+}
+
 /**
  * @brief Create and initialize mount queue context with all resources
  * @return nullptr if no apps to mount, otherwise the context
  */
-APPSPAWN_STATIC std::unique_ptr<MountQueueContext> CreateMountContext(int uid)
+APPSPAWN_STATIC std::unique_ptr<MountQueueContext> CreateMountContext(int userId)
 {
-    // Get mount bundle list
-    std::vector<LockBundleInfo> bundles = GetAllLockBundles();
-
-    // Filter bundles by userId
-    std::vector<LockBundleInfo> filteredBundles;
-    for (const auto &bundle : bundles) {
-        APPSPAWN_ONLY_EXPER(bundle.appUid / UID_BASE != static_cast<uint32_t>(uid), continue);
-        filteredBundles.push_back(bundle);
-    }
-
+    auto filteredBundles = GetUnlockBundlesForUser(userId);
     if (filteredBundles.empty()) {
-        APPSPAWN_LOGI("CreateMountContext: no apps to mount, uid=%{public}d", uid);
+        APPSPAWN_LOGI("CreateMountContext: no apps to mount, userId=%{public}d", userId);
         return nullptr;
     }
 
@@ -228,15 +231,15 @@ APPSPAWN_STATIC std::unique_ptr<MountQueueContext> CreateMountContext(int uid)
     return ctx;
 }
 
-int DoSharedMountForUser(int uid)
+int DoSharedMountForUser(int userId)
 {
-    APPSPAWN_LOGI("DoSharedMountForUser start, uid=%{public}d, g_lockBundleMap.size=%{public}zu",
-                  uid, GetLockBundleMapSize());
+    APPSPAWN_LOGI("DoSharedMountForUser start, userId=%{public}d, g_lockBundleMap.size=%{public}zu",
+                  userId, GetLockBundleMapSize());
 
     auto mountStart = std::chrono::steady_clock::now();
 
     // Create mount context (includes getting bundles, filtering, building task queue)
-    auto ctx = CreateMountContext(uid);
+    auto ctx = CreateMountContext(userId);
     if (ctx == nullptr) {
 #ifdef APPSPAWN_HISYSEVENT
         ReportKeyEvent(UNLOCK_MOUNT_NO_APPS);
@@ -259,10 +262,10 @@ int DoSharedMountForUser(int uid)
     int64_t duration = std::chrono::duration_cast<std::chrono::milliseconds>(mountEnd - mountStart).count();
 
     APPSPAWN_LOGI("DoSharedMountForUser done, %{public}d, %{public}d, %{public}d, %{public}d, %{public}" PRId64 " ms",
-                  uid, ctx->successCount.load(), ctx->failCount.load(),
+                  userId, ctx->successCount.load(), ctx->failCount.load(),
                   ctx->skipCount.load(), duration);
 #ifdef APPSPAWN_HISYSEVENT
-    ReportUnlockMountResult(uid, static_cast<int32_t>(ctx->bundles.size()),
+    ReportUnlockMountResult(userId, static_cast<int32_t>(ctx->bundles.size()),
         ctx->successCount.load(), ctx->failCount.load(), duration);
 #endif
     return 0;
@@ -282,16 +285,16 @@ int HandleUnlockMountForUser(AppSpawnMgr *mgr)
         return APPSPAWN_ARG_INVALID;
     }
 
-    // 从 AppSpawnContent 中获取当前需要处理的 UID
+    // 从 AppSpawnContent 中获取当前需要处理的 userId
     AppSpawnContent *content = &mgr->content;
-    int uid = content->currentUnlockUid;
+    int userId = content->currentUnlockUserId;
 
-    if (uid <= 0) {
-        APPSPAWN_LOGE("Invalid uid for unlock mount");
+    if (userId <= 0) {
+        APPSPAWN_LOGE("Invalid userId for unlock mount");
         return APPSPAWN_ARG_INVALID;
     }
 
-    return DoSharedMountForUser(uid);
+    return DoSharedMountForUser(userId);
 }
 
 MODULE_CONSTRUCTOR(void)

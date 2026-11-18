@@ -49,10 +49,10 @@ extern int g_mockWriteForceFail;
 extern void MockCgroupReset(void);
 
 // Source functions (APPSPAWN_STATIC -> visible in test)
-int IsUidDir(const char *name);
+int IsUserIdDir(const char *name);
 int IsAppDir(const char *name);
 void SetForkDeniedByPath(const char *appDirPath);
-void CleanupOrphanedTagDir(const char *uidPath, const char *dirName);
+void CleanupOrphanedTagDir(const char *userIdPath, const char *dirName);
 void CleanupOrphanedCgroupProcesses(void);
 int CgroupPreloadHook(AppSpawnMgr *content);
 int CgroupExitHook(AppSpawnMgr *content);
@@ -79,14 +79,14 @@ static std::string CreateTempDir()
     return "";
 }
 
-static void CreateOrphanDir(const std::string &root, const char *uid,
+static void CreateOrphanDir(const std::string &root, const char *userId,
                             const char *tag, const char *app,
                             const std::vector<pid_t> &pids)
 {
-    std::string uidDir = root + "/" + uid;
-    std::string tagDir = uidDir + "/" + tag;
+    std::string userIdDir = root + "/" + userId;
+    std::string tagDir = userIdDir + "/" + tag;
     std::string appDir = tagDir + "/" + app;
-    mkdir(uidDir.c_str(), DIR_MODE);
+    mkdir(userIdDir.c_str(), DIR_MODE);
     mkdir(tagDir.c_str(), DIR_MODE);
     mkdir(appDir.c_str(), DIR_MODE);
 
@@ -185,97 +185,97 @@ public:
 };
 
 // ===================================================================
-// 4.1 IsUidDir
+// 4.1 IsUserIdDir
 // ===================================================================
 
 /**
- * @tc.name: TestIsUidDir_NullInput
- * @tc.desc: Verify IsUidDir returns 0 for NULL input
+ * @tc.name: TestIsUserIdDir_NullInput
+ * @tc.desc: Verify IsUserIdDir returns 0 for NULL input
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_NullInput, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_NullInput, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir(nullptr), 0);
+    EXPECT_EQ(IsUserIdDir(nullptr), 0);
 }
 
 /**
- * @tc.name: TestIsUidDir_EmptyString
- * @tc.desc: Verify IsUidDir returns 0 for empty string
+ * @tc.name: TestIsUserIdDir_EmptyString
+ * @tc.desc: Verify IsUserIdDir returns 0 for empty string
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_EmptyString, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_EmptyString, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir(""), 0);
+    EXPECT_EQ(IsUserIdDir(""), 0);
 }
 
 /**
- * @tc.name: TestIsUidDir_DefaultUid
- * @tc.desc: Verify IsUidDir returns 1 for "0" (default UID)
+ * @tc.name: TestIsUserIdDir_DefaultUserId
+ * @tc.desc: Verify IsUserIdDir returns 1 for "0" (default user ID)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_DefaultUid, TestSize.Level0)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_DefaultUserId, TestSize.Level0)
 {
-    EXPECT_EQ(IsUidDir("0"), 1);
+    EXPECT_EQ(IsUserIdDir("0"), 1);
 }
 
 /**
- * @tc.name: TestIsUidDir_ValidUid100
- * @tc.desc: Verify IsUidDir returns 1 for "100" (min valid UID)
+ * @tc.name: TestIsUserIdDir_ValidUserId100
+ * @tc.desc: Verify IsUserIdDir returns 1 for "100" (min valid user ID)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_ValidUid100, TestSize.Level0)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_ValidUserId100, TestSize.Level0)
 {
-    EXPECT_EQ(IsUidDir("100"), 1);
+    EXPECT_EQ(IsUserIdDir("100"), 1);
 }
 
 /**
- * @tc.name: TestIsUidDir_ValidUid9999999999
- * @tc.desc: Verify IsUidDir returns 1 for "9999999999" (max length)
+ * @tc.name: TestIsUserIdDir_ValidUserId9999999999
+ * @tc.desc: Verify IsUserIdDir returns 1 for "9999999999" (max length)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_ValidUid9999999999, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_ValidUserId9999999999, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir("9999999999"), 1);
+    EXPECT_EQ(IsUserIdDir("9999999999"), 1);
 }
 
 /**
- * @tc.name: TestIsUidDir_TooShort
- * @tc.desc: Verify IsUidDir returns 0 for "12" (below min length 3)
+ * @tc.name: TestIsUserIdDir_TooShort
+ * @tc.desc: Verify IsUserIdDir returns 0 for "12" (below min length 3)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_TooShort, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_TooShort, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir("12"), 0);
+    EXPECT_EQ(IsUserIdDir("12"), 0);
 }
 
 /**
- * @tc.name: TestIsUidDir_TooLong
- * @tc.desc: Verify IsUidDir returns 0 for 11-digit number (above max length 10)
+ * @tc.name: TestIsUserIdDir_TooLong
+ * @tc.desc: Verify IsUserIdDir returns 0 for 11-digit number (above max length 10)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_TooLong, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_TooLong, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir("12345678901"), 0);
+    EXPECT_EQ(IsUserIdDir("12345678901"), 0);
 }
 
 /**
- * @tc.name: TestIsUidDir_WithAlpha
- * @tc.desc: Verify IsUidDir returns 0 for "1a3" (contains alpha)
+ * @tc.name: TestIsUserIdDir_WithAlpha
+ * @tc.desc: Verify IsUserIdDir returns 0 for "1a3" (contains alpha)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_WithAlpha, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_WithAlpha, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir("1a3"), 0);
+    EXPECT_EQ(IsUserIdDir("1a3"), 0);
 }
 
 /**
- * @tc.name: TestIsUidDir_WithDot
- * @tc.desc: Verify IsUidDir returns 0 for "1.0" (contains dot)
+ * @tc.name: TestIsUserIdDir_WithDot
+ * @tc.desc: Verify IsUserIdDir returns 0 for "1.0" (contains dot)
  * @tc.type: FUNC
  */
-HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUidDir_WithDot, TestSize.Level1)
+HWTEST_F(AppSpawnCGroupOrphanTest, TestIsUserIdDir_WithDot, TestSize.Level1)
 {
-    EXPECT_EQ(IsUidDir("1.0"), 0);
+    EXPECT_EQ(IsUserIdDir("1.0"), 0);
 }
 
 // ===================================================================
@@ -622,7 +622,7 @@ HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedTagDir_NonAppSubDir, TestS
 
 /**
  * @tc.name: TestCleanupOrphanedCgroup_SingleUid
- * @tc.desc: Verify cleanup works with single UID containing orphan cgroups
+ * @tc.desc: Verify cleanup works with single user ID containing orphan cgroups
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_SingleUid, TestSize.Level0)
@@ -639,7 +639,7 @@ HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_SingleUid, TestSize
 
 /**
  * @tc.name: TestCleanupOrphanedCgroup_MultipleUids
- * @tc.desc: Verify cleanup works across multiple UIDs
+ * @tc.desc: Verify cleanup works across multiple user IDs
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_MultipleUids, TestSize.Level0)
@@ -679,7 +679,7 @@ HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_RootNotExist, TestS
 HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_EmptyRoot, TestSize.Level1)
 {
     SetMockRoot();
-    // tempDir_ exists but is empty (no UID subdirs)
+    // tempDir_ exists but is empty (no user ID subdirs)
 
     CleanupOrphanedCgroupProcesses();
 
@@ -689,7 +689,7 @@ HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_EmptyRoot, TestSize
 
 /**
  * @tc.name: TestCleanupOrphanedCgroup_NonUidDirs
- * @tc.desc: Verify non-UID directories are skipped
+ * @tc.desc: Verify non-user ID directories are skipped
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_NonUidDirs, TestSize.Level1)
@@ -706,19 +706,19 @@ HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_NonUidDirs, TestSiz
 
 /**
  * @tc.name: TestCleanupOrphanedCgroup_UidDirOpenFail
- * @tc.desc: Verify no crash when UID subdirectory cannot be opened
+ * @tc.desc: Verify no crash when user ID subdirectory cannot be opened
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCGroupOrphanTest, TestCleanupOrphanedCgroup_UidDirOpenFail, TestSize.Level1)
 {
     SetMockRoot();
-    // Create a UID dir with no read permission
+    // Create a user ID dir with no read permission
     mkdir((tempDir_ + "/100").c_str(), 0755);
     chmod((tempDir_ + "/100").c_str(), 0000);
 
     CleanupOrphanedCgroupProcesses();
 
-    // Should skip unreadable UID dir without crash
+    // Should skip unreadable user ID dir without crash
     chmod((tempDir_ + "/100").c_str(), DIR_MODE);
     EXPECT_EQ(g_mockKilledCount, 0);
 }

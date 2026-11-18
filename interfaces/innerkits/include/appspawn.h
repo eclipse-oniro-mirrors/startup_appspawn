@@ -352,6 +352,8 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 #define MSG_EXT_NAME_MAX_CHILD_PROCCESS_MAX "MaxChildProcess"
 #define MSG_EXT_NAME_APP_FD "AppFd"
 #define MSG_EXT_NAME_JIT_PERMISSIONS "Permissions"
+// The legacy wire key "uid" carries an explicit userId. Sandbox package lookup
+// falls back to appUid / UID_BASE when the request omits this field.
 #define MSG_EXT_NAME_USERID "uid"
 #define MSG_EXT_NAME_EXTENSION_TYPE "ExtensionType"
 #define MSG_EXT_NAME_API_TARGET_VERSION "APITargetVersion"

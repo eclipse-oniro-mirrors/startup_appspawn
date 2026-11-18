@@ -494,7 +494,7 @@ HWTEST_F(AppSpawnCustomConfigTest, App_Spawn_LoadCustomSandboxEnv_06, TestSize.L
 
 /**
  * @tc.name: SetUidGidUserIdTest_001
- * @tc.desc: Test SetUidGid function when userIdStr is NULL
+ * @tc.desc: Test SetAppUidGid with an explicit userId
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCustomConfigTest, SetUidGidUserIdTest_001, TestSize.Level1)
@@ -531,7 +531,7 @@ HWTEST_F(AppSpawnCustomConfigTest, SetUidGidUserIdTest_001, TestSize.Level1)
 
 /**
  * @tc.name: SetUidGidUserIdTest_002
- * @tc.desc: Test SetUidGid function when userIdStr is NULL
+ * @tc.desc: Test SetAppUidGid without a userId extension
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCustomConfigTest, SetUidGidUserIdTest_002, TestSize.Level1)

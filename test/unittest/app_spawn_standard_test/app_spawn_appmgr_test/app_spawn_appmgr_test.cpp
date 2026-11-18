@@ -63,7 +63,7 @@ int AppspawnDevicedebugDeal(const char *op, int pid, cJSON *args);
 int ProcessAppSpawnDeviceDebugMsg(AppSpawnMsgNode *message);
 int AppSpawnReqMsgFdGet(AppSpawnConnection *connection, AppSpawnMsgNode *message, const char *fdName, int *fd);
 void ProcessObserveProcessSignalMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message);
-int SendUnlockMsgToPrefork(AppSpawnContent *content, int uid);
+int SendUnlockMsgToPrefork(AppSpawnContent *content, int userId);
 int SendPipeMsgToChild(AppSpawnMgr *mgr, pid_t childPid, AppSpawnPipeMsg *pipeMsg);
 void CleanupPreforkChild(AppSpawnMgr *mgr, pid_t childPid);
 int TransferPreforkFdToForkCtx(AppSpawnMgr *mgr, pid_t childPid, AppSpawningCtx *property);
@@ -1352,7 +1352,7 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_GetSpawnNameByRunMode_001, TestSize.Level
 
 /**
 * @brief WriteSignalInfoToFd with invalid args and normal json write
-* @note 预期结果：signalFd/pid/uid 非法时直接返回不写 fd；合法时向 signalFd 写入
+* @note 预期结果：signalFd/pid/appUid 非法时直接返回不写 fd；合法时向 signalFd 写入
 *                 包含 pid/uid/signal/bundleName 的 json 信息
 */
 HWTEST_F(AppSpawnAppMgrTest, App_Spawn_WriteSignalInfoToFd_001, TestSize.Level0)

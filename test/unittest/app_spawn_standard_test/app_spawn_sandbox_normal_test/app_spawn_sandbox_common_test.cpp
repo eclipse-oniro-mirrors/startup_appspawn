@@ -40,13 +40,18 @@ namespace OHOS {
 namespace AppSpawn {
 AppSpawnTestHelper g_testHelperCore;
 
-static AppSpawningCtx *GetTestAppPropertyCore()
+static AppSpawningCtx *GetTestAppPropertyCore(const char *parentUid = nullptr)
 {
     AppSpawnClientHandle clientHandle = nullptr;
     int ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &clientHandle);
     APPSPAWN_CHECK(ret == 0, return nullptr, "Failed to create reqMgr");
     AppSpawnReqMsgHandle reqHandle = g_testHelperCore.CreateMsg(clientHandle, MSG_APP_SPAWN, 0);
     APPSPAWN_CHECK(reqHandle != INVALID_REQ_HANDLE, return nullptr, "Failed to create req");
+    if (parentUid != nullptr && AppSpawnReqMsgAddStringInfo(reqHandle, MSG_EXT_NAME_PARENT_UID, parentUid) != 0) {
+        AppSpawnReqMsgFree(reqHandle);
+        AppSpawnClientDestroy(clientHandle);
+        return nullptr;
+    }
     return g_testHelperCore.GetAppProperty(clientHandle, reqHandle);
 }
 }
@@ -805,14 +810,9 @@ HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_ReplaceClonePackageN
  */
 HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_ReplaceHostUserId_01, TestSize.Level0)
 {
-    AppSpawningCtx *appProperty = AppSpawn::GetTestAppPropertyCore();
-    if (appProperty == nullptr) {
-        GTEST_SKIP() << "Failed to create test object";
-    }
-
-    std::string path = "/data/{HOST_USER_ID}";
-    std::string result = AppSpawn::SandboxCommon::ReplaceHostUserId(appProperty, path);
-    EXPECT_FALSE(result.empty());
+    AppSpawningCtx *appProperty = AppSpawn::GetTestAppPropertyCore("20010052");
+    ASSERT_NE(appProperty, nullptr);
+    EXPECT_EQ(AppSpawn::SandboxCommon::ReplaceHostUserId(appProperty, "/data/<hostUserId>"), "/data/100");
 
     DeleteAppSpawningCtx(appProperty);
 }

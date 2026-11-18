@@ -266,11 +266,12 @@ void ReportMountFull(int32_t errCode, int32_t nsMountCount, int32_t deviceMountC
     APPSPAWN_CHECK_ONLY_LOG(ret == 0, "ReportMountFull error, ret: %{public}d", ret);
 }
 
-void ReportUnlockMountResult(int32_t uid, int32_t totalCount, int32_t successCount, int32_t failCount, int64_t duration)
+void ReportUnlockMountResult(int32_t userId, int32_t totalCount,
+    int32_t successCount, int32_t failCount, int64_t duration)
 {
     int ret = HiSysEventWrite(HiSysEvent::Domain::APPSPAWN, UNLOCK_MOUNT_ALL_DONE,
         HiSysEvent::EventType::STATISTIC,
-        UID, uid,
+        UID, userId,
         APP_COUNT, totalCount,
         SUCCESS_COUNT, successCount,
         FAIL_COUNT, failCount,
@@ -279,12 +280,12 @@ void ReportUnlockMountResult(int32_t uid, int32_t totalCount, int32_t successCou
     APPSPAWN_CHECK_ONLY_LOG(ret == 0, "ReportUnlockMountResult error, ret: %{public}d", ret);
 }
 
-void ReportUnlockMountAppFail(int32_t uid, const char *bundleName,
+void ReportUnlockMountAppFail(int32_t appUid, const char *bundleName,
     const char *srcPath, const char *destPath, int32_t errorCode)
 {
     int ret = HiSysEventWrite(HiSysEvent::Domain::APPSPAWN, UNLOCK_MOUNT_APP_FAIL,
         HiSysEvent::EventType::FAULT,
-        UID, uid,
+        UID, appUid,
         BUNDLE_NAME, bundleName,
         SRC_PATH, srcPath,
         TARGET_PATH, destPath,

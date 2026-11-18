@@ -82,7 +82,7 @@ typedef struct AppSpawnPreforkMsg {
 
 
 typedef struct AppSpawnUnlockMsg {
-    int uid;                /**< User ID */
+    int userId;             /**< User ID from the storage manager unlock request */
     int reserved[2];        /**< Reserved field, aligned with AppSpawnPreforkMsg */
 } AppSpawnUnlockMsg;
 /**
@@ -110,7 +110,7 @@ typedef struct AppSpawnContent {
     char *propertyBuffer;
     pid_t reservedPid;
     int enablePerfork;
-    int currentUnlockUid;       /**< Current unlock operation UID */
+    int currentUnlockUserId; /**< User ID passed to the unlock mount hook */
 #endif
     struct TagSandboxQueue *permissionQueue;  /**< Permission queue for SPM module */
     // system

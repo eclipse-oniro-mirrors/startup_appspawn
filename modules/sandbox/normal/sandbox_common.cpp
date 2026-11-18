@@ -657,7 +657,7 @@ bool SandboxCommon::IsNeededCheckPathStatus(const AppSpawningCtx *appProperty, c
         }
         return false;
     }
-    // Only check user-level application data directories (el2/uid/xxx)
+    // Only check user-level application data directories (el2/<userId>/xxx)
     // data/app/el2/100/base/, data/app/el2/100/log/, data/app/el2/100/database/
     if (strstr(path, "data/app/el2/") != nullptr) {
         return true;
@@ -992,14 +992,14 @@ std::string SandboxCommon::ReplaceSandboxRootVariablePackageName(const AppSpawni
 std::string SandboxCommon::ReplaceHostUserId(const AppSpawningCtx *appProperty, const std::string &path)
 {
     std::string tmpSandboxPath = path;
-    int32_t uid = 0;
-    const char *userId =
+    int32_t parentUid = 0;
+    const char *parentUidStr =
         (const char *)(GetAppSpawnMsgExtInfo(appProperty->message, MSG_EXT_NAME_PARENT_UID, nullptr));
-    if (userId != nullptr) {
-        uid = atoi(userId);
+    if (parentUidStr != nullptr) {
+        parentUid = atoi(parentUidStr);
     }
     tmpSandboxPath = ReplaceAllVariables(tmpSandboxPath, SandboxCommonDef::g_hostUserId,
-                                                        std::to_string(uid / UID_BASE));
+                                                        std::to_string(parentUid / UID_BASE));
     APPSPAWN_LOGV("tmpSandboxPath %{public}s", tmpSandboxPath.c_str());
     return tmpSandboxPath;
 }

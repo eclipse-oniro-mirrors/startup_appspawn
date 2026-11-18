@@ -35,11 +35,11 @@
 #include "parameter.h"
 
 #define CGROUP_ROOT_PATH "/dev/pids/"
-#define UID_DIR_MIN_LEN 3    // uid >= 100, min digit length
-#define UID_DIR_MAX_LEN 10   // uid <= 9999999999, max digit length
+#define USER_ID_DIR_MIN_LEN 3    // Minimum length for nonzero userId directory names
+#define USER_ID_DIR_MAX_LEN 10   // Maximum length accepted for userId directory names
 #define APP_DIR_PREFIX "app_"
 #define APP_DIR_PREFIX_LEN 4
-#define DEFAULT_UID "0"
+#define DEFAULT_USER_ID "0"
 #define APPSPAWN_GRACEFUL_STOP_PARAM "startup.appspawn.graceful_stop.%s"
 #define APPSPAWN_GRACEFUL_STOP_PARAM_LEN 64
 #define CLEANUP_FLAG_NEED "1"
@@ -159,7 +159,7 @@ static void KillProcessesByCGroup(const char *path, AppSpawnMgr *content, const 
         APPSPAWN_LOGI("Kill app pid %{public}d now ...", pid);
         int reason = appInfo->killReason.reason != 0 ? appInfo->killReason.reason : REASON_KILL_CGROUP;
         int errorCause = appInfo->killReason.reason != 0 ? appInfo->killReason.errorCause : 0;
-        APPSPAWN_LOGI("KillProcessesByCGroup: pid:%{public}d appUid:%{public}d reason:%{public}d",
+        APPSPAWN_LOGI("KillProcessesByCGroup: pid:%{public}d appUid:%{public}u reason:%{public}d",
             pid, appInfo->appUid, reason);
 #ifndef APPSPAWN_TEST
         if (kill(pid, SIGKILL) != 0) {
@@ -181,7 +181,7 @@ APPSPAWN_STATIC int ProcessMgrRemoveApp(const AppSpawnMgr *content, const AppSpa
     }
     APPSPAWN_CHECK(!appInfo->isDaemonBin, return 0, "ProcessMgrRemoveApp isDaemon skip");
     char cgroupPath[PATH_MAX] = {};
-    APPSPAWN_LOGV("ProcessMgrRemoveApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);
+    APPSPAWN_LOGV("ProcessMgrRemoveApp %{public}d %{public}u to cgroup ", appInfo->pid, appInfo->appUid);
     int ret = GetCgroupPath(appInfo, cgroupPath, sizeof(cgroupPath));
     APPSPAWN_CHECK(ret == 0, return -1, "Failed to get real path errno: %{public}d", errno);
     char procPath[PATH_MAX] = {};
@@ -198,17 +198,17 @@ APPSPAWN_STATIC int ProcessMgrRemoveApp(const AppSpawnMgr *content, const AppSpa
     return ret;
 }
 
-// Check if directory name is a valid UID directory: "0" or 3-10 digit number
-APPSPAWN_STATIC int IsUidDir(const char *name)
+// Check if directory name is a valid userId directory: "0" or 3-10 digit number
+APPSPAWN_STATIC int IsUserIdDir(const char *name)
 {
     if (name == NULL || *name == '\0') {
         return 0;
     }
-    if (strcmp(name, DEFAULT_UID) == 0) {
+    if (strcmp(name, DEFAULT_USER_ID) == 0) {
         return 1;
     }
     size_t len = strlen(name);
-    if (len < UID_DIR_MIN_LEN || len > UID_DIR_MAX_LEN) {
+    if (len < USER_ID_DIR_MIN_LEN || len > USER_ID_DIR_MAX_LEN) {
         return 0;
     }
     for (size_t i = 0; i < len; i++) {
@@ -277,10 +277,10 @@ static void CleanupOrphanedAppDir(const char *tagDirPath, const char *appDirName
 }
 
 // Cleanup all app subdirectories under a tag dir, then remove the tag dir itself
-APPSPAWN_STATIC void CleanupOrphanedTagDir(const char *uidPath, const char *dirName)
+APPSPAWN_STATIC void CleanupOrphanedTagDir(const char *userIdPath, const char *dirName)
 {
     char tagDirPath[PATH_MAX] = {};
-    int ret = snprintf_s(tagDirPath, sizeof(tagDirPath), sizeof(tagDirPath) - 1, "%s/%s", uidPath, dirName);
+    int ret = snprintf_s(tagDirPath, sizeof(tagDirPath), sizeof(tagDirPath) - 1, "%s/%s", userIdPath, dirName);
     APPSPAWN_CHECK(ret > 0, return, "Failed to build tag dir path for %{public}s", dirName);
     DIR *tagDir = opendir(tagDirPath);
     APPSPAWN_CHECK(tagDir != NULL, return,
@@ -298,7 +298,7 @@ APPSPAWN_STATIC void CleanupOrphanedTagDir(const char *uidPath, const char *dirN
         APPSPAWN_LOGW("Failed to rmdir tag dir %{public}s errno: %{public}d", tagDirPath, errno));
 }
 
-// Top-level orphan cgroup cleanup: traverse all UID dirs and tag dirs under CGROUP_ROOT_PATH
+// Top-level orphan cgroup cleanup: traverse all userId dirs and tag dirs under CGROUP_ROOT_PATH
 APPSPAWN_STATIC void CleanupOrphanedCgroupProcesses(void)
 {
     DIR *dir = opendir(CGROUP_ROOT_PATH);
@@ -308,23 +308,24 @@ APPSPAWN_STATIC void CleanupOrphanedCgroupProcesses(void)
         if (dp->d_type != DT_DIR || strcmp(dp->d_name, ".") == 0 || strcmp(dp->d_name, "..") == 0) {
             continue;
         }
-        if (!IsUidDir(dp->d_name)) {
+        if (!IsUserIdDir(dp->d_name)) {
             continue;
         }
-        char uidPath[PATH_MAX] = {};
-        int ret = snprintf_s(uidPath, sizeof(uidPath), sizeof(uidPath) - 1, "%s%s", CGROUP_ROOT_PATH, dp->d_name);
-        APPSPAWN_CHECK(ret > 0, continue, "Failed to build uid path for %{public}s", dp->d_name);
-        DIR *uidDir = opendir(uidPath);
-        APPSPAWN_CHECK(uidDir != NULL, continue,
-            "Failed to open uid dir %{public}s errno: %{public}d", uidPath, errno);
+        char userIdPath[PATH_MAX] = {};
+        int ret = snprintf_s(userIdPath, sizeof(userIdPath), sizeof(userIdPath) - 1,
+            "%s%s", CGROUP_ROOT_PATH, dp->d_name);
+        APPSPAWN_CHECK(ret > 0, continue, "Failed to build userId path for %{public}s", dp->d_name);
+        DIR *userIdDir = opendir(userIdPath);
+        APPSPAWN_CHECK(userIdDir != NULL, continue,
+            "Failed to open userId dir %{public}s errno: %{public}d", userIdPath, errno);
         struct dirent *entry = NULL;
-        while ((entry = readdir(uidDir)) != NULL) {
+        while ((entry = readdir(userIdDir)) != NULL) {
             if (entry->d_type != DT_DIR || strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
                 continue;
             }
-            CleanupOrphanedTagDir(uidPath, entry->d_name);
+            CleanupOrphanedTagDir(userIdPath, entry->d_name);
         }
-        (void)closedir(uidDir);
+        (void)closedir(userIdDir);
     }
     (void)closedir(dir);
 }
@@ -378,7 +379,7 @@ APPSPAWN_STATIC int ProcessMgrAddApp(const AppSpawnMgr *content, const AppSpawne
     APPSPAWN_CHECK(!appInfo->isDaemonBin, return 0, "ProcessMgrAddApp isDaemon skip");
     APPSPAWN_ONLY_EXPER(IsNWebSpawnMode(content) || IsSubSpawnMode(content), return 0);
     char path[PATH_MAX] = {};
-    APPSPAWN_LOGV("ProcessMgrAddApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);
+    APPSPAWN_LOGV("ProcessMgrAddApp %{public}d %{public}u to cgroup ", appInfo->pid, appInfo->appUid);
     int ret = GetCgroupPath(appInfo, path, sizeof(path));
     APPSPAWN_CHECK(ret == 0, return -1, "Failed to get real path errno: %{public}d", errno);
     (void)CreateSandboxDir(path, 0755);  // 0755 default mode

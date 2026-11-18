@@ -1772,16 +1772,16 @@ int32_t SandboxCore::GetPackageList(AppSpawningCtx *property, std::vector<std::s
     AppDacInfo *info = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     if (GetBundleName(property) == nullptr || SandboxCommon::CheckBundleName(GetBundleName(property)) != 0 ||
         info == nullptr) {
-        std::string uid;
-        char *userId = (char *)GetAppSpawnMsgExtInfo(property->message, MSG_EXT_NAME_USERID, nullptr);
-        if (userId != nullptr) {
-            uid = std::string(userId);
+        std::string userIdStr;
+        char *userIdStrFromMsg = (char *)GetAppSpawnMsgExtInfo(property->message, MSG_EXT_NAME_USERID, nullptr);
+        if (userIdStrFromMsg != nullptr) {
+            userIdStr = std::string(userIdStrFromMsg);
         } else {
             APPSPAWN_CHECK(info != nullptr, return APPSPAWN_ARG_INVALID, "Invalid dacInfo");
-            uid = std::to_string(info->appUid / UID_BASE);
+            userIdStr = std::to_string(info->appUid / UID_BASE);
         }
         std::string defaultSandboxRoot = (tmp ? SandboxCommonDef::g_mntTmpRoot : SandboxCommonDef::g_mntShareRoot) +
-                                          uid + "/debug_hap";
+                                          userIdStr + "/debug_hap";
         APPSPAWN_CHECK(access(defaultSandboxRoot.c_str(), F_OK) == 0, return APPSPAWN_ARG_INVALID,
             "Failed to access %{public}s, err %{public}d", defaultSandboxRoot.c_str(), errno);
 
