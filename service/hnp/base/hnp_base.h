@@ -324,7 +324,7 @@ enum {
 // 0x801127 获取hnp全局锁失败
 #define HNP_ERRNO_BASE_LOCK_FAILED   HNP_ERRNO_COMMON(HNP_MID_BASE, 0x27)
 
-// 0x801128 BSSAPI 执行异常
+// 0x801128 获取hnp全局锁超时（可重试）
 #define HNP_ERRNO_BASE_LOCK_TIMEOUT  HNP_ERRNO_COMMON(HNP_MID_BASE, 0x28)
 
 int GetFileSizeByHandle(FILE *file, int *size);
