@@ -832,7 +832,7 @@ static int SpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
     return 0;
 }
 
-static int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property)
+APPSPAWN_STATIC int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Spawning: set appEnv");
     // Order: InitAppCommonEnv (USER var) → SetUserLevelEnvConfig (per-user
@@ -982,7 +982,7 @@ static const mode_t APPENV_DIR_MODE = 0755;
 static const uid_t APPENV_DIR_OWNER_UID = 1102;  // deviceinfo
 static const gid_t APPENV_DIR_OWNER_GID = 1102;  // deviceinfo
 
-static int SpawnEnsureAppenvDir(AppSpawnMgr *content, AppSpawningCtx *property)
+APPSPAWN_STATIC int SpawnEnsureAppenvDir(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     if (!IsAppSpawnMode(content)) {
         return 0;
