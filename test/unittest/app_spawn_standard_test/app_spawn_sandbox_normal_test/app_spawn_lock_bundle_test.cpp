@@ -42,6 +42,16 @@ using namespace testing;
 using namespace testing::ext;
 using namespace OHOS::AppSpawn;
 
+APPSPAWN_STATIC int AddDataGroupItemToQueue(AppSpawnMgr *content, const std::string &srcPath,
+    const std::string &destPath, const std::string &dataGroupUuid);
+APPSPAWN_STATIC void DumpDataGroupCtxQueue(const ListNode *front);
+APPSPAWN_STATIC int DataGroupCtxNodeCompare(ListNode *node, void *data);
+APPSPAWN_STATIC int AppCleanupHook(const AppSpawnMgr *content, const AppSpawnedProcessInfo *appInfo);
+APPSPAWN_STATIC int SpawnFailedHook(AppSpawnMgr *content, AppSpawningCtx *property);
+int UpdateDataGroupDirs(AppSpawnMgr *content);
+
+APPSPAWN_STATIC bool CheckPath(const std::string& name);
+
 namespace OHOS {
 
 AppSpawnTestHelper g_testHelperLock;
@@ -404,6 +414,212 @@ HWTEST_F(AppSpawnLockBundleTest, EdgeCase_002, TestSize.Level1)
     // Should not crash when releasing non-existent entry
     ReleaseLockBundleRef(testLockPath1);
     EXPECT_EQ(g_lockBundleMap.size(), 0u);
+}
+
+// ==================== DoSharedMount tests ====================
+
+/**
+ * @brief DoSharedMount with nullptr arg
+ *        Covers: line 240-242 (arg == nullptr -> return APPSPAWN_ARG_INVALID)
+ */
+HWTEST_F(AppSpawnLockBundleTest, DoSharedMount_NullArg_001, TestSize.Level1)
+{
+    int ret = DoSharedMount(nullptr);
+    EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
+}
+
+/**
+ * @brief DoSharedMount with nullptr srcPath
+ *        Covers: line 240-242 (arg->srcPath == nullptr -> return APPSPAWN_ARG_INVALID)
+ */
+HWTEST_F(AppSpawnLockBundleTest, DoSharedMount_NullSrcPath_001, TestSize.Level1)
+{
+    SharedMountArgs arg = {};
+    arg.srcPath = nullptr;
+    arg.destPath = "/tmp/test";
+    int ret = DoSharedMount(&arg);
+    EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
+}
+
+/**
+ * @brief DoSharedMount with nullptr destPath
+ *        Covers: line 240-242 (arg->destPath == nullptr -> return APPSPAWN_ARG_INVALID)
+ */
+HWTEST_F(AppSpawnLockBundleTest, DoSharedMount_NullDestPath_001, TestSize.Level1)
+{
+    SharedMountArgs arg = {};
+    arg.srcPath = "/tmp/test";
+    arg.destPath = nullptr;
+    int ret = DoSharedMount(&arg);
+    EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
+}
+
+// ==================== CheckPath tests ====================
+
+/**
+ * @brief CheckPath with various inputs
+ *        Covers: line 330-333
+ */
+HWTEST_F(AppSpawnLockBundleTest, CheckPath_001, TestSize.Level1)
+{
+    EXPECT_FALSE(CheckPath(""));
+    EXPECT_FALSE(CheckPath("."));
+    EXPECT_FALSE(CheckPath(".."));
+    EXPECT_FALSE(CheckPath("a/b"));
+    EXPECT_TRUE(CheckPath("validname"));
+}
+
+// ==================== UpdateDataGroupDirs tests ====================
+
+/**
+ * @brief UpdateDataGroupDirs with null content
+ *        Covers: line 468-469 (content == nullptr -> return APPSPAWN_ARG_INVALID)
+ */
+HWTEST_F(AppSpawnLockBundleTest, UpdateDataGroupDirs_NullContent_001, TestSize.Level1)
+{
+    int ret = UpdateDataGroupDirs(nullptr);
+    EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
+}
+
+/**
+ * @brief UpdateDataGroupDirs with empty queue
+ *        Covers: line 472-498 (queue empty -> no iteration -> return 0)
+ */
+HWTEST_F(AppSpawnLockBundleTest, UpdateDataGroupDirs_EmptyQueue_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    OH_ListInit(&mgr.dataGroupCtxQueue);
+    int ret = UpdateDataGroupDirs(&mgr);
+    EXPECT_EQ(ret, 0);
+}
+
+// ==================== AddDataGroupItemToQueue tests ====================
+
+/**
+ * @brief AddDataGroupItemToQueue adds a new item
+ *        Covers: line 351-374 (allocate, copy, add to queue)
+ */
+HWTEST_F(AppSpawnLockBundleTest, AddDataGroupItemToQueue_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    OH_ListInit(&mgr.dataGroupCtxQueue);
+    int ret = AddDataGroupItemToQueue(&mgr, "/data/test/src", "/mnt/sandbox/test/dest", "uuid-1234");
+    EXPECT_EQ(ret, 0);
+    // Cleanup
+    OH_ListRemoveAll(&mgr.dataGroupCtxQueue, nullptr);
+}
+
+/**
+ * @brief AddDataGroupItemToQueue with duplicate entry (already exists)
+ *        Covers: line 365-370 (node != nullptr -> free and return 0)
+ */
+HWTEST_F(AppSpawnLockBundleTest, AddDataGroupItemToQueue_Duplicate_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    OH_ListInit(&mgr.dataGroupCtxQueue);
+    AddDataGroupItemToQueue(&mgr, "/data/test/src", "/mnt/sandbox/test/dest", "uuid-1234");
+    int ret = AddDataGroupItemToQueue(&mgr, "/data/test/src", "/mnt/sandbox/test/dest", "uuid-1234");
+    EXPECT_EQ(ret, 0);
+    OH_ListRemoveAll(&mgr.dataGroupCtxQueue, nullptr);
+}
+
+// ==================== DumpDataGroupCtxQueue tests ====================
+
+/**
+ * @brief DumpDataGroupCtxQueue with null front
+ *        Covers: line 379-380 (front == nullptr -> return)
+ */
+HWTEST_F(AppSpawnLockBundleTest, DumpDataGroupCtxQueue_Null_001, TestSize.Level1)
+{
+    DumpDataGroupCtxQueue(nullptr);
+    // No crash
+}
+
+/**
+ * @brief DumpDataGroupCtxQueue with populated queue
+ *        Covers: line 383-394 (iterate and log)
+ */
+HWTEST_F(AppSpawnLockBundleTest, DumpDataGroupCtxQueue_Populated_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    OH_ListInit(&mgr.dataGroupCtxQueue);
+    AddDataGroupItemToQueue(&mgr, "/data/test/src", "/mnt/sandbox/test/dest", "uuid-1234");
+    DumpDataGroupCtxQueue(&mgr.dataGroupCtxQueue);
+    OH_ListRemoveAll(&mgr.dataGroupCtxQueue, nullptr);
+}
+
+// ==================== DataGroupCtxNodeCompare tests ====================
+
+/**
+ * @brief DataGroupCtxNodeCompare with matching nodes
+ *        Covers: line 335-348
+ */
+HWTEST_F(AppSpawnLockBundleTest, DataGroupCtxNodeCompare_001, TestSize.Level1)
+{
+    DataGroupCtx existing = {};
+    DataGroupCtx newNode = {};
+    strcpy_s(existing.srcPath.path, PATH_MAX_LEN - 1, "/data/src");
+    strcpy_s(existing.destPath.path, PATH_MAX_LEN - 1, "/mnt/dest");
+    strcpy_s(newNode.srcPath.path, PATH_MAX_LEN - 1, "/data/src");
+    strcpy_s(newNode.destPath.path, PATH_MAX_LEN - 1, "/mnt/dest");
+    int ret = DataGroupCtxNodeCompare(&existing.node, &newNode);
+    EXPECT_EQ(ret, 0);
+}
+
+/**
+ * @brief DataGroupCtxNodeCompare with non-matching nodes
+ */
+HWTEST_F(AppSpawnLockBundleTest, DataGroupCtxNodeCompare_NoMatch_001, TestSize.Level1)
+{
+    DataGroupCtx existing = {};
+    DataGroupCtx newNode = {};
+    strcpy_s(existing.srcPath.path, PATH_MAX_LEN - 1, "/data/src1");
+    strcpy_s(existing.destPath.path, PATH_MAX_LEN - 1, "/mnt/dest1");
+    strcpy_s(newNode.srcPath.path, PATH_MAX_LEN - 1, "/data/src2");
+    strcpy_s(newNode.destPath.path, PATH_MAX_LEN - 1, "/mnt/dest2");
+    int ret = DataGroupCtxNodeCompare(&existing.node, &newNode);
+    EXPECT_EQ(ret, 1);
+}
+
+// ==================== MountToShared tests ====================
+
+/**
+ * @brief MountToShared with null property
+ *        Covers: line 539-544 (calls MountDirToShared which checks null)
+ */
+HWTEST_F(AppSpawnLockBundleTest, MountToShared_NullProperty_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    int ret = MountToShared(&mgr, nullptr);
+    EXPECT_EQ(ret, 0);
+}
+
+// ==================== AppCleanupHook tests ====================
+
+/**
+ * @brief AppCleanupHook with null appInfo
+ *        Covers: line 548-549 (appInfo == nullptr -> return 0)
+ */
+HWTEST_F(AppSpawnLockBundleTest, AppCleanupHook_NullAppInfo_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    mgr.content.mode = MODE_FOR_APP_SPAWN;
+    int ret = AppCleanupHook(&mgr, nullptr);
+    EXPECT_EQ(ret, 0);
+}
+
+// ==================== SpawnFailedHook tests ====================
+
+/**
+ * @brief SpawnFailedHook with null property
+ *        Covers: line 564-565 (property == nullptr -> return 0)
+ */
+HWTEST_F(AppSpawnLockBundleTest, SpawnFailedHook_NullProperty_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    mgr.content.mode = MODE_FOR_APP_SPAWN;
+    int ret = SpawnFailedHook(&mgr, nullptr);
+    EXPECT_EQ(ret, 0);
 }
 
 }  // namespace OHOS

@@ -16,11 +16,18 @@
 #ifndef HNP_INSTALL_TEST_H
 #define HNP_INSTALL_TEST_H
 
+#include "hnp_installer.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void ClearSoftLink(int uid);
+int BssInstall(HnpSignMapInfo *hnpSignMapInfos, int count, HapInstallInfo *installInfo, int execFilesCount);
+int HandleSignParameter(HapInstallInfo *installInfo, const char *signHnp);
+bool CheckIsSignHnp(const char *hnpFile, HapInstallInfo *installInfo);
+int HnpInstall(const char *hnpFile, HnpInstallInfo *hnpInfo, HnpCfgInfo *hnpCfg,
+    HnpSignMapInfo *hnpSignMapInfos, int *count);
 
 #ifdef __cplusplus
 }

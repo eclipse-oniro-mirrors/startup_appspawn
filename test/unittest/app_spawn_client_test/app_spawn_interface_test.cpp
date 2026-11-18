@@ -21,6 +21,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <sys/socket.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -39,6 +40,17 @@
 
 using namespace testing;
 using namespace testing::ext;
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+APPSPAWN_STATIC int UpdateSocketTimeout(uint32_t timeout, int socketFd);
+APPSPAWN_STATIC const char *GetSocketName(uint32_t type);
+APPSPAWN_STATIC int ReadMessage(int socketFd, uint8_t *buf, int len, AppSpawnReqMsgNode *reqNode,
+    AppSpawnResult *result);
+#ifdef __cplusplus
+}
+#endif
 
 namespace OHOS {
 class AppSpawnInterfaceTest : public testing::Test {
@@ -796,6 +808,158 @@ HWTEST_F(AppSpawnInterfaceTest, GetSpecialGid_003, TestSize.Level0)
     const char *bundleName = "com.ohos.medialibrary";
     GetSpecialGid(bundleName, gidTable, &gidCount);
     EXPECT_EQ(gidTable[APP_MAX_GIDS - 1], 0);
+}
+
+// ==================== UpdateSocketTimeout tests ====================
+
+/**
+ * @brief UpdateSocketTimeout with valid socket pair
+ *        Covers: setsockopt SO_SNDTIMEO and SO_RCVTIMEO success path
+ */
+HWTEST_F(AppSpawnInterfaceTest, UpdateSocketTimeout_Valid_001, TestSize.Level0)
+{
+    int fds[2] = {-1, -1};
+    int ret = socketpair(AF_UNIX, SOCK_STREAM, 0, fds);
+    ASSERT_EQ(ret, 0);
+
+    ret = UpdateSocketTimeout(5, fds[0]);
+    EXPECT_EQ(ret, 0);
+
+    close(fds[0]);
+    close(fds[1]);
+}
+
+/**
+ * @brief UpdateSocketTimeout with invalid fd
+ *        Covers: setsockopt fails -> return ret (non-zero)
+ */
+HWTEST_F(AppSpawnInterfaceTest, UpdateSocketTimeout_InvalidFd_001, TestSize.Level0)
+{
+    int ret = UpdateSocketTimeout(5, -1);
+    EXPECT_NE(ret, 0);
+}
+
+// ==================== GetSocketName tests ====================
+
+/**
+ * @brief GetSocketName for CJAPPSPAWN
+ *        Covers: case CLIENT_FOR_CJAPPSPAWN -> CJAPPSPAWN_SOCKET_NAME
+ */
+HWTEST_F(AppSpawnInterfaceTest, GetSocketName_CJAppSpawn_001, TestSize.Level0)
+{
+    const char *name = GetSocketName(CLIENT_FOR_CJAPPSPAWN);
+    EXPECT_STREQ(name, CJAPPSPAWN_SOCKET_NAME);
+}
+
+/**
+ * @brief GetSocketName for all types
+ *        Covers: all switch cases
+ */
+HWTEST_F(AppSpawnInterfaceTest, GetSocketName_AllTypes_001, TestSize.Level0)
+{
+    EXPECT_STREQ(GetSocketName(CLIENT_FOR_APPSPAWN), APPSPAWN_SOCKET_NAME);
+    EXPECT_STREQ(GetSocketName(CLIENT_FOR_CJAPPSPAWN), CJAPPSPAWN_SOCKET_NAME);
+    EXPECT_STREQ(GetSocketName(CLIENT_FOR_NATIVESPAWN), NATIVESPAWN_SOCKET_NAME);
+    EXPECT_STREQ(GetSocketName(CLIENT_FOR_HYBRIDSPAWN), HYBRIDSPAWN_SOCKET_NAME);
+    EXPECT_STREQ(GetSocketName(CLIENT_FOR_APPSPAWNDF), APPSPAWNDF_SOCKET_NAME);
+    // default -> NWEBSPAWN_SOCKET_NAME
+    EXPECT_STREQ(GetSocketName(9999), NWEBSPAWN_SOCKET_NAME);
+}
+
+// ==================== CJAppSpawn client init test ====================
+
+/**
+ * @brief AppSpawnClientInit with CJAPPSPAWN_SERVER_NAME
+ *        Covers: CLIENT_FOR_CJAPPSPAWN initialization path
+ */
+HWTEST_F(AppSpawnInterfaceTest, App_Spawn_Interface_Init_CJAppSpawn_001, TestSize.Level0)
+{
+    AppSpawnClientHandle handle = nullptr;
+    int ret = AppSpawnClientInit(CJAPPSPAWN_SERVER_NAME, &handle);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(handle, nullptr);
+    AppSpawnClientDestroy(handle);
+}
+
+// ==================== AppSpawnClientSendMsg failure path test ====================
+
+/**
+ * @brief AppSpawnClientSendMsg with MSG_APP_SPAWN in test env (socket connect fails)
+ *        Covers: AppSpawnClientSendMsg entry, ClientSendMsgLocked connect failure path.
+ *        In unit test environment, AppSpawndfIsServiceEnabled returns false (no whitelist
+ *        config), so AppSpawnClientSendMsgDfControl is not reached; the socket connect
+ *        fails and the function returns an error.
+ */
+HWTEST_F(AppSpawnInterfaceTest, App_Spawn_SendMsgDfControl_001, TestSize.Level0)
+{
+    AppSpawnClientHandle handle = nullptr;
+    int ret = AppSpawnClientInit(APPSPAWN_SERVER_NAME, &handle);
+    EXPECT_EQ(ret, 0);
+    EXPECT_NE(handle, nullptr);
+
+    AppSpawnReqMsgHandle reqHandle;
+    ret = AppSpawnReqMsgCreate(MSG_APP_SPAWN, "com.test.dfcontrol", &reqHandle);
+    EXPECT_EQ(ret, 0);
+
+    AppSpawnResult result = {};
+    // In test env, no real server running, socket connect will fail.
+    // AppSpawndfIsServiceEnabled returns false (empty whitelist), so
+    // AppSpawnClientSendMsgDfControl is not dispatched.
+    ret = AppSpawnClientSendMsg(handle, reqHandle, &result);
+    // Expected to fail since no real server
+    EXPECT_NE(ret, 0);
+
+    AppSpawnClientDestroy(handle);
+}
+
+// ==================== ReadMessage retry test ====================
+
+/**
+ * @brief ReadMessage with invalid fd (read fails immediately)
+ *        Covers: ReadMessage entry, read fails -> return APPSPAWN_TIMEOUT
+ */
+HWTEST_F(AppSpawnInterfaceTest, ReadMessage_InvalidFd_001, TestSize.Level0)
+{
+    uint8_t buf[256] = {0};
+    AppSpawnReqMsgNode reqNode = {};
+    AppSpawnResult result = {};
+
+    int ret = ReadMessage(-1, buf, sizeof(buf), &reqNode, &result);
+    EXPECT_EQ(ret, APPSPAWN_TIMEOUT);
+}
+
+/**
+ * @brief ReadMessage with socketpair, write response then read
+ *        Covers: ReadMessage success path, response parsed
+ */
+HWTEST_F(AppSpawnInterfaceTest, ReadMessage_ValidResponse_001, TestSize.Level0)
+{
+    int fds[2] = {-1, -1};
+    int ret = socketpair(AF_UNIX, SOCK_STREAM, 0, fds);
+    ASSERT_EQ(ret, 0);
+
+    // Write a valid response message
+    AppSpawnResponseMsg respMsg = {};
+    respMsg.msgHdr.msgId = 1;
+    respMsg.result.result = 0;
+    respMsg.result.pid = 1234;
+    ret = write(fds[1], &respMsg, sizeof(respMsg));
+    ASSERT_EQ(ret, (int)sizeof(respMsg));
+
+    AppSpawnMsg msg = {};
+    msg.msgId = 1;
+    AppSpawnReqMsgNode reqNode = {};
+    reqNode.msg = &msg;
+    reqNode.isColdRun = 0;
+    AppSpawnResult result = {};
+
+    uint8_t buf[1024] = {0};
+    ret = ReadMessage(fds[0], buf, sizeof(buf), &reqNode, &result);
+    EXPECT_EQ(ret, 0);
+    EXPECT_EQ(result.pid, 1234);
+
+    close(fds[0]);
+    close(fds[1]);
 }
 
 }  // namespace OHOS
