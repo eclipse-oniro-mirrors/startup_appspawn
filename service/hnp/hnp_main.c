@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
     if (needLock) {
         ret = HnpGlobalLockAcquire(&lockFd);
         if (ret != 0) {
-            HNP_LOGE("acquire hnp global lock failed, ret=%{public}d, ret");
+            HNP_LOGE("acquire hnp global lock failed, ret=%{public}d", ret);
             return HnpReportApiResult(ret);
         }
     }
