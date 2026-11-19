@@ -41,7 +41,8 @@ public:
     static int32_t DoAllSymlinkPointslink(const AppSpawningCtx *appProperty, cJSON *appConfig);
     static int32_t DoSandboxRootFolderCreate(AppSpawnMgr *content, const AppSpawningCtx *appProperty,
         std::string &sandboxPackagePath);
-    static int32_t DoSandboxRootFolderCreateAdapt(std::string &sandboxPackagePath);
+    static int32_t DoSandboxRootFolderCreateAdapt(const AppSpawningCtx *appProperty,
+        std::string &sandboxPackagePath);
     static int32_t HandleFlagsPoint(const AppSpawningCtx *appProperty, cJSON *appConfig);
     static int32_t SetOverlayAppSandboxProperty(const AppSpawningCtx *appProperty, std::string &sandboxPackagePath);
     static int32_t SetBundleResourceAppSandboxProperty(const AppSpawningCtx *appProperty,
