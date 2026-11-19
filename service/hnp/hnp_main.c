@@ -87,6 +87,8 @@ static NativeManagerCmdInfo* HnpCmdCheck(const char *cmd)
 int main(int argc, char *argv[])
 {
     int ret;
+    int lockFd = -1;
+    bool needLock = false;
     NativeManagerCmdInfo *cmdInfo = NULL;
 
     if (argc < HNP_INDEX_2) {
@@ -100,18 +102,28 @@ int main(int argc, char *argv[])
     cmdInfo = HnpCmdCheck(argv[HNP_INDEX_1]);
     if (cmdInfo == NULL) {
         HNP_LOGE("invalid cmd!. cmd:%{public}s\r\n", argv[HNP_INDEX_1]);
-        return HNP_ERRNO_OPERATOR_TYPE_INVALID;
+        return HnpReportApiResult(HNP_ERRNO_OPERATOR_TYPE_INVALID);
     }
 
     /* 执行命令 */
+    needLock = (cmdInfo->process != HnpShowHelp);
+    if (needLock) {
+        ret = HnpGlobalLockAcquire(&lockFd);
+        if (ret != 0) {
+            HNP_LOGE("acquire hnp global lock failed, ret=%{public}d", ret);
+            return HnpReportApiResult(ret);
+        }
+    }
+
     ret = cmdInfo->process(argc, argv);
-    if (ret == HNP_ERRNO_OPERATOR_ARGV_MISS) {
-        HnpShowHelp(argc, argv);
+
+    if (needLock) {
+        HnpGlobalLockRelease(lockFd);
     }
 
     /* 返回值依赖此条log打印，切勿随意修改 */
     HNP_LOGI("native manager process exit. ret=%{public}d \r\n", ret);
-    return ret;
+    return HnpReportApiResult(ret);
 }
 
 #ifdef __cplusplus
