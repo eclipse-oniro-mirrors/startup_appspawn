@@ -209,6 +209,9 @@ static void SetHWAsanOptions(const AppSpawningCtx *property)
 
 APPSPAWN_STATIC int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *property)
 {
+    if (IsSubSpawnMode(content) || IsSubspawnInstanceCreate(content, property)) {
+        return 0;
+    }
     APPSPAWN_LOGV("Prepare spawn app %{public}s", GetProcessName(property));
     const SpawnPolicy *pl = ResolvePolicy(property);
     APPSPAWN_CHECK_LOGV(pl->asanEnvEnable, return 0,
@@ -245,6 +248,9 @@ APPSPAWN_STATIC int AsanSpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCt
 
 APPSPAWN_STATIC int AsanSpawnInitSpawningEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
+    if (IsSubSpawnMode(content) || IsSubspawnInstanceCreate(content, property)) {
+        return 0;
+    }
     const SpawnPolicy *pl = ResolvePolicy(property);
     if (GetAppSpawnMsgType(property) == MSG_SPAWN_NATIVE_PROCESS || !pl->asanEnvEnable) {
         return 0;

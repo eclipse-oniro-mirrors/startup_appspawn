@@ -1200,6 +1200,11 @@ int OnMessageRebuildFromSPM(AppSpawnMgr *mgr, AppSpawningCtx *ctx)
         return SPM_ERROR_INVALID_PARAM;
     }
 
+    if (IsSubSpawnMode(mgr)) {
+        APPSPAWN_LOGI("OnMessageRebuildFromSPM: subspawn mode do not support");
+        return 0;
+    }
+
     // Skip SPM operations on Linux platform
     APPSPAWN_CHECK_LOGV(!mgr->content.isLinux, return 0, "OnMessageRebuildFromSPM: skip on Linux platform");
 
@@ -1228,6 +1233,10 @@ int OnSpawnAbortUpdateRefCount(AppSpawnMgr *mgr, AppSpawningCtx *ctx)
         return -1;
     }
 
+    if (IsSubSpawnMode(mgr)) {
+        APPSPAWN_LOGE("OnSpawnAbortUpdateRefCount: subspawn mode do not support");
+        return 0;
+    }
     // Skip SPM operations on Linux platform
     APPSPAWN_CHECK_LOGV(!mgr->content.isLinux, return 0, "OnSpawnAbortUpdateRefCount: skip on Linux platform");
 
@@ -1279,6 +1288,11 @@ int OnAppExitUpdateRefCount(const AppSpawnMgr *mgr, const AppSpawnedProcess *app
         return -1;
     }
 
+    if (IsSubSpawnMode(mgr)) {
+        APPSPAWN_LOGE("OnAppExitUpdateRefCount: subspawn mode do not support");
+        return 0;
+    }
+
     // Skip SPM operations on Linux platform
     APPSPAWN_CHECK_LOGV(!mgr->content.isLinux, return 0, "OnAppExitUpdateRefCount: skip on Linux platform");
 
@@ -1323,6 +1337,12 @@ APPSPAWN_STATIC int SpmPreloadHook(AppSpawnMgr *mgr)
     // Skip SPM operations on Linux platform
     APPSPAWN_CHECK_LOGV(!mgr->content.isLinux, return 0, "SpmPreloadHook: skip on Linux platform");
 
+    // Per-app instances must never clear the global appspawn spawn-id refs.
+    if (IsSubSpawnMode(mgr)) {
+        g_spawnId = SPAWN_ID_APP; // Account to the owning appspawn; never clear its global references here.
+        return 0;
+    }
+
     APPSPAWN_LOGI("SPM module initializing...");
 
     uint32_t runMode = mgr->content.mode;
@@ -1346,6 +1366,7 @@ MODULE_CONSTRUCTOR(void)
     APPSPAWN_LOGI("SPM module loading...");
     (void)AddServerStageHook(STAGE_SERVER_PRELOAD, HOOK_PRIO_COMMON, SpmPreloadHook);
     (void)AddAppSpawnHook(STAGE_PARENT_MSG_DECODE, HOOK_PRIO_HIGHEST, OnMessageRebuildFromSPM);
+    (void)AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_PRE_FORK, HOOK_PRIO_HIGHEST, OnMessageRebuildFromSPM);
     (void)AddAppSpawnHook(STAGE_SERVER_SPAWN_ABORT, HOOK_PRIO_HIGHEST, OnSpawnAbortUpdateRefCount);
     (void)AddProcessMgrHook(STAGE_SERVER_APP_CLEANUP, HOOK_PRIO_HIGHEST, OnAppExitUpdateRefCount);
     APPSPAWN_LOGI("SPM module loaded successfully, hooks registered");

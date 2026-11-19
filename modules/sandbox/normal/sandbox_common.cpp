@@ -154,14 +154,12 @@ int SandboxCommon::LoadAppSandboxConfigCJson(AppSpawnMgr *content)
         }
         std::string path = files->paths[i];
         std::string appPath = path + SandboxCommonDef::APP_JSON_CONFIG;
-        APPSPAWN_LOGI("LoadAppSandboxConfig %{public}s", appPath.c_str());
         sandboxCJsonRoot = GetJsonObjFromFile(appPath.c_str());
         APPSPAWN_CHECK((sandboxCJsonRoot != nullptr && cJSON_IsObject(sandboxCJsonRoot)), continue,
                        "Failed to load app data sandbox config %{public}s", appPath.c_str());
         StoreCJsonConfig(sandboxCJsonRoot, SandboxCommonDef::SANDBOX_APP_JSON_CONFIG);
 
         std::string isolatedPath = path + SandboxCommonDef::APP_ISOLATED_JSON_CONFIG;
-        APPSPAWN_LOGI("LoadAppSandboxConfig %{public}s", isolatedPath.c_str());
         sandboxCJsonRoot = GetJsonObjFromFile(isolatedPath.c_str());
         APPSPAWN_CHECK_LOGW((sandboxCJsonRoot != nullptr && cJSON_IsObject(sandboxCJsonRoot)), continue,
                        "Failed to load app data sandbox config %{public}s", isolatedPath.c_str());

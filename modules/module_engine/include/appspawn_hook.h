@@ -80,6 +80,9 @@ typedef enum TagAppSpawnHookStage {
     STAGE_CHILD_PRE_RELY,
     STAGE_CHILD_POST_RELY,
     STAGE_CHILD_PRE_RUN,
+    // Dedicated instance creation stages; keep existing stage values stable.
+    STAGE_CREATE_SUBSPAWN_PRE_FORK,
+    STAGE_CREATE_SUBSPAWN_EXECUTE,
     STAGE_MAX
 } AppSpawnHookStage;
 
@@ -152,6 +155,13 @@ __attribute__((always_inline)) inline int AddPreloadHook(int prio, ServerStageHo
 int AddAppSpawnHook(AppSpawnHookStage stage, int prio, AppSpawnHook hook);
 
 /**
+ * @brief Execute application hooks in a stage using hookmgr execution flags.
+ *
+ * @return The hook error on failure; an unregistered stage is treated as success.
+ */
+int AppSpawnHookExecute(AppSpawnHookStage stage, uint32_t flags, AppSpawnContent *content, AppSpawnClient *client);
+
+/**
  * @brief 添加业务进程处理函数
  *
  * @param stage 阶段信息
@@ -160,6 +170,10 @@ int AddAppSpawnHook(AppSpawnHookStage stage, int prio, AppSpawnHook hook);
  * @return int
  */
 int AddProcessMgrHook(AppSpawnHookStage stage, int prio, ProcessChangeHook hook);
+
+// Executes lifecycle hooks synchronously. The caller retains the populated process information.
+int ProcessMgrHookExecute(AppSpawnHookStage stage,
+    const AppSpawnContent *content, const AppSpawnedProcessInfo *appInfo);
 
 typedef int (*ChildLoop)(AppSpawnContent *content, AppSpawnClient *client);
 /**

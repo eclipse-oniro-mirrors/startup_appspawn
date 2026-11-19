@@ -1018,6 +1018,21 @@ HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_SpmPreloadHook_001, TestSize.Level2)
     TestDataFactory::FreeAppSpawnMgr(mgr);
 }
 
+HWTEST_F(AppSpawnSpmTest, App_Spawn_Spm_SpmPreloadHook_Subspawn_001, TestSize.Level1)
+{
+    AppSpawnMgr mgr = {};
+    mgr.content.mode = MODE_FOR_NWEB_SPAWN;
+    EXPECT_CALL(*mock_, SpmClearSpawnidRefCnt(SPAWN_ID_NWEB)).WillOnce(Return(0));
+    ASSERT_EQ(SpmPreloadHook(&mgr), 0);
+    ASSERT_EQ(GetSpawnId(), SPAWN_ID_NWEB);
+    ASSERT_TRUE(testing::Mock::VerifyAndClearExpectations(mock_.get()));
+
+    mgr.content.mode = MODE_FOR_SUB_SPAWN;
+    EXPECT_CALL(*mock_, SpmClearSpawnidRefCnt(_)).Times(0);
+    EXPECT_EQ(SpmPreloadHook(&mgr), 0);
+    EXPECT_EQ(GetSpawnId(), SPAWN_ID_APP);
+}
+
 // ============================================================================
 // 1.34 ModuleConstructor — verify hooks are registered
 // ============================================================================

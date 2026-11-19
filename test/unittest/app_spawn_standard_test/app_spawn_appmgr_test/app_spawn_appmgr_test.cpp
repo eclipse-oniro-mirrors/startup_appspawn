@@ -1339,10 +1339,11 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_GetSpawnNameByRunMode_001, TestSize.Level
         APPSPAWN_SERVER_NAME, NWEBSPAWN_SERVER_NAME,       // MODE_FOR_APP_COLD_RUN, MODE_FOR_NWEB_COLD_RUN
         NATIVESPAWN_SERVER_NAME, NATIVESPAWN_SERVER_NAME,  // MODE_FOR_NATIVE_SPAWN, MODE_FOR_NATIVE_COLD_RUN
         CJAPPSPAWN_SERVER_NAME, CJAPPSPAWN_SERVER_NAME,    // MODE_FOR_CJAPP_SPAWN, MODE_FOR_CJAPP_COLD_RUN
-        HYBRIDSPAWN_SERVER_NAME, HYBRIDSPAWN_SERVER_NAME   // MODE_FOR_HYBRID_SPAWN, MODE_FOR_HYBRID_COLD_RUN
+        HYBRIDSPAWN_SERVER_NAME, HYBRIDSPAWN_SERVER_NAME,  // MODE_FOR_HYBRID_SPAWN, MODE_FOR_HYBRID_COLD_RUN
+        "",                                             // MODE_FOR_SUB_SPAWN
     };
     for (int i = 0; i < modeCount; i++) {
-        EXPECT_EQ(0, strcmp(GetSpawnNameByRunMode(static_cast<RunMode>(i)), expectName[i]));
+        EXPECT_STREQ(expectName[i], GetSpawnNameByRunMode(static_cast<RunMode>(i)));
     }
     EXPECT_EQ(0, strcmp(GetSpawnNameByRunMode(MODE_INVALID), ""));
     EXPECT_EQ(0, strcmp(GetSpawnNameByRunMode(static_cast<RunMode>(-1)), ""));

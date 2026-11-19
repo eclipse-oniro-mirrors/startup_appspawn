@@ -388,7 +388,7 @@ void ReportMountFullHisysevent(int32_t errCode)
     bool needReport = CheckNeedUpdateReport();
     APPSPAWN_CHECK_DUMPI(needReport, return, "WriteMountInfo not need report");
 
-    int appCount = OH_ListGetCnt(&mgr->appQueue);
+    int appCount = OH_ListGetCnt(&mgr->appQueue) + OH_ListGetCnt(&mgr->subspawnQueue);
     uint32_t mainNsMountCount = GetMountCountForPid(mgr->servicePid);
     uint32_t allMountCount = GetAllMountCount();
 

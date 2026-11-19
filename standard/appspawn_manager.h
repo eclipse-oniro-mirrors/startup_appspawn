@@ -81,6 +81,13 @@ typedef struct {
     char *coldRunPath;
 } AppSpawnForkCtx;
 
+enum {
+    SUBSPAWN_MEM_FD_INDEX = 0,
+    SUBSPAWN_PIPE_FD_INDEX,
+    SUBSPAWN_LISTEN_FD_INDEX,
+    SUBSPAWN_FD_COUNT
+};
+
 typedef struct TagAppSpawningCtx {
     AppSpawnClient client;
     struct ListNode node;
@@ -91,6 +98,7 @@ typedef struct TagAppSpawningCtx {
     int state;
     struct timespec spawnStart;
     bool allowDumpable;
+    int subspawnFds[SUBSPAWN_FD_COUNT];  // CREATE keeps message, ready and listen descriptors across exec.
     uint64_t checkPointId;        // Image process index ID
     uint8_t spmRefAdded;          // Bitmap: which SPM refcounts have been incremented
                                   //   bit0 (0x01): tokenid refcount
@@ -120,6 +128,7 @@ typedef struct TagAppSpawnedProcess {
     AppSpawnMsgNode *message;
 #endif
     bool isDebuggable;
+    bool isSubspawn;  // Per-app server cgroup lifecycle belongs to appspawn.
     uint32_t appIndex;
     bool lockBundleRefAdded;  // Flag: whether AddLockBundleRef has been called for _preunlock directory
     char *lockPath;  // Sandbox root path for _preunlock directory management
@@ -181,6 +190,7 @@ typedef struct TagAppSpawnMgr {
     TaskHandle server;
     SignalHandle sigHandler;
     struct ListNode appQueue;           // save spawned app pid and name
+    struct ListNode subspawnQueue;      // save ready subspawn instances
     struct ListNode diedQueue;          // save died app pid and name
     struct ListNode appSpawnQueue;      // save spawning app pid and name
     struct ListNode extData;
@@ -209,6 +219,9 @@ typedef void (*AppTraversal)(const AppSpawnMgr *mgr, AppSpawnedProcess *appInfo,
 void TraversalSpawnedProcess(AppTraversal traversal, void *data);
 AppSpawnedProcess *AddSpawnedProcess(pid_t pid, const char *processName, uint32_t appIndex,
     bool isDebuggable, uint64_t tokenid);
+AppSpawnedProcess *AddSubspawnProcess(pid_t pid, const char *processName, uint32_t appIndex,
+    bool isDebuggable, uint64_t tokenid);
+AppSpawnedProcess *GetSubspawnProcess(pid_t pid);
 AppSpawnedProcess *GetSpawnedProcess(pid_t pid);
 AppSpawnedProcess *GetSpawnedProcessByName(const char *name);
 void TerminateSpawnedProcess(AppSpawnedProcess *node);
@@ -280,6 +293,11 @@ APPSPAWN_INLINE int IsNativeSpawnMode(const AppSpawnMgr *content)
         (content->content.mode == MODE_FOR_NATIVE_SPAWN || content->content.mode == MODE_FOR_NATIVE_COLD_RUN);
 }
 
+APPSPAWN_INLINE int IsSubSpawnMode(const AppSpawnMgr *content)
+{
+    return (content != NULL) && (content->content.mode == MODE_FOR_SUB_SPAWN);
+}
+
 APPSPAWN_INLINE int IsHybridSpawnMode(const AppSpawnMgr *content)
 {
     return (content != NULL) &&
@@ -310,6 +328,13 @@ APPSPAWN_INLINE int GetAppSpawnMsgType(const AppSpawningCtx *appProperty)
 {
     return (appProperty != NULL && appProperty->message != NULL) ?
         appProperty->message->msgHeader.msgType : MAX_TYPE_INVALID;
+}
+
+APPSPAWN_INLINE bool IsSubspawnInstanceCreate(const AppSpawnMgr *content, const AppSpawningCtx *property)
+{
+    // CREATE runs in appspawn, including the forked child until exec starts subspawn.
+    return content != NULL && content->content.mode == MODE_FOR_APP_SPAWN &&
+        GetAppSpawnMsgType(property) == MSG_SUBSPAWN_CREATE;
 }
 
 APPSPAWN_INLINE const char *GetProcessName(const AppSpawningCtx *property)
@@ -394,6 +419,11 @@ APPSPAWN_INLINE int IsIsolatedNativeSpawnMode(const AppSpawnMgr *content, const 
         CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
 }
 
+APPSPAWN_INLINE int IsIsolatedSubSpawnMode(const AppSpawnMgr *content, const AppSpawningCtx *property)
+{
+    return (content != NULL) && (content->content.mode == MODE_FOR_SUB_SPAWN) &&
+        CheckAppMsgFlagsSet(property, APP_FLAGS_ISOLATED_SANDBOX_TYPE);
+}
 /* PC custom sandbox app: PC(nosharefs) && (isShareUid || CUSTOM_SANDBOX).
  * Inline here because callers live in different DSOs (see versionscript).
  */

@@ -64,7 +64,8 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/modules/ace_adapter/appspawn_checkpoint.c",
       "${appspawn_path}/interfaces/innerkits/client/appspawn_msg.c",
       "${appspawn_path}/interfaces/innerkits/client/appspawn_client.c",
-      "${appspawn_path}/standard/appspawn_service.c"
+      "${appspawn_path}/standard/appspawn_service.c",
+      "${appspawn_path}/standard/subspawn_manager.c"
     ]
 
     # Dependent code sources

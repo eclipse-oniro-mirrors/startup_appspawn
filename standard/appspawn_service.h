@@ -60,6 +60,8 @@ typedef struct TagAppSpawnConnection {
     uint32_t connectionId;
     TaskHandle stream;
     AppSpawnMsgReceiverCtx receiverCtx;
+    uid_t peerUid;  // 由 SO_PEERCRED 获取，不使用消息中自报的 UID。
+    bool peerCredValid;
 } AppSpawnConnection;
 
 typedef struct TagAppSpawnStartArg {
@@ -84,6 +86,8 @@ struct RenderIpcFds {
     int32_t sharedFd;
     int32_t crashFd;
 };
+
+int ReapSubspawnProcess(pid_t pid);
 
 #ifdef __cplusplus
 }

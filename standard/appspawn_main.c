@@ -21,9 +21,11 @@
 #include "appspawn_modulemgr.h"
 #include "appspawn_manager.h"
 #include "appspawn_service.h"
+#include "subspawn_manager.h"
 #include "appspawn_trace.h"
 #include "parameter.h"
 #include "securec.h"
+#include "appspawn_error.h"
 
 #define APPSPAWN_PRELOAD "libappspawn_helper.z.so"
 #define CJAPPSPAWN_COLD "cj_app_cold"
@@ -42,6 +44,7 @@ static AppSpawnStartArgTemplate g_appSpawnStartArgTemplate[PROCESS_INVALID] = {
     {"hybrid_cold", {MODE_FOR_HYBRID_COLD_RUN, MODULE_HYBRIDSPAWN, HYBRIDSPAWN_SOCKET_NAME,
         HYBRIDSPAWN_SERVER_NAME, 0}},
     {APPSPAWNDF_SERVER_NAME, {MODE_FOR_APP_SPAWN, MODULE_APPSPAWN, APPSPAWNDF_SOCKET_NAME, APPSPAWNDF_SERVER_NAME, 1}},
+    {SUBSPAWN_SERVER_NAME, {MODE_FOR_SUB_SPAWN, MODULE_COMMON, SUBSPAWN_SERVER_NAME, SUBSPAWN_SERVER_NAME, 1}},
 };
 #else
 static AppSpawnStartArgTemplate g_appCJSpawnStartArgTemplate[CJPROCESS_INVALID] = {
@@ -121,6 +124,12 @@ int main(int argc, char *const argv[])
         argTemp = GetAppSpawnStartArg(argv[MODE_VALUE_INDEX], g_appCJSpawnStartArgTemplate,
             argTemp, ARRAY_LENGTH(g_appCJSpawnStartArgTemplate));
     }
+#elif SUBSPAWN_SPAWN
+    argTemp = &g_appSpawnStartArgTemplate[PROCESS_FOR_SUB_SPAWN];
+    if (argc > MODE_VALUE_INDEX) {
+        argTemp = GetAppSpawnStartArg(argv[MODE_VALUE_INDEX], g_appSpawnStartArgTemplate,
+            argTemp, ARRAY_LENGTH(g_appSpawnStartArgTemplate));
+    }
 #elif NATIVE_SPAWN
     argTemp = &g_appSpawnStartArgTemplate[PROCESS_FOR_NATIVE_SPAWN];
     if (argc > MODE_VALUE_INDEX) {
@@ -147,6 +156,10 @@ int main(int argc, char *const argv[])
     }
 #endif
     arg = &argTemp->arg;
+    if (arg->mode == MODE_FOR_SUB_SPAWN && SubspawnEarlyParse(argc, argv) != 0) {
+        APPSPAWN_LOGE("Invalid subspawn instance arguments");
+        return EXIT_FAILURE;
+    }
     if (arg->initArg == 0) {
         APPSPAWN_CHECK(argc >= ARG_NULL, return 0, "Invalid arg for cold start %{public}d", argc);
     } else {
@@ -156,7 +169,16 @@ int main(int argc, char *const argv[])
     StartAppspawnTrace("StartSpawnService");
     AppSpawnContent *content = StartSpawnService(arg, argvSize, argc, argv);
     FinishAppspawnTrace();
+    if (arg->mode == MODE_FOR_SUB_SPAWN && content == NULL) {
+        SubspawnNotifyReady(SubspawnGetStartResult());
+    }
     if (content != NULL) {
+        if (arg->mode == MODE_FOR_SUB_SPAWN) {
+            int ret = SubspawnSetProcessName(content);
+            APPSPAWN_CHECK(ret == 0, SubspawnNotifyReady(ret);
+                AppSpawnDestroyContent(content);
+                return EXIT_FAILURE, "Failed to set subspawn instance name");
+        }
         content->runAppSpawn(content, argc, argv);
     }
     APPSPAWN_LOGI("main end");

@@ -77,6 +77,11 @@ int CapabilityPrctlMock(int option, ...)
         cap = va_arg(args, int);
     }
     va_end(args);
+    if (operation == PR_CAP_AMBIENT_CLEAR_ALL) {
+        g_capabilityTestState->ambientClearCalls++;
+        g_capabilityTestState->ambient = 0;
+        return 0;
+    }
     if (operation != PR_CAP_AMBIENT_RAISE) {
         return 0;
     }

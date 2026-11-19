@@ -255,6 +255,110 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_NormalApp_001, TestSize.Level0)
 }
 
 /*
+ * @tc.name: SetAppUidGid_SubspawnIsolatedUid_001
+ * @tc.desc: Business FORK rejects UIDs outside the isolated segment before changing identity.
+ * @tc.type: SECU
+ */
+HWTEST_F(AppSpawnAppUidDacTest, SetAppUidGid_SubspawnIsolatedUid_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_SUB_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    const uint32_t invalidUids[] = {
+        10000, 100000, 109999, 120000, 199999, 200000, 309999, 320000,
+        20010029, 20109999, 20120000, UINT32_MAX,
+    };
+    for (uint32_t uid : invalidUids) {
+        SCOPED_TRACE(testing::Message() << "uid=" << uid);
+        AppUidPropertyPtr property(BuildAppUidProperty("com.test.subspawnuid", uid, NORMAL_APP_UID, false),
+            CleanupAppUidProperty);
+        ASSERT_NE(property, nullptr);
+        ExpectDacRejected(mgr.get(), property.get());
+    }
+}
+
+/*
+ * @tc.name: SetAppUidGid_SubspawnIsolatedUid_002
+ * @tc.desc: CREATE and business FORK accept both isolated UID boundaries for multiple users.
+ * @tc.type: SECU
+ */
+HWTEST_F(AppSpawnAppUidDacTest, SetAppUidGid_SubspawnIsolatedUid_002, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    const uint32_t validUids[] = {110000, 119999, 310000, 319999, 20110000, 20119999};
+    for (bool creatingInstance : {true, false}) {
+        mgr->content.mode = creatingInstance ? MODE_FOR_APP_SPAWN : MODE_FOR_SUB_SPAWN;
+        for (uint32_t uid : validUids) {
+            SCOPED_TRACE(testing::Message() << "create=" << creatingInstance << " uid=" << uid);
+            AppUidPropertyPtr property(BuildAppUidProperty("com.test.subspawnuid", uid, NORMAL_APP_UID, false),
+                CleanupAppUidProperty);
+            ASSERT_NE(property, nullptr);
+            property->message->msgHeader.msgType = creatingInstance ? MSG_SUBSPAWN_CREATE : MSG_APP_SPAWN;
+            AppUidMockReset();
+            EXPECT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
+            ASSERT_EQ(AppUidMockSetresuidCallCount(), 1);
+            AppUidSetresuidCall call = {};
+            ASSERT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
+            EXPECT_EQ(call.ruid, uid);
+            EXPECT_EQ(call.euid, uid);
+            EXPECT_EQ(call.suid, uid);
+        }
+    }
+}
+
+/*
+ * @tc.name: SetAppUidGid_SubspawnCreateUid_001
+ * @tc.desc: CREATE accepts valid DAC UIDs outside the isolated segment.
+ * @tc.type: SECU
+ */
+HWTEST_F(AppSpawnAppUidDacTest, SetAppUidGid_SubspawnCreateUid_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    const uint32_t validUids[] = {10000, 100000, 109999, 120000, 20010029};
+    for (uint32_t uid : validUids) {
+        SCOPED_TRACE(testing::Message() << "uid=" << uid);
+        AppUidPropertyPtr property(BuildAppUidProperty("com.test.subspawncreateuid", uid, NORMAL_APP_UID, false),
+            CleanupAppUidProperty);
+        ASSERT_NE(property, nullptr);
+        property->message->msgHeader.msgType = MSG_SUBSPAWN_CREATE;
+        AppUidMockReset();
+        EXPECT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
+        ASSERT_EQ(AppUidMockSetresuidCallCount(), 1);
+        AppUidSetresuidCall call = {};
+        ASSERT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
+        EXPECT_EQ(call.ruid, uid);
+        EXPECT_EQ(call.euid, uid);
+        EXPECT_EQ(call.suid, uid);
+    }
+}
+
+/*
+ * @tc.name: SetAppUidGid_NonSubspawnUid_001
+ * @tc.desc: The five existing service modes keep accepting ordinary application UIDs.
+ * @tc.type: FUNC
+ */
+HWTEST_F(AppSpawnAppUidDacTest, SetAppUidGid_NonSubspawnUid_001, TestSize.Level1)
+{
+    AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
+    ASSERT_NE(mgr, nullptr);
+    const RunMode modes[] = {
+        MODE_FOR_APP_SPAWN, MODE_FOR_NWEB_SPAWN, MODE_FOR_NATIVE_SPAWN,
+        MODE_FOR_CJAPP_SPAWN, MODE_FOR_HYBRID_SPAWN,
+    };
+    for (RunMode mode : modes) {
+        SCOPED_TRACE(testing::Message() << "mode=" << mode);
+        mgr->content.mode = mode;
+        AppUidPropertyPtr property(BuildAppUidProperty("com.test.normaluid", NORMAL_APP_UID, NORMAL_APP_UID, false),
+            CleanupAppUidProperty);
+        ASSERT_NE(property, nullptr);
+        AppUidMockReset();
+        EXPECT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
+        ExpectAppliedIdentity(NORMAL_APP_UID, OHOS::AppUidTest::APPUID_TEST_DAC_GID, NORMAL_APP_UID);
+    }
+}
+
+/*
  * @tc.name: AppUid_SetUidGid_RootUid_001
  * @tc.desc: uid range rule - uid 0 is rejected even for a real custom sandbox
  *           app, so the custom-sandbox path can never spawn a root process.
