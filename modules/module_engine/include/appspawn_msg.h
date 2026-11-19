@@ -50,6 +50,8 @@ extern "C" {
 #define APP_APL_MAX_LEN 32
 #define APP_RENDER_CMD_MAX_LEN 2048
 #define APP_OWNER_ID_LEN 64
+#define AGENT_ID_STR_MAX_LEN 64
+#define USER_ID_STR_MAX_LEN 16
 
 typedef enum {
     TLV_BUNDLE_INFO = 0,

@@ -333,8 +333,6 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 #define MSG_EXT_NAME_IPC_GROUP "IPCGroup"
 #define MSG_EXT_NAME_AGENT_ID "AgentId"
 
-#define AGENT_ID_STR_MAX_LEN 64
-#define USER_ID_STR_MAX_LEN 16
 
 int AppSpawnReqMsgAddExtInfo(AppSpawnReqMsgHandle reqHandle, const char *name, const uint8_t *value, uint32_t valueLen);
 
