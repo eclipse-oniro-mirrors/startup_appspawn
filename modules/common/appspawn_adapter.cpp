@@ -399,17 +399,18 @@ int LoadSeLinuxConfig(void)
 uint32_t GetHostId(const AppSpawningCtx *property)
 {
     uint32_t hostId = 0; // The value of 0 is invalid. Its purpose is to initialize.
-    const char *userId =
+    // ParentUid ext info carries the hostProcessUid supplied by Ability Manager Service.
+    const char *parentUidStr =
         (const char *)(GetAppSpawnMsgExtInfo(property->message, MSG_EXT_NAME_PARENT_UID, nullptr));
-    if (userId == nullptr) {
-        APPSPAWN_LOGE("AppSpawn get hostId failed, userId is null");
+    if (parentUidStr == nullptr) {
+        APPSPAWN_LOGE("AppSpawn get hostId failed, parentUid is null");
         return hostId;
     }
 
     char *end;
     errno = 0;
     const int numberBase = 10;
-    hostId = strtoul(userId, &end, numberBase);
+    hostId = strtoul(parentUidStr, &end, numberBase);
     APPSPAWN_CHECK(errno != ERANGE && *end == '\0', return 0, "AppSpawn get hostId failed, errno=%d.", errno);
     return hostId;
 }

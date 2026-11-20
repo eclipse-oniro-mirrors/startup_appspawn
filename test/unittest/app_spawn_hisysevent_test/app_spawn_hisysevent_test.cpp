@@ -23,7 +23,7 @@
 
 namespace OHOS {
 namespace system {
-void ProcessMgrRemoveApp(const char* processName, int pid, int uid, int status);
+void ProcessMgrRemoveApp(const char* processName, int pid, int appUid, int status);
 }  // namespace system
 }  // namespace OHOS
 

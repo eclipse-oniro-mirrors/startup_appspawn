@@ -136,10 +136,11 @@ void ReportSpawnStatisticDuration(const TimerHandle taskHandle, void* content);
 
 void ReportMountFull(int32_t errCode, int32_t nsMountCount, int32_t deviceMountCount, int32_t spawnResult);
 
-// Unlock mount event report functions (structured events with queryable params)
-void ReportUnlockMountResult(int32_t uid, int32_t totalCount,
+// UNLOCK_MOUNT_ALL_DONE reports the account ID in the UID event field.
+void ReportUnlockMountResult(int32_t userId, int32_t totalCount,
     int32_t successCount, int32_t failCount, int64_t duration);
-void ReportUnlockMountAppFail(int32_t uid, const char *bundleName,
+// UNLOCK_MOUNT_APP_FAIL reports the application UID in the UID event field.
+void ReportUnlockMountAppFail(int32_t appUid, const char *bundleName,
     const char *srcPath, const char *destPath, int32_t errorCode);
 
 #ifdef __cplusplus

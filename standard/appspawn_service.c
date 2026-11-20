@@ -80,12 +80,12 @@ static void ProcessUnlockChildResponse(const WatcherHandle taskHandle, int fd,
     uint32_t *events, const void *context);
 
 // Forward declarations for unlock mount functions
-APPSPAWN_STATIC bool HandleUnlockEvent(AppSpawnContent *content, int uid, AppSpawnMsgNode *message,
+APPSPAWN_STATIC bool HandleUnlockEvent(AppSpawnContent *content, int userId, AppSpawnMsgNode *message,
     AppSpawnConnection *connection);
-APPSPAWN_STATIC int SendUnlockMsgToPrefork(AppSpawnContent *content, int uid);
-APPSPAWN_STATIC int DoUnlockMountSerial(AppSpawnContent *content, int uid);
-APPSPAWN_STATIC int ProcessUnlockMessage(int uid);
-APPSPAWN_STATIC int ForkAndDoUnlockMount(AppSpawnContent *content, int uid, AppSpawningCtx *property);
+APPSPAWN_STATIC int SendUnlockMsgToPrefork(AppSpawnContent *content, int userId);
+APPSPAWN_STATIC int DoUnlockMountSerial(AppSpawnContent *content, int userId);
+APPSPAWN_STATIC int ProcessUnlockMessage(int userId);
+APPSPAWN_STATIC int ForkAndDoUnlockMount(AppSpawnContent *content, int userId, AppSpawningCtx *property);
 
 // FD_CLOEXEC
 static inline void SetFdCtrl(int fd, int opt)
@@ -158,7 +158,7 @@ APPSPAWN_STATIC void WriteSignalInfoToFd(AppSpawnedProcess *appInfo, AppSpawnCon
 {
     APPSPAWN_CHECK(content->signalFd > 0, return, "Invalid signal fd[%{public}d]", content->signalFd);
     APPSPAWN_CHECK(appInfo->pid > 0, return, "Invalid pid[%{public}d]", appInfo->pid);
-    APPSPAWN_CHECK(appInfo->appUid > 0, return, "Invalid uid[%{public}d]", appInfo->appUid);
+    APPSPAWN_CHECK(appInfo->appUid > 0, return, "Invalid appUid[%{public}u]", appInfo->appUid);
     APPSPAWN_CHECK(appInfo->name != NULL, return, "Invalid name");
 
     cJSON *root = cJSON_CreateObject();
@@ -1102,9 +1102,9 @@ static void UnlockChildTimeout(const TimerHandle taskHandle, void *context)
 
 APPSPAWN_STATIC void HandlePreforkUnlockMsg(AppSpawnContent *content, const AppSpawnUnlockMsg *unlockMsg)
 {
-    APPSPAWN_LOGI("HandlePreforkUnlockMsg: uid=%{public}d pid=%{public}d",
-        unlockMsg->uid, getpid());
-    int result = ProcessUnlockMessage(unlockMsg->uid);
+    APPSPAWN_LOGI("HandlePreforkUnlockMsg: userId=%{public}d pid=%{public}d",
+        unlockMsg->userId, getpid());
+    int result = ProcessUnlockMessage(unlockMsg->userId);
 
 #ifdef APPSPAWN_HISYSEVENT
     ReportKeyEvent(result == 0 ? UNLOCK_SUCCESS : "UNLOCK_MOUNT_FAIL");
@@ -1113,15 +1113,15 @@ APPSPAWN_STATIC void HandlePreforkUnlockMsg(AppSpawnContent *content, const AppS
     AppSpawnMgr *mgr = (AppSpawnMgr *)content;
     AppSpawnFds *childToParentFd = FindSpawningFdsByPid(mgr, getpid(), TYPE_CHILD_PARENT);
     APPSPAWN_ONLY_EXPER(childToParentFd == NULL || childToParentFd->fds[1] < 0,
-        APPSPAWN_LOGE("L1 prefork childToParentFd not found, uid=%{public}d result=%{public}d dropped",
-            unlockMsg->uid, result);
+        APPSPAWN_LOGE("L1 prefork childToParentFd not found, userId=%{public}d result=%{public}d dropped",
+            unlockMsg->userId, result);
 #ifdef APPSPAWN_HISYSEVENT
         ReportKeyEvent("UNLOCK_MOUNT_L1_RESULT_DROPPED");
 #endif
         ProcessExit(0));
 
-    APPSPAWN_LOGI("L1 prefork write result: uid=%{public}d result=%{public}d fd=%{public}d",
-        unlockMsg->uid, result, childToParentFd->fds[1]);
+    APPSPAWN_LOGI("L1 prefork write result: userId=%{public}d result=%{public}d fd=%{public}d",
+        unlockMsg->userId, result, childToParentFd->fds[1]);
     ssize_t writeSize = write(childToParentFd->fds[1], &result, sizeof(result));
     APPSPAWN_ONLY_EXPER(writeSize != sizeof(result),
 #ifdef APPSPAWN_HISYSEVENT
@@ -2609,7 +2609,7 @@ APPSPAWN_STATIC bool ProcessAppSpawnLockStatusMsg(AppSpawnConnection *connection
         // Sync path (L3): Both L1 and L2 failed, do serial mount in main process
         int mountResult = DoUnlockMountSerial(GetAppSpawnContent(), userId);
         *result = mountResult;
-        APPSPAWN_LOGI("L3 serial mount done: uid=%{public}d result=%{public}d", userId, mountResult);
+        APPSPAWN_LOGI("L3 serial mount done: userId=%{public}d result=%{public}d", userId, mountResult);
         return false;
     }
     return false;
@@ -2831,16 +2831,16 @@ static void ReforkPreforkIfNeeded(AppSpawnContent *content)
     }
 }
 
-static int TryLevel1PreforkUnlock(AppSpawnContent *content, int uid, AppSpawningCtx *property)
+static int TryLevel1PreforkUnlock(AppSpawnContent *content, int userId, AppSpawningCtx *property)
 {
     APPSPAWN_ONLY_EXPER(content->reservedPid <= 0, return APPSPAWN_SYSTEM_ERROR);
     AppSpawnMgr *mgr = (AppSpawnMgr *)content;
-    APPSPAWN_LOGI("TryLevel1PreforkUnlock: uid=%{public}d reservedPid=%{public}d",
-        uid, content->reservedPid);
+    APPSPAWN_LOGI("TryLevel1PreforkUnlock: userId=%{public}d reservedPid=%{public}d",
+        userId, content->reservedPid);
 
     do {
         AppSpawnFds *pcFds = FindSpawningFdsByPid(mgr, content->reservedPid, TYPE_PARENT_CHILD);
-        APPSPAWN_CHECK(pcFds != NULL && pcFds->fds[1] >= 0 && SendUnlockMsgToPrefork(content, uid) == 0, break,
+        APPSPAWN_CHECK(pcFds != NULL && pcFds->fds[1] >= 0 && SendUnlockMsgToPrefork(content, userId) == 0, break,
             "L1 failed: send unlock msg to prefork failed");
 
         AppSpawnFds *cpFds = FindSpawningFdsByPid(mgr, content->reservedPid, TYPE_CHILD_PARENT);
@@ -2879,16 +2879,16 @@ static int TryLevel1PreforkUnlock(AppSpawnContent *content, int uid, AppSpawning
     return APPSPAWN_SYSTEM_ERROR;
 }
 
-APPSPAWN_STATIC bool HandleUnlockEvent(AppSpawnContent *content, int uid, AppSpawnMsgNode *message,
+APPSPAWN_STATIC bool HandleUnlockEvent(AppSpawnContent *content, int userId, AppSpawnMsgNode *message,
     AppSpawnConnection *connection)
 {
     APPSPAWN_CHECK(content != NULL, return false, "HandleUnlockEvent: Invalid content");
-    APPSPAWN_CHECK(uid > 0, return false, "HandleUnlockEvent: Invalid uid");
+    APPSPAWN_CHECK(userId > 0, return false, "HandleUnlockEvent: Invalid userId");
     APPSPAWN_CHECK(message != NULL, return false, "HandleUnlockEvent: Invalid message");
     APPSPAWN_CHECK(connection != NULL, return false, "HandleUnlockEvent: Invalid connection");
 
-    APPSPAWN_LOGI("HandleUnlockEvent start: uid=%{public}d reservedPid=%{public}d",
-        uid, content->reservedPid);
+    APPSPAWN_LOGI("HandleUnlockEvent start: userId=%{public}d reservedPid=%{public}d",
+        userId, content->reservedPid);
 
     // Create property context for L1/L2 async operations
     // NOTE: property->message and message->connection are used by L1/L2:
@@ -2904,17 +2904,17 @@ APPSPAWN_STATIC bool HandleUnlockEvent(AppSpawnContent *content, int uid, AppSpa
 
     do {
         // Level 1: Reuse prefork child process (zero fork overhead)
-        APPSPAWN_ONLY_EXPER(TryLevel1PreforkUnlock(content, uid, property) == 0,
+        APPSPAWN_ONLY_EXPER(TryLevel1PreforkUnlock(content, userId, property) == 0,
             APPSPAWN_LOGI("HandleUnlockEvent L1 async started: pid=%{public}d", property->pid);
             async = true;
             break);
 
         // Level 2: Fork new child process with pipe for result
-        APPSPAWN_ONLY_EXPER(ForkAndDoUnlockMount(content, uid, property) == 0, async = true;
+        APPSPAWN_ONLY_EXPER(ForkAndDoUnlockMount(content, userId, property) == 0, async = true;
             break);
 
         // Both L1 and L2 failed, caller will handle L3 serial mount
-        APPSPAWN_LOGI("HandleUnlockEvent L1/L2 both failed, uid=%{public}d", uid);
+        APPSPAWN_LOGI("HandleUnlockEvent L1/L2 both failed, userId=%{public}d", userId);
         property->message = NULL;
         DeleteAppSpawningCtx(property);
     } while (0);
@@ -2923,7 +2923,7 @@ APPSPAWN_STATIC bool HandleUnlockEvent(AppSpawnContent *content, int uid, AppSpa
     return async;
 }
 
-APPSPAWN_STATIC int SendUnlockMsgToPrefork(AppSpawnContent *content, int uid)
+APPSPAWN_STATIC int SendUnlockMsgToPrefork(AppSpawnContent *content, int userId)
 {
     APPSPAWN_CHECK(content != NULL, return APPSPAWN_ARG_INVALID,
                   "SendUnlockMsgToPrefork: Invalid content");
@@ -2936,7 +2936,7 @@ APPSPAWN_STATIC int SendUnlockMsgToPrefork(AppSpawnContent *content, int uid)
 
     AppSpawnPipeMsg msg = {0};
     msg.type = MSG_LOCK_STATUS;
-    msg.msg.unlockMsg.uid = uid;
+    msg.msg.unlockMsg.userId = userId;
 
     ssize_t writeSize = write(pcFds->fds[1], &msg, sizeof(msg));
     if (writeSize != sizeof(msg)) {
@@ -2945,12 +2945,12 @@ APPSPAWN_STATIC int SendUnlockMsgToPrefork(AppSpawnContent *content, int uid)
         return APPSPAWN_PIPE_ERROR;
     }
 
-    APPSPAWN_LOGI("SendUnlockMsgToPrefork success: uid=%{public}d fd=%{public}d",
-        uid, pcFds->fds[1]);
+    APPSPAWN_LOGI("SendUnlockMsgToPrefork success: userId=%{public}d fd=%{public}d",
+        userId, pcFds->fds[1]);
     return 0;
 }
 
-APPSPAWN_STATIC int ForkAndDoUnlockMount(AppSpawnContent *content, int uid, AppSpawningCtx *property)
+APPSPAWN_STATIC int ForkAndDoUnlockMount(AppSpawnContent *content, int userId, AppSpawningCtx *property)
 {
     APPSPAWN_CHECK(content != NULL, return APPSPAWN_ARG_INVALID, "ForkAndDoUnlockMount: Invalid content");
     APPSPAWN_CHECK(property != NULL, return APPSPAWN_ARG_INVALID, "ForkAndDoUnlockMount: Invalid property");
@@ -2967,9 +2967,9 @@ APPSPAWN_STATIC int ForkAndDoUnlockMount(AppSpawnContent *content, int uid, AppS
     }
     if (pid == 0) {
         HilogCloseSocketFd();
-        int result = ProcessUnlockMessage(uid);
-        APPSPAWN_LOGI("L2 child write result: uid=%{public}d result=%{public}d fd=%{public}d",
-            uid, result, property->forkCtx.fd[1]);
+        int result = ProcessUnlockMessage(userId);
+        APPSPAWN_LOGI("L2 child write result: userId=%{public}d result=%{public}d fd=%{public}d",
+            userId, result, property->forkCtx.fd[1]);
         ssize_t writeSize = write(property->forkCtx.fd[1], &result, sizeof(result));
         APPSPAWN_CHECK_ONLY_LOG(writeSize == sizeof(result),
             "L2 write result failed %{public}zd %{public}d", writeSize, errno);
@@ -3001,27 +3001,27 @@ APPSPAWN_STATIC int ForkAndDoUnlockMount(AppSpawnContent *content, int uid, AppS
     return 0;
 }
 
-APPSPAWN_STATIC int DoUnlockMountSerial(AppSpawnContent *content, int uid)
+APPSPAWN_STATIC int DoUnlockMountSerial(AppSpawnContent *content, int userId)
 {
-    APPSPAWN_LOGI("DoUnlockMountSerial: uid=%{public}d", uid);
+    APPSPAWN_LOGI("DoUnlockMountSerial: userId=%{public}d", userId);
 
-    int result = ProcessUnlockMessage(uid);
+    int result = ProcessUnlockMessage(userId);
 
-    APPSPAWN_LOGI("DoUnlockMountSerial done: uid=%{public}d result=%{public}d", uid, result);
+    APPSPAWN_LOGI("DoUnlockMountSerial done: userId=%{public}d result=%{public}d", userId, result);
 #ifdef APPSPAWN_HISYSEVENT
     ReportKeyEvent(UNLOCK_MOUNT_L3_DONE);
 #endif
     return result;
 }
 
-APPSPAWN_STATIC int ProcessUnlockMessage(int uid)
+APPSPAWN_STATIC int ProcessUnlockMessage(int userId)
 {
-    APPSPAWN_LOGI("ProcessUnlockMessage start, uid=%{public}d", uid);
+    APPSPAWN_LOGI("ProcessUnlockMessage start, userId=%{public}d", userId);
 
-    // Set UID in content for hook function to retrieve
+    // Set userId in content for hook function to retrieve
     AppSpawnContent *content = GetAppSpawnContent();
     if (content != NULL) {
-        content->currentUnlockUid = uid;
+        content->currentUnlockUserId = userId;
     }
 
     // Save original scheduling policy and priority
@@ -3045,6 +3045,6 @@ APPSPAWN_STATIC int ProcessUnlockMessage(int uid)
     ret = sched_setscheduler(0, oldSchedPolicy, &oldParam);
     APPSPAWN_CHECK_ONLY_LOG(ret == 0, "restore scheduler failed ret=%{public}d", ret);
 
-    APPSPAWN_LOGI("ProcessUnlockMessage done, uid=%{public}d, result=%{public}d", uid, result);
+    APPSPAWN_LOGI("ProcessUnlockMessage done, userId=%{public}d, result=%{public}d", userId, result);
     return result;
 }

@@ -27,7 +27,7 @@ using OHOS::AppUidTest::CleanupAppUidProperty;
 
 namespace {
 
-constexpr uint32_t CUSTOM_SANDBOX_UID = 100;           // userId-like 10x uid
+constexpr uint32_t CUSTOM_SANDBOX_UID = 100;           // shared process UID (10x)
 constexpr uint32_t CUSTOM_SANDBOX_APPUID = 20010052;  // 200xxxxx -> userId 100
 
 /* mirrors modules/ace_adapter/appspawn_checkpoint.c private define */

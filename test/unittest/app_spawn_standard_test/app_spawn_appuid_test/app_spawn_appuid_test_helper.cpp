@@ -155,7 +155,7 @@ AppSpawningCtx *CreateAppUidProperty(AppSpawnMsgNode *msgNode, bool customSandbo
 
 /*
  * Build an AppSpawningCtx with hand-crafted TLVs.
- * customSandbox=true: uid=100 (userId-like 10x), appUid=20010052 (200xxxxx), CUSTOM_SANDBOX flag.
+ * customSandbox=true: uid=100 (shared process UID), appUid=20010052 (200xxxxx), CUSTOM_SANDBOX flag.
  * customSandbox=false: normal app, uid==appUid==20010029.
  */
 AppSpawningCtx *BuildAppUidProperty(const char *processName, uint32_t uid, uint32_t appUid,

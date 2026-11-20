@@ -39,6 +39,8 @@
 #ifdef __cplusplus
 #include <cstdint>
 #include <cstring>
+#include <optional>
+#include <type_traits>
 #include <string>
 
 extern "C" {
@@ -127,6 +129,7 @@ struct MockHiSysEventState {
     std::string lastDomain;
     std::string lastEventName;
     int lastEventType = 0;
+    std::optional<int32_t> lastUid;
 };
 
 // Singleton mock state, accessible from both test and adapter code
@@ -137,6 +140,20 @@ inline MockHiSysEventState& GetMockHiSysEventState()
 }
 
 class HiSysEvent {
+    static void CaptureUid(MockHiSysEventState&) {}
+
+    template<typename T, typename... Rest>
+    static void CaptureUid(MockHiSysEventState& state, const char* key, const T& value, const Rest&... rest)
+    {
+        if constexpr (std::is_same_v<T, int32_t>) {
+            if (std::strcmp(key, "UID") == 0) {
+                state.lastUid = value;
+                return;
+            }
+        }
+        CaptureUid(state, rest...);
+    }
+
 public:
     class Domain {
     public:
@@ -161,6 +178,8 @@ public:
         state.lastDomain = domain;
         state.lastEventName = eventName;
         state.lastEventType = static_cast<int>(type);
+        state.lastUid.reset();
+        CaptureUid(state, keyValues...);
         return state.returnValue;
     }
 };

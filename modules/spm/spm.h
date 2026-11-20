@@ -36,7 +36,7 @@
 // SPM reference count bitmap flags (for spmRefAdded field)
 #define SPM_REF_NONE      0x00  // No refcounts incremented
 #define SPM_REF_TOKENID   0x01  // bit 0: tokenid refcount incremented
-#define SPM_REF_UID       0x02  // bit 1: uid refcount incremented
+#define SPM_REF_UID       0x02  // bit 1: appUid refcount incremented
 
 // SPM message rebuild error codes
 // Error code format: 0x04E1xxxx (APPSPAWN_SPAWNER module)

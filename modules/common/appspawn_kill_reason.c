@@ -60,7 +60,7 @@ struct KillInfo {
 #define KILL_INFO_SIZE (sizeof(struct KillInfo))
 #define SET_KILL_INFO _IOWR(KILL_LOG_BASE, 0x07, int32_t)
 
-APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t uid, int reason, int errorCause)
+APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t appUid, int reason, int errorCause)
 {
     if (info == NULL) {
         APPSPAWN_LOGE("InitKillInfo: invalid info pointer");
@@ -77,7 +77,8 @@ APPSPAWN_STATIC void InitKillInfo(struct KillInfo *info, pid_t pid, uid_t uid, i
     info->data.processed = false;
     info->data.foreground = false;
     info->data.pid = pid;
-    info->data.uid = uid;
+    // The kernel field retains its name; appspawn reports the application identity.
+    info->data.uid = appUid;
     info->data.eventParamFirst = errorCause;
     info->structSize = KILL_INFO_SIZE;
 }
@@ -103,23 +104,23 @@ APPSPAWN_STATIC int GetKillReasonFd(AppSpawnMgr *mgr)
     return fd;
 }
 
-void SetKillReason(const AppSpawnMgr *mgr, pid_t pid, uid_t uid, int reason, int errorCause)
+void SetKillReason(const AppSpawnMgr *mgr, pid_t pid, uid_t appUid, int reason, int errorCause)
 {
     int fd = GetKillReasonFd((AppSpawnMgr *)mgr);
     if (fd < 0) {
-        APPSPAWN_LOGE("SetKillReason: no fd, pid:%{public}d, uid:%{public}d, reason:%{public}d",
-            pid, uid, reason);
+        APPSPAWN_LOGE("SetKillReason: no fd, pid:%{public}d, appUid:%{public}u, reason:%{public}d",
+            pid, appUid, reason);
         return;
     }
     struct KillInfo info;
-    InitKillInfo(&info, pid, uid, reason, errorCause);
+    InitKillInfo(&info, pid, appUid, reason, errorCause);
     int res = ioctl(fd, SET_KILL_INFO, &info);
     if (res != 0) {
-        APPSPAWN_LOGE("SetKillReason: ioctl failed, pid:%{public}d, uid:%{public}d, reason:%{public}d, "
-            "errno:%{public}d", pid, uid, reason, errno);
+        APPSPAWN_LOGE("SetKillReason: ioctl failed, pid:%{public}d, appUid:%{public}u, reason:%{public}d, "
+            "errno:%{public}d", pid, appUid, reason, errno);
     } else {
-        APPSPAWN_LOGI("SetKillReason: pid:%{public}d, uid:%{public}d, reason:%{public}d, errorCause:%{public}d",
-            pid, uid, reason, errorCause);
+        APPSPAWN_LOGI("SetKillReason: pid:%{public}d, appUid:%{public}u, reason:%{public}d, errorCause:%{public}d",
+            pid, appUid, reason, errorCause);
     }
 }
 
@@ -128,7 +129,7 @@ APPSPAWN_STATIC int KillReasonReportHook(const AppSpawnMgr *mgr, const AppSpawne
     if (appInfo == NULL || appInfo->killReason.reason == 0) {
         return 0;
     }
-    APPSPAWN_LOGI("KillReasonReportHook: pid:%{public}d appUid:%{public}d reason:%{public}d errorCause:%{public}d",
+    APPSPAWN_LOGI("KillReasonReportHook: pid:%{public}d appUid:%{public}u reason:%{public}d errorCause:%{public}d",
         appInfo->pid, appInfo->appUid, appInfo->killReason.reason, appInfo->killReason.errorCause);
     SetKillReason(mgr, appInfo->pid, appInfo->appUid, appInfo->killReason.reason, appInfo->killReason.errorCause);
     return 0;

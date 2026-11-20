@@ -3974,9 +3974,9 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_GetExtPermGids_007, TestSize.Level0)
 }
 
 /**
- * @brief Test SetUidGid appends perm gids when NeedExtPerm gate is open
+ * @brief Test SetAppUidGid appends perm gids when NeedExtPerm gate is open
  * Expected: gidTable gets configured gids (gate true -> GetExtPermGids runs)
- * Branch: SetUidGid NeedExtPerm == true
+ * Branch: SetAppUidGid NeedExtPerm == true
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_ExtPermGids_001, TestSize.Level0)
 {
@@ -4620,11 +4620,11 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_ExtPerm_Integration_002, TestSize.Level0)
 // ==========================================================================
 // UT Test Cases for Appspawn Abnormal Scene Hisysevent Reporting
 // Feature: HiSysEvent bigdata reporting at exception points
-// Modified functions: SetUidGid, SetAppAccessToken, AppSpawnProcessMsg
+// Modified functions: SetAppUidGid, SetAppAccessToken, AppSpawnProcessMsg
 // ==========================================================================
  
 /**
- * @brief SetUidGid with invalid uid (below MIN_VALID_APP_UID) should return APPSPAWN_MSG_INVALID
+ * @brief SetAppUidGid with invalid uid (below MIN_VALID_APP_UID) should return APPSPAWN_MSG_INVALID
  *        Branch: uid < MIN_VALID_APP_UID
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidUid_001, TestSize.Level0)
@@ -4660,7 +4660,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidUid_001, TestSize.Level0
 }
 
 /**
- * @brief SetUidGid with invalid gid (below MIN_VALID_APP_GID) should return APPSPAWN_MSG_INVALID
+ * @brief SetAppUidGid with invalid gid (below MIN_VALID_APP_GID) should return APPSPAWN_MSG_INVALID
  *        Branch: gid < MIN_VALID_APP_GID
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGid_001, TestSize.Level0)
@@ -4696,7 +4696,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGid_001, TestSize.Level0
 }
  
 /**
- * @brief SetUidGid with gidCount exceeding APP_MAX_GIDS should return APPSPAWN_MSG_INVALID
+ * @brief SetAppUidGid with gidCount exceeding APP_MAX_GIDS should return APPSPAWN_MSG_INVALID
  *        Branch: gidCount > APP_MAX_GIDS
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGidCount_001, TestSize.Level0)
@@ -4732,7 +4732,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_InvalidGidCount_001, TestSize.L
 }
  
 /**
- * @brief SetUidGid with uid == UINT32_MAX should return APPSPAWN_MSG_INVALID
+ * @brief SetAppUidGid with uid == UINT32_MAX should return APPSPAWN_MSG_INVALID
  *        Branch: uid >= UINT32_MAX boundary
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxBoundary_001, TestSize.Level0)
@@ -4767,7 +4767,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMaxBoundary_001, TestSize.Le
 }
  
 /**
- * @brief SetUidGid with NULL property should not crash
+ * @brief SetAppUidGid with NULL property should not crash
  *        Branch: processName == NULL guard
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_NullProperty_001, TestSize.Level0)
@@ -4848,7 +4848,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_Hisysevent_EventNames_001, TestSize.Level
 }
  
 /**
- * @brief SetUidGid with valid uid/gid should succeed and not trigger error reporting
+ * @brief SetAppUidGid with valid uid/gid should succeed and not trigger error reporting
  *        This is a regression test to ensure valid path is not broken by the new
  *        hisysevent reporting code
  */
@@ -4895,7 +4895,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_AppSpawnProcessMsg_ForkFail_001, TestSize
 }
 
 /**
- * @brief SetUidGid with the minimum valid uid (MIN_VALID_APP_UID=10000)
+ * @brief SetAppUidGid with the minimum valid uid (MIN_VALID_APP_UID=10000)
  *        Branch: uid == MIN_VALID_APP_UID passes the merged uid/gid/gidCount check
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMinBoundary_001, TestSize.Level0)
@@ -4930,7 +4930,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidMinBoundary_001, TestSize.Le
 }
 
 /**
- * @brief SetUidGid with the maximum valid gidCount (APP_MAX_GIDS)
+ * @brief SetAppUidGid with the maximum valid gidCount (APP_MAX_GIDS)
  *        Branch: gidCount == APP_MAX_GIDS passes the merged uid/gid/gidCount check
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountMaxBoundary_001, TestSize.Level0)
@@ -4965,7 +4965,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountMaxBoundary_001, TestSi
 }
 
 /**
- * @brief SetUidGid with MSG_EXT_NAME_USERID ext info covers the userId branch
+ * @brief SetAppUidGid with MSG_EXT_NAME_USERID ext info covers the userId branch
  *        Branch: GetAppSpawnMsgExtInfo(MSG_EXT_NAME_USERID) != NULL -> SetUserId
  */
 HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_WithUserId_001, TestSize.Level0)
@@ -4995,7 +4995,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_WithUserId_001, TestSize.Level0
 }
 
 /**
- * @brief SetUidGid with uid below MIN_VALID_APP_UID should fail the merged
+ * @brief SetAppUidGid with uid below MIN_VALID_APP_UID should fail the merged
  *        parameter check (DFX report branch for invalid spawn parameters)
  *        Branch: dacInfo->uid < MIN_VALID_APP_UID -> APPSPAWN_MSG_INVALID
  */
@@ -5031,7 +5031,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_UidBelowMin_001, TestSize.Level
 }
 
 /**
- * @brief SetUidGid with gid below MIN_VALID_APP_GID should fail the merged
+ * @brief SetAppUidGid with gid below MIN_VALID_APP_GID should fail the merged
  *        parameter check
  *        Branch: dacInfo->gid < MIN_VALID_APP_GID -> APPSPAWN_MSG_INVALID
  */
@@ -5067,7 +5067,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidBelowMin_001, TestSize.Level
 }
 
 /**
- * @brief SetUidGid with gidCount exceeding APP_MAX_GIDS should fail the merged
+ * @brief SetAppUidGid with gidCount exceeding APP_MAX_GIDS should fail the merged
  *        parameter check
  *        Branch: dacInfo->gidCount > APP_MAX_GIDS -> APPSPAWN_MSG_INVALID
  */
@@ -5103,7 +5103,7 @@ HWTEST_F(AppSpawnCommonTest, App_Spawn_SetUidGid_GidCountOverMax_001, TestSize.L
 }
 
 /**
- * @brief SetUidGid with uid at UINT32_MAX should fail the merged parameter
+ * @brief SetAppUidGid with uid at UINT32_MAX should fail the merged parameter
  *        check (uid must be strictly less than UINT32_MAX)
  *        Branch: dacInfo->uid == UINT32_MAX -> APPSPAWN_MSG_INVALID
  */

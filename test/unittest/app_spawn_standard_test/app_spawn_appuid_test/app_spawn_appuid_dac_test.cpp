@@ -39,7 +39,7 @@ int SetAppUid(uint32_t appUid);
 int GetAppUid(uint32_t *appUid);
 int SetUserId(char *userIdStr);
 int KillReasonReportHook(const AppSpawnMgr *mgr, const AppSpawnedProcessInfo *appInfo);
-void SetKillReason(const AppSpawnMgr *mgr, pid_t pid, uid_t uid, int reason, int errorCause);
+void SetKillReason(const AppSpawnMgr *mgr, pid_t pid, uid_t appUid, int reason, int errorCause);
 int GetCgroupPath(const AppSpawnedProcessInfo *appInfo, char *buffer, uint32_t buffLen);
 void HandleDiedPid(pid_t pid, uid_t uid, int status);
 AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *property);
@@ -63,7 +63,7 @@ void ProcessMgrRemoveApp(const char *processName, int pid, int appUid, int statu
 namespace {
 
 /* constants: custom sandbox uid is 10x segment, appUid keeps 200xxxxx. */
-constexpr uint32_t CUSTOM_SANDBOX_UID = 100;          // userId-like 10x uid, below MIN_VALID_APP_UID
+constexpr uint32_t CUSTOM_SANDBOX_UID = 100;          // shared process UID (10x), below MIN_VALID_APP_UID
 constexpr uint32_t CUSTOM_SANDBOX_APPUID = 20010052;  // 200xxxxx
 constexpr uint32_t NORMAL_APP_UID = 20010029;
 
@@ -88,7 +88,7 @@ void ExpectSignalAppUid(int fd, uint32_t expectedAppUid)
     cJSON_Delete(json);
 }
 
-// Every identity check reads calls captured from the production SetUidGid path.
+// Every identity check reads calls captured from the production SetAppUidGid path.
 void ExpectPrimaryGid(uint32_t expectedGid)
 {
     ASSERT_EQ(AppUidMockSetresgidCallCount(), 1);
@@ -199,7 +199,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_CustomSandbox_001, TestSize.Lev
     ASSERT_NE(dacInfo, nullptr);
     dacInfo->gid = CUSTOM_SANDBOX_UID;
 
-    // enable the real custom sandbox condition so the userId-like 10x uid passes the range check
+    // enable the real custom sandbox condition so the shared process UID (10x) passes the range check
     SetNoShareFsEnable(true);
     AppUidMockReset();
     int ret = SetAppUidGid(mgr, property);
@@ -389,10 +389,10 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_BothIoctlCoexist_001, TestSize.
     AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
     ASSERT_NE(mgr, nullptr);
     AppSpawningCtx *property = BuildAppUidProperty("com.test.coexist",
-        CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, true, true);
+        101, CUSTOM_SANDBOX_APPUID, true, true);  // Distinguish the process UID from account 100.
     ASSERT_NE(property, nullptr);
 
-    // enable the real custom sandbox condition so the userId-like 10x uid passes the range check
+    // enable the real custom sandbox condition so the shared process UID (10x) passes the range check
     SetNoShareFsEnable(true);
     AppUidMockReset();
     int ret = SetAppUidGid(mgr, property);
@@ -402,7 +402,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_SetUidGid_BothIoctlCoexist_001, TestSize.
     EXPECT_EQ(AppUidMockFindIoctlCall(AppUidMockEncodeIoctlCmd(1, APPUID_HM_SET_APPUID), &call), 1);
     EXPECT_EQ(call.value, CUSTOM_SANDBOX_APPUID);
     EXPECT_EQ(AppUidMockFindIoctlCall(AppUidMockEncodeIoctlCmd(1, APPUID_HM_SET_USERID), &call), 1);
-    EXPECT_EQ(call.value, CUSTOM_SANDBOX_UID);
+    EXPECT_EQ(call.value, 100u);  // Explicit userId from MSG_EXT_NAME_USERID.
 
     CleanupAppUidProperty(property);
     DeleteAppSpawnMgr(mgr);
@@ -1011,7 +1011,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_NormalizeDecodeStage_001, TestSize.Level1
 }
 
 
-// These fixtures exercise the caller-visible boundary through SetUidGid.
+// These fixtures exercise the caller-visible boundary through SetAppUidGid.
 constexpr uint32_t MIN_APP_UID = 10000;
 constexpr uint32_t MIN_APP_GID = 10000;
 

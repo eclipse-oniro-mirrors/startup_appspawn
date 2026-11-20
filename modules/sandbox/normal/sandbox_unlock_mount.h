@@ -22,7 +22,7 @@
 extern "C" {
 #endif
 
-int DoSharedMountForUser(int uid);
+int DoSharedMountForUser(int userId);
 
 int HandleUnlockMountForUser(AppSpawnMgr *mgr);
 

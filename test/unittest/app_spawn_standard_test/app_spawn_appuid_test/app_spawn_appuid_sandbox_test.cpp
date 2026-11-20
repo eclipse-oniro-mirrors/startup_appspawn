@@ -38,7 +38,7 @@ bool IsUnlockStatus(uint32_t appUid);
 
 namespace {
 
-constexpr uint32_t CUSTOM_SANDBOX_UID = 100;           // userId-like 10x uid
+constexpr uint32_t CUSTOM_SANDBOX_UID = 100;           // shared process UID (10x)
 constexpr uint32_t CUSTOM_SANDBOX_APPUID = 20010052;  // 200xxxxx -> userId 100
 constexpr uint32_t NORMAL_APP_UID = 20010029;
 
@@ -258,8 +258,8 @@ HWTEST_F(AppSpawnAppUidSandboxTest, AppUid_SharedMount_LockBundleRef_001, TestSi
 
 /*
  * @tc.name: AppUid_SharedMount_IsUnlockStatus_001
- * @tc.desc: IsUnlockStatus derives userId from appUid: same-user appUids agree;
- *           the 10x uid by mistake collapses to userId 0 (always unlocked).
+ * @tc.desc: Verify locked and unlocked results for the same appUid. Passing the shared
+ *           process UID maps to userId 0 and returns unlocked.
  */
 HWTEST_F(AppSpawnAppUidSandboxTest, AppUid_SharedMount_IsUnlockStatus_001, TestSize.Level1)
 {

@@ -48,13 +48,13 @@ static constexpr size_t LOCKSTATUS_KEY_PREFIX_LEN = 28;
 
 // Forward declarations for internal test functions (exported via APPSPAWN_TEST)
 extern std::map<std::string, LockBundleInfo> g_lockBundleMap;
-int AddLockBundleRef(uint32_t uid, const std::string &bundleName, const std::string &lockPath);
+int AddLockBundleRef(uint32_t appUid, const std::string &bundleName, const std::string &lockPath);
 void ReleaseLockBundleRef(const std::string &lockPath);
 
 // Test helper functions from sandbox_shared_mount
 extern "C++" {
 bool IsExcludedApp(const std::string &appName);
-bool IsUnlockStatus(uint32_t uid);
+bool IsUnlockStatus(uint32_t appUid);
 void MountDirToShared(AppSpawnMgr *content, const AppSpawningCtx *property);
 int AppCleanupHook(const AppSpawnMgr *content, const AppSpawnedProcessInfo *appInfo);
 int SpawnFailedHook(AppSpawnMgr *content, AppSpawningCtx *property);
@@ -65,6 +65,7 @@ extern "C++" {
 std::string ReplacePlaceholders(const std::string &templateStr, const std::string &userId,
                                 const std::string &bundleName);
 }
+std::vector<LockBundleInfo> GetUnlockBundlesForUser(int userId);
 MountEntryResult MountSingleConfigEntry(const UnlockMountEntry &config, const LockBundleInfo &bundle);
 
 namespace OHOS {
@@ -270,8 +271,8 @@ public:
     void SetUp();
     void TearDown();
 
-    static constexpr int testUid = 100;
-    static constexpr int testUid2 = 200;
+    static constexpr int testUserId = 100;
+    static constexpr int testUserId2 = 200;
     static constexpr const char *testBundle1 = "com.example.app1";
     static constexpr const char *testBundle2 = "com.example.app2";
     static constexpr const char *testBundle3 = "com.example.app3";
@@ -333,7 +334,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_001, TestSize.Leve
     g_accessShouldFail = false;    // source paths exist
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     EXPECT_EQ(ret, 0);
@@ -349,7 +350,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_002, TestSize.Leve
 {
     // Arrange - g_lockBundleMap is empty (cleared in SetUp)
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     // 覆盖: DoSharedMountForUser no tasks (sandbox_shared_mount.cpp:840)
@@ -373,7 +374,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_003, TestSize.Leve
         "/mnt/sandbox/100/com.ohos.render_preunlock");
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     // 覆盖: DoSharedMountForUser all excluded (sandbox_shared_mount.cpp:845)
@@ -392,8 +393,14 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_004, TestSize.Leve
     AddLockBundleRef(200 * UID_BASE, "com.example.other",
         "/mnt/sandbox/200/com.example.other_preunlock");
 
+    EXPECT_TRUE(GetUnlockBundlesForUser(testUserId).empty());
+    AddLockBundleRef(20010052, "com.example.current", "/mnt/sandbox/100/com.example.current_preunlock");
+    auto selected = GetUnlockBundlesForUser(testUserId);
+    ASSERT_EQ(selected.size(), 1u);
+    EXPECT_EQ(selected.front().appUid, 20010052u);
+
     // Act
-    int ret = DoSharedMountForUser(testUid);  // testUid = 100
+    int ret = DoSharedMountForUser(testUserId);  // testUserId = 100
 
     // Assert
     // 覆盖: DoSharedMountForUser userId filter (sandbox_shared_mount.cpp:845)
@@ -423,7 +430,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_005, TestSize.Leve
     g_accessShouldFail = false;
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     // 覆盖: DoSharedMountForUser exclude check (sandbox_shared_mount.cpp:845)
@@ -445,7 +452,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_006, TestSize.Leve
     g_accessShouldFail = false;
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     // 覆盖: DoSharedMountForUser single bundle (sandbox_shared_mount.cpp:840)
@@ -470,7 +477,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_007, TestSize.Leve
     g_accessShouldFail = false;
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     EXPECT_EQ(ret, 0);
@@ -491,7 +498,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_008, TestSize.Leve
     g_accessShouldFail = false;
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     EXPECT_EQ(ret, 0);
 }
@@ -510,7 +517,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_009, TestSize.Leve
     g_statShouldFail = true;  // stat fails for el2/base
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     EXPECT_EQ(ret, 0);
@@ -539,7 +546,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_010, TestSize.Leve
     g_accessShouldFail = false;
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     // 覆盖: DoSharedMountForUser thread safety (sandbox_shared_mount.cpp:855)
@@ -561,7 +568,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_011, TestSize.Leve
     g_accessShouldFail = false;
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     EXPECT_EQ(ret, 0);
@@ -582,7 +589,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, DoSharedMountForUser_012, TestSize.Leve
     g_accessShouldFail = true;  // Source paths don't exist
 
     // Act
-    int ret = DoSharedMountForUser(testUid);
+    int ret = DoSharedMountForUser(testUserId);
 
     // Assert
     // 覆盖: DoSharedMountForUser skip count (sandbox_shared_mount.cpp:845)
@@ -724,7 +731,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, HandleUnlockMountForUser_001, TestSize.
 
 /**
  * @tc.name: HandleUnlockMountForUser_002
- * @tc.desc: Test HandleUnlockMountForUser with invalid uid (0)
+ * @tc.desc: Test HandleUnlockMountForUser with invalid userId (0)
  * @tc.type: FUNC
  * @tc.require: issueI
  */
@@ -733,19 +740,19 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, HandleUnlockMountForUser_002, TestSize.
     // Arrange
     AppSpawnMgr mgr;
     memset_s(&mgr, sizeof(mgr), 0, sizeof(mgr));
-    mgr.content.currentUnlockUid = 0;
+    mgr.content.currentUnlockUserId = 0;
 
     // Act
     int ret = HandleUnlockMountForUser(&mgr);
 
     // Assert
-    // 覆盖: HandleUnlockMountForUser uid <= 0 (sandbox_shared_mount.cpp:946)
+    // 覆盖: HandleUnlockMountForUser userId <= 0 (sandbox_shared_mount.cpp:946)
     EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
 }
 
 /**
  * @tc.name: HandleUnlockMountForUser_003
- * @tc.desc: Test HandleUnlockMountForUser with negative uid
+ * @tc.desc: Test HandleUnlockMountForUser with negative userId
  * @tc.type: FUNC
  * @tc.require: issueI
  */
@@ -754,19 +761,19 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, HandleUnlockMountForUser_003, TestSize.
     // Arrange
     AppSpawnMgr mgr;
     memset_s(&mgr, sizeof(mgr), 0, sizeof(mgr));
-    mgr.content.currentUnlockUid = -1;
+    mgr.content.currentUnlockUserId = -1;
 
     // Act
     int ret = HandleUnlockMountForUser(&mgr);
 
     // Assert
-    // 覆盖: HandleUnlockMountForUser uid <= 0 negative (sandbox_shared_mount.cpp:946)
+    // 覆盖: HandleUnlockMountForUser userId <= 0 negative (sandbox_shared_mount.cpp:946)
     EXPECT_EQ(ret, APPSPAWN_ARG_INVALID);
 }
 
 /**
  * @tc.name: HandleUnlockMountForUser_004
- * @tc.desc: Test HandleUnlockMountForUser with valid uid (delegates to DoSharedMountForUser)
+ * @tc.desc: Test HandleUnlockMountForUser with valid userId (delegates to DoSharedMountForUser)
  * @tc.type: FUNC
  * @tc.require: issueI
  */
@@ -775,7 +782,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, HandleUnlockMountForUser_004, TestSize.
     // Arrange
     AppSpawnMgr mgr;
     memset_s(&mgr, sizeof(mgr), 0, sizeof(mgr));
-    mgr.content.currentUnlockUid = testUid;
+    mgr.content.currentUnlockUserId = testUserId;
     AddLockBundleRef(100 * UID_BASE, "com.example.app1",
         "/mnt/sandbox/100/com.example.app1_preunlock");
     g_statShouldReturnDir = true;
@@ -1081,7 +1088,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, AddLockBundleRef_001, TestSize.Level1)
 
 /**
  * @tc.name: AddLockBundleRef_002
- * @tc.desc: Test AddLockBundleRef first time adds new entry with uid and bundleName
+ * @tc.desc: Test AddLockBundleRef first time adds new entry with appUid and bundleName
  * @tc.type: FUNC
  * @tc.require: issueI
  */
@@ -1260,7 +1267,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, ReleaseLockBundleRef_006, TestSize.Leve
 
 /**
  * @tc.name: IsUnlockStatus_001
- * @tc.desc: Test IsUnlockStatus with uid=0 (userId=0 always returns true)
+ * @tc.desc: Test IsUnlockStatus with appUid=0 (userId=0 always returns true)
  * @tc.type: FUNC
  * @tc.require: issueI
  */
@@ -1270,25 +1277,25 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, IsUnlockStatus_001, TestSize.Level1)
     bool result = IsUnlockStatus(0);
 
     // Assert
-    // 覆盖: IsUnlockStatus uid=0 always true (sandbox_shared_mount.cpp:279)
+    // 覆盖: IsUnlockStatus appUid=0 always true (sandbox_shared_mount.cpp:279)
     EXPECT_TRUE(result);
 }
 
 /**
  * @tc.name: IsUnlockStatus_002
- * @tc.desc: Test IsUnlockStatus with uid where GetParameter returns LOCK_STATUS_UNLOCK ("0")
+ * @tc.desc: Test IsUnlockStatus with appUid where GetParameter returns LOCK_STATUS_UNLOCK ("0")
  * @tc.type: FUNC
  * @tc.require: issueI
  */
 HWTEST_F(AppSpawnUnlockMountSandboxTest, IsUnlockStatus_002, TestSize.Level1)
 {
     // Arrange
-    uint32_t uid = 200100;  // userId = 1
+    uint32_t appUid = 200100;  // userId = 1
     g_mockLockStatusValue = "0";  // LOCK_STATUS_UNLOCK
     g_mockGetParamLockFail = false;
 
     // Act
-    bool result = IsUnlockStatus(uid);
+    bool result = IsUnlockStatus(appUid);
 
     // Assert
     // 覆盖: IsUnlockStatus unlock status "0" (sandbox_shared_mount.cpp:285)
@@ -1300,19 +1307,19 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, IsUnlockStatus_002, TestSize.Level1)
 
 /**
  * @tc.name: IsUnlockStatus_003
- * @tc.desc: Test IsUnlockStatus with uid where GetParameter returns locked status ("1")
+ * @tc.desc: Test IsUnlockStatus with appUid where GetParameter returns locked status ("1")
  * @tc.type: FUNC
  * @tc.require: issueI
  */
 HWTEST_F(AppSpawnUnlockMountSandboxTest, IsUnlockStatus_003, TestSize.Level1)
 {
     // Arrange
-    uint32_t uid = 200100;  // userId = 1
+    uint32_t appUid = 200100;  // userId = 1
     g_mockLockStatusValue = "1";  // locked
     g_mockGetParamLockFail = false;
 
     // Act
-    bool result = IsUnlockStatus(uid);
+    bool result = IsUnlockStatus(appUid);
 
     // Assert
     // 覆盖: IsUnlockStatus locked status "1" (sandbox_shared_mount.cpp:285)
@@ -1321,18 +1328,18 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, IsUnlockStatus_003, TestSize.Level1)
 
 /**
  * @tc.name: IsUnlockStatus_004
- * @tc.desc: Test IsUnlockStatus with uid where GetParameter fails (returns 0)
+ * @tc.desc: Test IsUnlockStatus with appUid where GetParameter fails (returns 0)
  * @tc.type: FUNC
  * @tc.require: issueI
  */
 HWTEST_F(AppSpawnUnlockMountSandboxTest, IsUnlockStatus_004, TestSize.Level1)
 {
     // Arrange
-    uint32_t uid = 200100;  // userId = 1
+    uint32_t appUid = 200100;  // userId = 1
     g_mockGetParamLockFail = true;  // GetParameter returns 0
 
     // Act
-    bool result = IsUnlockStatus(uid);
+    bool result = IsUnlockStatus(appUid);
 
     // Assert
     // 覆盖: IsUnlockStatus GetParameter fail (sandbox_shared_mount.cpp:285)
@@ -1608,7 +1615,7 @@ HWTEST_F(AppSpawnUnlockMountSandboxTest, SpawnFailedHook_004, TestSize.Level1)
     memset_s(&mgr, sizeof(mgr), 0, sizeof(mgr));
     mgr.content.mode = MODE_FOR_APP_SPAWN;
 
-    // With message=nullptr, uid=0, lockBundleRefAdded=true
+    // With message=nullptr and lockBundleRefAdded=true
     // Proceeds past !lockBundleRefAdded check, but GetBundleName returns nullptr -> early return
 
     // Act
@@ -1773,7 +1780,7 @@ void MountWorkerThread(unsigned int index, unsigned int mod, const MountWorkerCo
 }
 
 // DoSharedMountForUser implementation (work queue mode)
-int DoSharedMountForUser(int uid)
+int DoSharedMountForUser(int userId)
 {
     // Get mount bundle list from g_lockBundleMap
     std::vector<LockBundleInfo> bundles;
@@ -1784,7 +1791,7 @@ int DoSharedMountForUser(int uid)
     // Filter bundles by userId
     std::vector<LockBundleInfo> filteredBundles;
     for (const auto &bundle : bundles) {
-        if ((bundle.appUid / UID_BASE) == static_cast<uint32_t>(uid)) {
+        if ((bundle.appUid / UID_BASE) == static_cast<uint32_t>(userId)) {
             filteredBundles.push_back(bundle);
         }
     }

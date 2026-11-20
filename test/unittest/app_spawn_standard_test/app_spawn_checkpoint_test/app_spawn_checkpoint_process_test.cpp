@@ -1711,7 +1711,7 @@ HWTEST_F(AppSpawnCheckpointProcessTest, ForkDenied_OpenSuccess_WriteFail_005, Te
 
 /**
  * @tc.name: ForkDenied_WithDacInfo_UidCalc_006
- * @tc.desc: Test SetWorkerProcesssForkDenied with specific uid to verify userId calculation
+ * @tc.desc: Verify the checkpoint worker userId calculation from appUid / UID_BASE.
  * @tc.type: FUNC
  */
 HWTEST_F(AppSpawnCheckpointProcessTest, ForkDenied_WithDacInfo_UidCalc_006, TestSize.Level0)

@@ -62,11 +62,11 @@ extern "C" {
 void StopAppSpawn(void);
 void HandleDiedPid(pid_t pid, uid_t uid, int status);
 bool ProcessAppSpawnLockStatusMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message, int *result);
-bool HandleUnlockEvent(AppSpawnContent *content, int uid, AppSpawnMsgNode *message, AppSpawnConnection *connection);
-int SendUnlockMsgToPrefork(AppSpawnContent *content, int uid);
-int DoUnlockMountSerial(AppSpawnContent *content, int uid);
-int ProcessUnlockMessage(int uid);
-int ForkAndDoUnlockMount(AppSpawnContent *content, int uid, AppSpawningCtx *property);
+bool HandleUnlockEvent(AppSpawnContent *content, int userId, AppSpawnMsgNode *message, AppSpawnConnection *connection);
+int SendUnlockMsgToPrefork(AppSpawnContent *content, int userId);
+int DoUnlockMountSerial(AppSpawnContent *content, int userId);
+int ProcessUnlockMessage(int userId);
+int ForkAndDoUnlockMount(AppSpawnContent *content, int userId, AppSpawningCtx *property);
 APPSPAWN_STATIC void HandlePreforkUnlockMsg(AppSpawnContent *content, const AppSpawnUnlockMsg *unlockMsg);
 APPSPAWN_STATIC void PreforkChildLoop(AppSpawnContent *content, AppSpawningCtx *property,
     AppSpawnMgr *mgr, enum fdsan_error_level errorLevel);
@@ -89,7 +89,7 @@ static thread_local volatile int g_forkCallCount = 0;
 
 // ===== Mock hook tracking for STAGE_SERVER_LOCK =====
 static thread_local volatile int g_hookCalled = 0;
-static thread_local volatile int g_hookUid = 0;
+static thread_local volatile int g_hookUserId = 0;
 static thread_local volatile int g_hookReturn = 0;
 
 // ===== Mock prefork child registration =====
@@ -181,8 +181,8 @@ namespace OHOS {
 static int TestUnlockHook(AppSpawnMgr *mgr)
 {
     g_hookCalled = 1;
-    if (mgr != nullptr && mgr->content.currentUnlockUid > 0) {
-        g_hookUid = mgr->content.currentUnlockUid;
+    if (mgr != nullptr && mgr->content.currentUnlockUserId > 0) {
+        g_hookUserId = mgr->content.currentUnlockUserId;
     }
     return g_hookReturn;
 }
@@ -241,7 +241,7 @@ public:
         g_mockForkReturn = MOCK_FORK_USE_REAL;
         g_forkCallCount = 0;
         g_hookCalled = 0;
-        g_hookUid = 0;
+        g_hookUserId = 0;
         g_hookReturn = 0;
         g_fakeFdsRegistered = false;
 
@@ -420,12 +420,12 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_001, Test
     // 覆盖: HandleUnlockEvent NULL content early return (appspawn_service.c:2113-2115)
     // Arrange
     AppSpawnContent *content = nullptr;
-    int uid = 100;
+    int userId = 100;
     int originalReservedPid = mgr_->content.reservedPid;
     int originalHookCalled = 0;
 
     // Act
-    HandleUnlockEvent(content, uid, NULL, NULL);
+    HandleUnlockEvent(content, userId, NULL, NULL);
 
     // Assert - function should return immediately without modifying any state
     EXPECT_EQ(mgr_->content.reservedPid, originalReservedPid);
@@ -435,21 +435,21 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_001, Test
 
 /**
  * @tc.name: UnlockMount_HandleUnlockEvent_002
- * @tc.desc: HandleUnlockEvent with invalid uid (uid <= 0): returns immediately (line 2119)
+ * @tc.desc: HandleUnlockEvent with invalid userId (userId <= 0) returns immediately
  * @tc.type: FUNC
  * @tc.level: Level1
  * @tc.require: unlock_mount feature
  */
 HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_002, TestSize.Level1)
 {
-    // 覆盖: HandleUnlockEvent uid <= 0 early return (appspawn_service.c:2117-2119)
+    // 覆盖: HandleUnlockEvent userId <= 0 early return (appspawn_service.c:2117-2119)
     // Arrange
     AppSpawnContent *content = &mgr_->content;
     int originalReservedPid = content->reservedPid;
-    int uid = 0;  // Invalid uid
+    int userId = 0;  // Invalid userId
 
     // Act
-    HandleUnlockEvent(content, uid, NULL, NULL);
+    HandleUnlockEvent(content, userId, NULL, NULL);
 
     // Assert - function should return immediately without modifying state
     EXPECT_EQ(content->reservedPid, originalReservedPid);
@@ -471,29 +471,35 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_003, Test
     pid_t preforkPid = 54321;
     content->reservedPid = preforkPid;
     content->enablePerfork = 0;  // Disable prefork to avoid refork after L1/L2 failure
-    int uid = 100;
+    int userId = 100;
 
-    // Register fake prefork fds with read ends closed
-    // This will cause write() to fail with EPIPE (SIGPIPE ignored)
-    RegisterFakePreforkFds(preforkPid);
+    int pipeFds[PIPE_FD_LENGTH];
+    ASSERT_EQ(pipe(pipeFds), 0);
+    close(pipeFds[0]);
+    pipeFds[0] = -1;
+    SpawningFdRegInfo regInfo = {.type = TYPE_PARENT_CHILD, .count = PIPE_FD_LENGTH, .fds = pipeFds, .pid = preforkPid};
+    ASSERT_NE(RegisterSpawningFds(mgr_, &regInfo), nullptr);
 
     // Force fork to fail, so Level 2 also fails and falls back to Level 3
     g_mockForkReturn = -1;
 
     // Act: HandleUnlockEvent returns false when L1/L2 fail, caller handles L3
-    bool async = HandleUnlockEvent(content, uid, NULL, NULL);
-    EXPECT_EQ(async, false);  // L1/L2 failed, returned sync
+    AppSpawnMsgNode message = {};
+    AppSpawnConnection connection = {};
+    bool async = HandleUnlockEvent(content, userId, &message, &connection);
+    ASSERT_FALSE(async);
+    EXPECT_EQ(g_forkCallCount, 1);
 
     // Caller executes L3 serial mount
-    int result = DoUnlockMountSerial(content, uid);
+    int result = DoUnlockMountSerial(content, userId);
 
     // Assert
-    // reservedPid remains unchanged (prefork disabled, no refork)
-    EXPECT_EQ(content->reservedPid, preforkPid);
+    // L1 failure clears the reservation and refork is disabled.
+    EXPECT_EQ(content->reservedPid, 0);
 
     // Hook should have been called via Level 3 serial path
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
     EXPECT_EQ(result, 0);  // L3 should succeed
 }
 
@@ -512,35 +518,37 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_004, Test
     pid_t preforkPid = 54322;
     content->reservedPid = preforkPid;
     content->enablePerfork = 0;  // Disable prefork to avoid refork after L1/L2 failure
-    int uid = 100;
+    int userId = 100;
 
     // Force fork to fail, so Level 2 also fails and falls back to Level 3
     g_mockForkReturn = -1;
 
     // Act: HandleUnlockEvent returns false when L1/L2 fail, caller handles L3
-    bool async = HandleUnlockEvent(content, uid, NULL, NULL);
-    EXPECT_EQ(async, false);  // L1/L2 failed, returned sync
+    AppSpawnMsgNode message = {};
+    AppSpawnConnection connection = {};
+    bool async = HandleUnlockEvent(content, userId, &message, &connection);
+    ASSERT_FALSE(async);
+    EXPECT_EQ(g_forkCallCount, 1);
 
     // Caller executes L3 serial mount
-    int result = DoUnlockMountSerial(content, uid);
+    int result = DoUnlockMountSerial(content, userId);
 
     // Assert
-    // reservedPid remains unchanged (prefork disabled, no refork)
-    EXPECT_EQ(content->reservedPid, preforkPid);
+    // L1 failure clears the reservation and refork is disabled.
+    EXPECT_EQ(content->reservedPid, 0);
 
     // fds should not be found (we didn't register any)
     EXPECT_EQ(FindSpawningFdsByPid(mgr_, preforkPid, TYPE_PARENT_CHILD), nullptr);
 
     // Hook should have been called via Level 3 serial path
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
     EXPECT_EQ(result, 0);  // L3 should succeed
 }
 
 /**
  * @tc.name: UnlockMount_HandleUnlockEvent_005
- * @tc.desc: HandleUnlockEvent Level 1 write failed: fallback to Level 2
- *           (line 2135, SendUnlockMsgToPrefork returns error)
+ * @tc.desc: HandleUnlockEvent falls back to Level 2 when the prefork write fd is invalid.
  * @tc.type: FUNC
  * @tc.level: Level0
  * @tc.require: unlock_mount feature
@@ -552,39 +560,40 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_005, Test
     pid_t preforkPid = 54323;
     content->reservedPid = preforkPid;
     content->enablePerfork = 0;  // Disable prefork to avoid refork after L1/L2 failure
-    int uid = 100;
+    int userId = 100;
 
-    // Register fake prefork fds
-    RegisterFakePreforkFds(preforkPid);
-
-    // Close write end to make write() fail
-    close(g_pipeWriteFd);
-    g_pipeWriteFd = -1;
+    int unavailableFds[PIPE_FD_LENGTH] = {-1, -1};
+    SpawningFdRegInfo regInfo = {
+        .type = TYPE_PARENT_CHILD, .count = PIPE_FD_LENGTH, .fds = unavailableFds, .pid = preforkPid
+    };
+    ASSERT_NE(RegisterSpawningFds(mgr_, &regInfo), nullptr);
 
     // Force fork to fail, so Level 2 also fails and falls back to Level 3
     g_mockForkReturn = -1;
 
     // Act: HandleUnlockEvent returns false when L1/L2 fail, caller handles L3
-    bool async = HandleUnlockEvent(content, uid, NULL, NULL);
-    EXPECT_EQ(async, false);  // L1/L2 failed, returned sync
+    AppSpawnMsgNode message = {};
+    AppSpawnConnection connection = {};
+    bool async = HandleUnlockEvent(content, userId, &message, &connection);
+    ASSERT_FALSE(async);
+    EXPECT_EQ(g_forkCallCount, 1);
 
     // Caller executes L3 serial mount
-    int result = DoUnlockMountSerial(content, uid);
+    int result = DoUnlockMountSerial(content, userId);
 
     // Assert
-    // reservedPid remains unchanged (prefork disabled, no refork)
-    EXPECT_EQ(content->reservedPid, preforkPid);
+    // L1 failure clears the reservation and refork is disabled.
+    EXPECT_EQ(content->reservedPid, 0);
 
     // Hook should have been called via Level 3 serial path
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
     EXPECT_EQ(result, 0);  // L3 should succeed
 }
 
 /**
  * @tc.name: UnlockMount_HandleUnlockEvent_008
- * @tc.desc: HandleUnlockEvent Level 2 fork success: break
- *           (line 2160, pid > 0)
+ * @tc.desc: HandleUnlockEvent rejects a missing message before forking
  * @tc.type: FUNC
  * @tc.level: Level0
  * @tc.require: unlock_mount feature
@@ -594,17 +603,18 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_008, Test
     // Arrange
     AppSpawnContent *content = &mgr_->content;
     content->reservedPid = 0;  // No prefork, go directly to Level 2
-    int uid = 100;
+    int userId = 100;
 
     // Force fork to return a fake pid (Level 2 success)
     g_mockForkReturn = 54326;
 
     // Act: message/connection are NULL, HandleUnlockEvent returns false immediately
-    bool async = HandleUnlockEvent(content, uid, NULL, NULL);
-    EXPECT_EQ(async, false);  // NULL params, return false
+    bool async = HandleUnlockEvent(content, userId, NULL, NULL);
+    EXPECT_FALSE(async);
+    EXPECT_EQ(g_forkCallCount, 0);
 
     // Caller executes L3 serial mount
-    int result = DoUnlockMountSerial(content, uid);
+    int result = DoUnlockMountSerial(content, userId);
 
     // Assert
     // reservedPid should remain 0
@@ -628,17 +638,20 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_009, Test
     // Arrange
     AppSpawnContent *content = &mgr_->content;
     content->reservedPid = 0;  // No prefork
-    int uid = 100;
+    int userId = 100;
 
     // Force fork to fail
     g_mockForkReturn = -1;
 
     // Act: HandleUnlockEvent returns false when L1/L2 fail, caller handles L3
-    bool async = HandleUnlockEvent(content, uid, NULL, NULL);
-    EXPECT_EQ(async, false);  // L1/L2 failed, returned sync
+    AppSpawnMsgNode message = {};
+    AppSpawnConnection connection = {};
+    bool async = HandleUnlockEvent(content, userId, &message, &connection);
+    ASSERT_FALSE(async);
+    EXPECT_EQ(g_forkCallCount, 1);
 
     // Caller executes L3 serial mount
-    int result = DoUnlockMountSerial(content, uid);
+    int result = DoUnlockMountSerial(content, userId);
 
     // Assert
     // reservedPid should remain 0
@@ -646,7 +659,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandleUnlockEvent_009, Test
 
     // Hook should have been called via Level 3 serial path
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
     EXPECT_EQ(result, 0);  // L3 should succeed
 }
 
@@ -666,10 +679,10 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_SendUnlockMsgToPrefork_001,
 {
     // Arrange
     AppSpawnContent *content = nullptr;
-    int uid = 100;
+    int userId = 100;
 
     // Act
-    int ret = SendUnlockMsgToPrefork(content, uid);
+    int ret = SendUnlockMsgToPrefork(content, userId);
 
     // Assert
     EXPECT_NE(ret, 0);  // Should return error code
@@ -689,12 +702,12 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_SendUnlockMsgToPrefork_002,
     AppSpawnContent *content = &mgr_->content;
     pid_t preforkPid = 54328;
     content->reservedPid = preforkPid;
-    int uid = 100;
+    int userId = 100;
 
     // Don't register any fds
 
     // Act
-    int ret = SendUnlockMsgToPrefork(content, uid);
+    int ret = SendUnlockMsgToPrefork(content, userId);
 
     // Assert
     EXPECT_NE(ret, 0);  // Should return error code
@@ -714,13 +727,13 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_SendUnlockMsgToPrefork_003,
     AppSpawnContent *content = &mgr_->content;
     pid_t preforkPid = 54329;
     content->reservedPid = preforkPid;
-    int uid = 100;
+    int userId = 100;
 
     // Register fake prefork fds with open read end (non-blocking)
     RegisterFakePreforkFdsWithOpenReadEnd(preforkPid);
 
     // Act
-    int ret = SendUnlockMsgToPrefork(content, uid);
+    int ret = SendUnlockMsgToPrefork(content, userId);
 
     // Assert
     EXPECT_EQ(ret, 0);  // Should return success
@@ -728,9 +741,9 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_SendUnlockMsgToPrefork_003,
     // Clean up: read the message from pipe to drain buffer
     AppSpawnPipeMsg msg = {};
     ssize_t readSize = read(g_pipeReadFd, &msg, sizeof(msg));
-    // We expect to read the message, but don't assert on it
-    // (it might have been consumed or drained)
-    (void)readSize;
+    ASSERT_EQ(readSize, static_cast<ssize_t>(sizeof(msg)));
+    EXPECT_EQ(msg.type, MSG_LOCK_STATUS);
+    EXPECT_EQ(msg.msg.unlockMsg.userId, userId);
 }
 
 /**
@@ -747,7 +760,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_SendUnlockMsgToPrefork_004,
     AppSpawnContent *content = &mgr_->content;
     pid_t preforkPid = 54330;
     content->reservedPid = preforkPid;
-    int uid = 100;
+    int userId = 100;
 
     // Register fake prefork fds
     RegisterFakePreforkFds(preforkPid);
@@ -757,7 +770,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_SendUnlockMsgToPrefork_004,
     g_pipeWriteFd = -1;
 
     // Act
-    int ret = SendUnlockMsgToPrefork(content, uid);
+    int ret = SendUnlockMsgToPrefork(content, userId);
 
     // Assert
     EXPECT_NE(ret, 0);  // Should return error code
@@ -779,7 +792,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_001, T
 {
     // Arrange
     AppSpawnContent *content = &mgr_->content;
-    int uid = 100;
+    int userId = 100;
 
     // Create a valid AppSpawningCtx for ForkAndDoUnlockMount
     AppSpawningCtx *property = CreateAppSpawningCtx();
@@ -789,7 +802,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_001, T
     g_mockForkReturn = -1;
 
     // Act
-    int ret = ForkAndDoUnlockMount(content, uid, property);
+    int ret = ForkAndDoUnlockMount(content, userId, property);
 
     // Cleanup property
     DeleteAppSpawningCtx(property);
@@ -813,7 +826,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_002, T
 {
     // Arrange
     AppSpawnContent *content = &mgr_->content;
-    int uid = 100;
+    int userId = 100;
     pid_t fakePid = 54332;
 
     // Create a valid AppSpawningCtx for ForkAndDoUnlockMount
@@ -824,7 +837,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_002, T
     g_mockForkReturn = fakePid;
 
     // Act
-    int ret = ForkAndDoUnlockMount(content, uid, property);
+    int ret = ForkAndDoUnlockMount(content, userId, property);
 
     // Cleanup property
     DeleteAppSpawningCtx(property);
@@ -853,7 +866,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_003, T
 {
     // Arrange
     AppSpawnContent *content = &mgr_->content;
-    int uid = 100;
+    int userId = 100;
 
     // Create a valid AppSpawningCtx for ForkAndDoUnlockMount
     AppSpawningCtx *property = CreateAppSpawningCtx();
@@ -869,7 +882,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_003, T
     int jmpVal = setjmp(g_processExitEnv);
     if (jmpVal == 0) {
         // Act
-        int ret = ForkAndDoUnlockMount(content, uid, property);
+        int ret = ForkAndDoUnlockMount(content, userId, property);
 
         // Should not reach here in child
         FAIL() << "ForkAndDoUnlockMount should have called ProcessExit in child";
@@ -886,7 +899,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_003, T
 
     // Hook should have been called
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
 }
 
 /**
@@ -902,7 +915,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_004, T
 {
     // Arrange
     AppSpawnContent *content = &mgr_->content;
-    int uid = 100;
+    int userId = 100;
 
     // Create a valid AppSpawningCtx for ForkAndDoUnlockMount
     AppSpawningCtx *property = CreateAppSpawningCtx();
@@ -918,7 +931,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_004, T
     int jmpVal = setjmp(g_processExitEnv);
     if (jmpVal == 0) {
         // Act
-        int ret = ForkAndDoUnlockMount(content, uid, property);
+        int ret = ForkAndDoUnlockMount(content, userId, property);
 
         // Should not reach here in child
         FAIL() << "ForkAndDoUnlockMount should have called ProcessExit in child";
@@ -935,7 +948,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ForkAndDoUnlockMount_004, T
 
     // Hook should have been called
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
 }
 
 // ============================================================================
@@ -955,16 +968,16 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_DoUnlockMountSerial_004, Te
     // 覆盖: appspawn_service.c:2236-2265 DoUnlockMountSerial normal flow
     // Arrange
     AppSpawnContent *content = &mgr_->content;
-    int uid = 203;
+    int userId = 203;
     g_hookReturn = 0;
 
     // Act
-    DoUnlockMountSerial(content, uid);
+    DoUnlockMountSerial(content, userId);
 
     // Assert
-    // Hook should have been called with correct uid
+    // Hook should have been called with correct userId
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
 }
 
 // ============================================================================
@@ -983,19 +996,19 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ProcessUnlockMessage_001, T
 {
     // 覆盖: appspawn_service.c:2267-2282 ProcessUnlockMessage hook returns 0
     // Arrange
-    int uid = 100;
+    int userId = 100;
     g_hookReturn = 0;
 
     // Act
-    int ret = ProcessUnlockMessage(uid);
+    int ret = ProcessUnlockMessage(userId);
 
     // Assert
     EXPECT_EQ(ret, 0);
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
 
-    // Verify currentUnlockUid was set in content
-    EXPECT_EQ(mgr_->content.currentUnlockUid, uid);
+    // Verify currentUnlockUserId was set in content
+    EXPECT_EQ(mgr_->content.currentUnlockUserId, userId);
 }
 
 /**
@@ -1010,24 +1023,24 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ProcessUnlockMessage_002, T
 {
     // 覆盖: appspawn_service.c:2267-2282 ProcessUnlockMessage hook returns -1
     // Arrange
-    int uid = 101;
+    int userId = 101;
     g_hookReturn = -1;
 
     // Act
-    int ret = ProcessUnlockMessage(uid);
+    int ret = ProcessUnlockMessage(userId);
 
     // Assert
     EXPECT_NE(ret, 0);
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, uid);
+    EXPECT_EQ(g_hookUserId, userId);
 
-    // Verify currentUnlockUid was still set
-    EXPECT_EQ(mgr_->content.currentUnlockUid, uid);
+    // Verify currentUnlockUserId was still set
+    EXPECT_EQ(mgr_->content.currentUnlockUserId, userId);
 }
 
 /**
  * @tc.name: UnlockMount_ProcessUnlockMessage_003
- * @tc.desc: ProcessUnlockMessage verifies currentUnlockUid is set correctly
+ * @tc.desc: ProcessUnlockMessage verifies currentUnlockUserId is set correctly
  *           for valid content path. (appspawn_service.c:2272-2275, B1)
  *           NOTE: NULL content path (GetAppSpawnContent returns NULL) cannot be
  *           tested directly in unit tests because GetAppSpawnContent is a global
@@ -1039,29 +1052,29 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ProcessUnlockMessage_002, T
  */
 HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ProcessUnlockMessage_003, TestSize.Level1)
 {
-    // 覆盖: appspawn_service.c:2272-2275 ProcessUnlockMessage sets currentUnlockUid
+    // 覆盖: appspawn_service.c:2272-2275 ProcessUnlockMessage sets currentUnlockUserId
     // Arrange
-    int uid = 102;
+    int userId = 102;
     g_hookReturn = 0;
-    // Reset currentUnlockUid to verify it gets set
-    mgr_->content.currentUnlockUid = 0;
+    // Reset currentUnlockUserId to verify it gets set
+    mgr_->content.currentUnlockUserId = 0;
 
     // Act
-    int ret = ProcessUnlockMessage(uid);
+    int ret = ProcessUnlockMessage(userId);
 
     // Assert
     EXPECT_EQ(ret, 0);
-    EXPECT_EQ(mgr_->content.currentUnlockUid, uid);
+    EXPECT_EQ(mgr_->content.currentUnlockUserId, userId);
 
-    // Call again with different uid to verify it updates
-    int uid2 = 200;
+    // Call again with different userId to verify it updates
+    int userId2 = 200;
     g_hookCalled = 0;
-    g_hookUid = 0;
-    ret = ProcessUnlockMessage(uid2);
+    g_hookUserId = 0;
+    ret = ProcessUnlockMessage(userId2);
 
     EXPECT_EQ(ret, 0);
-    EXPECT_EQ(mgr_->content.currentUnlockUid, uid2);
-    EXPECT_EQ(g_hookUid, uid2);
+    EXPECT_EQ(mgr_->content.currentUnlockUserId, userId2);
+    EXPECT_EQ(g_hookUserId, userId2);
 }
 
 // ============================================================================
@@ -1082,7 +1095,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandlePreforkUnlockMsg_001,
     // Arrange
     AppSpawnContent *content = &mgr_->content;
     AppSpawnUnlockMsg unlockMsg = {0};
-    unlockMsg.uid = 300;
+    unlockMsg.userId = 300;
     g_hookReturn = 0;
 
     // Set up longjmp to catch ProcessExit(0)
@@ -1099,9 +1112,9 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandlePreforkUnlockMsg_001,
     EXPECT_EQ(g_processExitCalled, 1);
     EXPECT_EQ(g_processExitCode, 0);
 
-    // Hook should have been called with correct uid
+    // Hook should have been called with correct userId
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, unlockMsg.uid);
+    EXPECT_EQ(g_hookUserId, unlockMsg.userId);
 }
 
 /**
@@ -1118,7 +1131,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandlePreforkUnlockMsg_002,
     // Arrange
     AppSpawnContent *content = &mgr_->content;
     AppSpawnUnlockMsg unlockMsg = {0};
-    unlockMsg.uid = 301;
+    unlockMsg.userId = 301;
     g_hookReturn = -1;
 
     // Set up longjmp to catch ProcessExit(0)
@@ -1135,9 +1148,9 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_HandlePreforkUnlockMsg_002,
     EXPECT_EQ(g_processExitCalled, 1);
     EXPECT_EQ(g_processExitCode, 0);
 
-    // Hook should have been called with correct uid
+    // Hook should have been called with correct userId
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, unlockMsg.uid);
+    EXPECT_EQ(g_hookUserId, unlockMsg.userId);
 }
 
 // ============================================================================
@@ -1174,7 +1187,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_PreforkChildLoop_001, TestS
     AppSpawnPipeMsg pipeMsg;
     memset_s(&pipeMsg, sizeof(pipeMsg), 0, sizeof(pipeMsg));
     pipeMsg.type = MSG_LOCK_STATUS;
-    pipeMsg.msg.unlockMsg.uid = 400;
+    pipeMsg.msg.unlockMsg.userId = 400;
     g_hookReturn = 0;
 
     // Write the message into the pipe so PreforkChildLoop can read it
@@ -1205,7 +1218,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_PreforkChildLoop_001, TestS
 
     // Hook should have been called via HandlePreforkUnlockMsg
     EXPECT_EQ(g_hookCalled, 1);
-    EXPECT_EQ(g_hookUid, pipeMsg.msg.unlockMsg.uid);
+    EXPECT_EQ(g_hookUserId, pipeMsg.msg.unlockMsg.userId);
 
     // Cleanup
     DeleteAppSpawningCtx(property);
@@ -1364,7 +1377,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ProcessAppSpawnLockStatusMs
     // Arrange
     AppSpawnContent *content = &mgr_->content;
     int originalHookCalled = 0;
-    int originalUnlockUid = content->currentUnlockUid;
+    int originalUnlockUserId = content->currentUnlockUserId;
     int result = 0;
 
     // Act
@@ -1372,7 +1385,7 @@ HWTEST_F(AppSpawnUnlockMountServiceTest, UnlockMount_ProcessAppSpawnLockStatusMs
 
     // Assert - nullptr should be caught by APPSPAWN_CHECK_ONLY_EXPER, no state change
     EXPECT_EQ(g_hookCalled, originalHookCalled);
-    EXPECT_EQ(content->currentUnlockUid, originalUnlockUid);
+    EXPECT_EQ(content->currentUnlockUserId, originalUnlockUserId);
 }
 
 // NOTE: Full ProcessAppSpawnLockStatusMsg tests with valid TLV message data
