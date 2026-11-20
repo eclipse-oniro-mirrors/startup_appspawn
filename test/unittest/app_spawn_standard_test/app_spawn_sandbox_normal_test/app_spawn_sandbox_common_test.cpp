@@ -190,7 +190,7 @@ HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_VerifyDirRecursive_0
 HWTEST_F(AppSpawnSandboxCommonTest, App_Spawn_SandboxCommon_CreateFileIfNotExist_01, TestSize.Level0)
 {
     const char *path = "/data/appspawn_ut/test_file.txt";
-    AppSpawn::SandboxCommon::CreateFileIfNotExist(path);
+    AppSpawn::SandboxCommon::CreateFileIfNotExist(nullptr, path);
     int32_t ret = 0;
     EXPECT_GE(ret, 0);
 }

@@ -1084,7 +1084,9 @@ int32_t SandboxCore::DoAllSymlinkPointslink(const AppSpawningCtx *appProperty, c
         std::string linkName(linkNameChr);
         targetName = SandboxCommon::ConvertToRealPath(appProperty, targetName);
         linkName = sandboxRoot + SandboxCommon::ConvertToRealPath(appProperty, linkName);
-        MakeDirRec(linkName.c_str(), SandboxCommonDef::DIR_MODE, 0);
+        // Create only the symlink's parent directory (equivalent to MakeDirRec with lastPath=0)
+        std::string linkParent = linkName.substr(0, linkName.rfind('/'));
+        (void)SandboxCommon::CreateDirRecursive(linkParent, SandboxCommonDef::DIR_MODE, appProperty);
         APPSPAWN_LOGV("symlink target %{public}s link %{public}s", targetName.c_str(), linkName.c_str());
         int ret = symlink(targetName.c_str(), linkName.c_str());
         APPSPAWN_CHECK_ONLY_LOG(!(ret && (errno != EEXIST)),
@@ -1097,13 +1099,14 @@ int32_t SandboxCore::DoAllSymlinkPointslink(const AppSpawningCtx *appProperty, c
     return SandboxCommon::HandleArrayForeach(symlinkPoints, processor);
 }
 
-int32_t SandboxCore::DoSandboxRootFolderCreateAdapt(std::string &sandboxPackagePath)
+int32_t SandboxCore::DoSandboxRootFolderCreateAdapt(const AppSpawningCtx *appProperty,
+    std::string &sandboxPackagePath)
 {
 #ifndef APPSPAWN_TEST
     int rc = mount(nullptr, "/", nullptr, MS_REC | MS_SLAVE, nullptr);
     APPSPAWN_CHECK(rc == 0, return rc, "set propagation slave failed");
 #endif
-    (void)SandboxCommon::CreateDirRecursive(sandboxPackagePath, SandboxCommonDef::FILE_MODE);
+    (void)SandboxCommon::CreateDirRecursive(sandboxPackagePath, SandboxCommonDef::FILE_MODE, appProperty);
 
     // bind mount "/" to /mnt/sandbox/<currentUserId>/<packageName> path
     // rootfs: to do more resources bind mount here to get more strict resources constraints
@@ -1130,7 +1133,8 @@ int32_t SandboxCore::DoSandboxRootFolderCreate(AppSpawnMgr *content, const AppSp
     arg.destPath = sandboxRootPath;
 
 #ifdef APPSPAWN_SANDBOX_ROOT_TMPFS
-    if (CheckAppMsgFlagsSet(appProperty, APP_FLAGS_UNLOCKED_STATUS) && IsAppSpawnMode(content)) {
+    if (CheckAppMsgFlagsSet(appProperty, APP_FLAGS_UNLOCKED_STATUS) && IsAppSpawnMode(content) &&
+        !IsSubspawnInstanceCreate(content, appProperty)) {
         arg.srcPath = "tmpfs";
         arg.destPath = sandboxRootPath;
         arg.fsType = "tmpfs";
@@ -1384,6 +1388,23 @@ int32_t SandboxCore::SetSandboxProperty(AppSpawningCtx *appProperty, std::string
     return ret;
 }
 
+/**
+ * @brief Choose the creation mode of an app sandbox root directory.
+ */
+static mode_t GetSandboxRootMode(const AppSpawningCtx *appProperty, const std::string &sandboxPackagePath)
+{
+    // Non-NoShareFs platforms and non-custom-sandbox apps keep the original 0711 root mode.
+    if (!IsNoShareFsEnable() || !CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CUSTOM_SANDBOX)) {
+        return SandboxCommonDef::DIR_MODE;
+    }
+    // Pre-create user-level and isolated ancestors with 0711
+    std::string parentPath = sandboxPackagePath.substr(0, sandboxPackagePath.rfind('/'));
+    if (SandboxCommon::CreateDirRecursive(parentPath, SandboxCommonDef::DIR_MODE) != 0) {
+        return SandboxCommonDef::DIR_MODE;
+    }
+    return SandboxCommonDef::WEAK_SANDBOX_DIR_MODE;
+}
+
 int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx *appProperty, uint32_t sandboxNsFlags)
 {
     APPSPAWN_CHECK(appProperty != nullptr, return -1, "Invalid appspawn client");
@@ -1396,7 +1417,8 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     APPSPAWN_CHECK(dacInfo != nullptr, return APPSPAWN_SANDBOX_INVALID, "No dac info in msg app property");
 
     std::string sandboxPackagePath = SandboxCommon::GetSandboxRootPath(appProperty, nullptr);
-    SandboxCommon::CreateDirRecursiveWithClock(sandboxPackagePath.c_str(), SandboxCommonDef::FILE_MODE);
+    mode_t sandboxMode = GetSandboxRootMode(appProperty, sandboxPackagePath);
+    SandboxCommon::CreateDirRecursiveWithClock(sandboxPackagePath.c_str(), sandboxMode);
 
     bool dlpStatus = (CheckAppPermissionFlagSet(appProperty,
         static_cast<uint32_t>(GetPermissionIndex(nullptr, SandboxCommonDef::ACCESS_DLP_FILE_MODE.c_str()))) != 0);
@@ -1417,7 +1439,7 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     UpdateMsgFlagsWithPermission(appProperty, SandboxCommonDef::APP_ALLOW_IOURING, APP_FLAGS_ALLOW_IOURING);
     // check app sandbox switch
     if (!SandboxCommon::IsTotalSandboxEnabled(appProperty) || !SandboxCommon::IsAppSandboxEnabled(appProperty)) {
-        rc = DoSandboxRootFolderCreateAdapt(sandboxPackagePath);
+        rc = DoSandboxRootFolderCreateAdapt(appProperty, sandboxPackagePath);
     } else {
         rc = DoSandboxRootFolderCreate(content, appProperty, sandboxPackagePath);
     }
@@ -1433,7 +1455,6 @@ int32_t SandboxCore::SetAppSandboxProperty(AppSpawnMgr *content, AppSpawningCtx 
     APPSPAWN_LOGV("Change root dir success");
 #endif
     SetDecWithDir(appProperty, dacInfo->appUid / UID_BASE);
-    SetDecDenyWithDir(appProperty);
     SetDecPolicy();
     return 0;
 }
@@ -1507,7 +1528,7 @@ int32_t SandboxCore::SetAppSandboxPropertyNweb(AppSpawnMgr *content, AppSpawning
     // check app sandbox switch
     if ((SandboxCommon::IsTotalSandboxEnabled(appProperty) == false) ||
         (SandboxCommon::IsAppSandboxEnabled(appProperty) == false)) {
-        rc = DoSandboxRootFolderCreateAdapt(sandboxPackagePath);
+        rc = DoSandboxRootFolderCreateAdapt(appProperty, sandboxPackagePath);
     } else if (!sandboxSharedStatus) {
         rc = DoSandboxRootFolderCreate(content, appProperty, sandboxPackagePath);
     }
@@ -1565,12 +1586,6 @@ int32_t SandboxCore::ChangeCurrentDir(std::string &sandboxPackagePath, const std
     APPSPAWN_CHECK(ret == 0, return ret, "MNT_DETACH failed, packagename is %{public}s", bundleName.c_str());
     return ret;
 }
-
-static const DecDenyPathTemplate DEC_DENY_PATH_MAP[] = {
-    {"ohos.permission.READ_WRITE_DOWNLOAD_DIRECTORY", "/storage/Users/currentUser/Download"},
-    {"ohos.permission.READ_WRITE_DESKTOP_DIRECTORY", "/storage/Users/currentUser/Desktop"},
-    {"ohos.permission.READ_WRITE_DOCUMENTS_DIRECTORY", "/storage/Users/currentUser/Documents"},
-};
 
 int32_t SandboxCore::SetDecWithDir(const AppSpawningCtx *appProperty, uint32_t userId)
 {
@@ -1697,40 +1712,6 @@ EXIT:
         }
     }
     return ret;
-}
-
-void SandboxCore::SetDecDenyWithDir(const AppSpawningCtx *appProperty)
-{
-    int32_t userFileIndex = GetPermissionIndex(nullptr, SandboxCommonDef::READ_WRITE_USER_FILE_MODE.c_str());
-    APPSPAWN_CHECK_LOGV(userFileIndex != -1, return, "userFileIndex Invalid index");
-    if (CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(userFileIndex)) == 0) {
-        APPSPAWN_LOGV("The app doesn't have %{public}s, no need to set deny rules",
-                      SandboxCommonDef::READ_WRITE_USER_FILE_MODE.c_str());
-        return;
-    }
-
-    AppSpawnMsgAccessToken *tokenInfo =
-        reinterpret_cast<AppSpawnMsgAccessToken *>(GetAppProperty(appProperty, TLV_ACCESS_TOKEN_INFO));
-    APPSPAWN_CHECK(tokenInfo != nullptr, return, "Get token id failed");
-
-    DecPolicyInfo decPolicyInfo = {0};
-    decPolicyInfo.pathNum = 0;
-    uint32_t count = ARRAY_LENGTH(DEC_DENY_PATH_MAP);
-    for (uint32_t i = 0, j = 0; i < count; i++) {
-        int32_t index = GetPermissionIndex(nullptr, DEC_DENY_PATH_MAP[i].permission);
-        if (CheckAppPermissionFlagSet(appProperty, static_cast<uint32_t>(index))) {
-            continue;
-        }
-        APPSPAWN_CHECK(j < MAX_CONFIG_POLICY_NUM, return, "dec policy out of bound currentIndex %{public}d", j);
-        PathInfo pathInfo = {0};
-        pathInfo.path = const_cast<char *>(DEC_DENY_PATH_MAP[i].decPath);
-        pathInfo.pathLen = static_cast<uint32_t>(strlen(pathInfo.path));
-        pathInfo.mode = DEC_MODE_DENY_INHERIT;
-        decPolicyInfo.path[j++] = pathInfo;
-        decPolicyInfo.pathNum += 1;
-    }
-    decPolicyInfo.tokenId = tokenInfo->accessTokenIdEx;
-    SetDecPolicyInfos(&decPolicyInfo);
 }
 
 std::string SandboxCore::ConvertDebugRealPath(const AppSpawningCtx *appProperty, std::string path)

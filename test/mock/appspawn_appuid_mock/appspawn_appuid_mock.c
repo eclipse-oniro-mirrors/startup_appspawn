@@ -63,6 +63,9 @@ static int g_chownRet = 0;
 static AppUidSetresuidCall g_setresuidCalls[APPUID_MOCK_MAX_PATH_CALLS];
 static int g_setresuidCallCount = 0;
 
+static AppUidSetresgidCall g_setresgidCalls[APPUID_MOCK_MAX_PATH_CALLS];
+static int g_setresgidCallCount = 0;
+
 static int g_mountRet = 0;
 
 static AppUidMountCall g_mountCalls[APPUID_MOCK_MAX_PATH_CALLS];
@@ -162,6 +165,8 @@ void AppUidMockReset(void)
     g_chownRet = 0;
     (void)memset_s(g_setresuidCalls, sizeof(g_setresuidCalls), 0, sizeof(g_setresuidCalls));
     g_setresuidCallCount = 0;
+    (void)memset_s(g_setresgidCalls, sizeof(g_setresgidCalls), 0, sizeof(g_setresgidCalls));
+    g_setresgidCallCount = 0;
     g_mountRet = 0;
     (void)memset_s(g_mountCalls, sizeof(g_mountCalls), 0, sizeof(g_mountCalls));
     g_mountCallCount = 0;
@@ -245,6 +250,20 @@ int AppUidMockGetSetresuidCall(int index, AppUidSetresuidCall *out)
         return -1;
     }
     *out = g_setresuidCalls[index];
+    return 0;
+}
+
+int AppUidMockSetresgidCallCount(void)
+{
+    return g_setresgidCallCount;
+}
+
+int AppUidMockGetSetresgidCall(int index, AppUidSetresgidCall *out)
+{
+    if (out == NULL || index < 0 || index >= g_setresgidCallCount) {
+        return -1;
+    }
+    *out = g_setresgidCalls[index];
     return 0;
 }
 
@@ -374,11 +393,14 @@ int AppUidSetresuidStub(uid_t ruid, uid_t euid, uid_t suid)
     return 0;
 }
 
-int AppUidSetresgidStub(uid_t rgid, uid_t egid, uid_t sgid)
+int AppUidSetresgidStub(gid_t rgid, gid_t egid, gid_t sgid)
 {
-    (void)rgid;
-    (void)egid;
-    (void)sgid;
+    if (g_setresgidCallCount < APPUID_MOCK_MAX_PATH_CALLS) {
+        g_setresgidCalls[g_setresgidCallCount].rgid = rgid;
+        g_setresgidCalls[g_setresgidCallCount].egid = egid;
+        g_setresgidCalls[g_setresgidCallCount].sgid = sgid;
+        g_setresgidCallCount++;
+    }
     return 0;
 }
 

@@ -423,7 +423,8 @@ APPSPAWN_STATIC int SpawnSetEncapsPermissions(AppSpawnMgr *content, AppSpawningC
     }
 
     // The trustlist is used to control not appspawn or nativespawn
-    if (!(IsAppSpawnMode(content) || IsHybridSpawnMode(content) || IsNativeSpawnMode(content))) {
+    if (!(IsAppSpawnMode(content) || IsHybridSpawnMode(content) || IsNativeSpawnMode(content) ||
+        IsSubSpawnMode(content))) {
         return 0;
     }
 
@@ -469,4 +470,5 @@ APPSPAWN_STATIC int SpawnSetEncapsPermissions(AppSpawnMgr *content, AppSpawningC
 MODULE_CONSTRUCTOR(void)
 {
     AddAppSpawnHook(STAGE_CHILD_EXECUTE, HOOK_PRIO_COMMON, SpawnSetEncapsPermissions);
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_COMMON, SpawnSetEncapsPermissions);
 }

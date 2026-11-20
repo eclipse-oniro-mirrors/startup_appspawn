@@ -25,6 +25,7 @@
 #include "appspawn_hook.h"
 #include "appspawn_manager.h"
 #include "securec.h"
+#include "sandbox_dec_calloc_mock.h"
 
 using namespace testing;
 using namespace testing::ext;
@@ -183,6 +184,8 @@ public:
         g_mockClockTimeSec = MOCK_CLOCK_TIME_SEC;
         g_mockClockTimeNsec = MOCK_CLOCK_TIME_NSEC;
         g_mockStrdupShouldFail = false;
+        g_mockCallocFailAfter = -1;
+        g_callocCallCount = 0;
         for (int i = 0; i < MAX_IOCTL_RECORDS; i++) {
             g_ioctlPathNums[i] = 0;
         }
@@ -1452,6 +1455,70 @@ HWTEST_F(SandboxDecTest, SandboxDec_SetDecPolicyInfos_InputClampBoundary_001, Te
     for (uint32_t i = 0; i < MAX_CONFIG_POLICY_NUM; i++) {
         free(info.path[i].path);
     }
+}
+
+// ==================== TC: calloc failure in SetDecPolicyInfos ====================
+
+/**
+ * @tc.name: SandboxDec_SetDecPolicyInfos_CallocFail_001
+ * @tc.desc: Verify SetDecPolicyInfos handles calloc failure (g_decPolicyInfos NULL)
+ *           Covers: calloc returns NULL -> APPSPAWN_LOGE("calloc failed"); return;
+ */
+HWTEST_F(SandboxDecTest, SandboxDec_SetDecPolicyInfos_CallocFail_001, TestSize.Level1)
+{
+    // g_decPolicyInfos should be NULL at this point (reset by previous test cleanup)
+    // Set calloc to fail on the first call (index 0)
+    g_mockCallocFailAfter = 0;
+
+    DecPolicyInfo info = {};
+    info.tokenId = MOCK_TOKEN_ID;
+    info.pathNum = 1;
+    info.path[0].path = strdup("/data/test/calloc_fail");
+    info.path[0].pathLen = strlen(info.path[0].path);
+    info.path[0].mode = 0x1;
+
+    // Should not crash, calloc fails internally
+    SetDecPolicyInfos(&info);
+
+    // g_decPolicyInfos should still be NULL (calloc failed)
+    // SetDecPolicy should do nothing
+    g_mockIoctlCallCount = 0;
+    SetDecPolicy();
+    EXPECT_EQ(g_mockIoctlCallCount, 0);
+
+    free(info.path[0].path);
+}
+
+// ==================== TC: NULL path in SetDecPolicyInfos (explicit coverage) ====================
+
+/**
+ * @tc.name: SandboxDec_SetDecPolicyInfos_NullPathEntry_001
+ * @tc.desc: Verify SetDecPolicyInfos skips NULL path entry
+ *           Covers: decPolicyInfos->path[i].path == NULL -> APPSPAWN_LOGW("DecPolicy path[%u] is NULL, skip")
+ */
+HWTEST_F(SandboxDecTest, SandboxDec_SetDecPolicyInfos_NullPathEntry_001, TestSize.Level1)
+{
+    DecPolicyInfo info = {};
+    info.tokenId = MOCK_TOKEN_ID;
+    info.pathNum = 2;
+    info.path[0].path = strdup("/data/test/null_path_valid");
+    info.path[0].pathLen = strlen(info.path[0].path);
+    info.path[0].mode = 0x1;
+    info.path[1].path = NULL;  // NULL path - should be skipped
+    info.path[1].pathLen = 0;
+    info.path[1].mode = 0x1;
+
+    SetDecPolicyInfos(&info);
+
+    // Call SetDecPolicy to verify only 1 path was added (NULL skipped)
+    g_mockIoctlCallCount = 0;
+    SetDecPolicy();
+    EXPECT_EQ(g_mockIoctlCallCount, 1);  // 1 path = 1 batch
+    if (g_mockIoctlCallCount > 0) {
+        EXPECT_EQ(g_ioctlPathNums[0], 1u);  // only 1 path in the batch
+    }
+
+    free(info.path[0].path);
 }
 
 } // namespace OHOS

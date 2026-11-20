@@ -41,6 +41,7 @@ typedef enum {
     MODE_FOR_CJAPP_COLD_RUN,
     MODE_FOR_HYBRID_SPAWN,
     MODE_FOR_HYBRID_COLD_RUN,
+    MODE_FOR_SUB_SPAWN,
     MODE_INVALID
 } RunMode;
 
@@ -54,6 +55,7 @@ typedef enum {
     PROCESS_FOR_HYBRID_SPAWN,
     PROCESS_FOR_HYBRID_COLD_RUN,
     PROCESS_FOR_APP_SPAWNDF,
+    PROCESS_FOR_SUB_SPAWN,
     PROCESS_INVALID
 } RunProcess;
 
@@ -133,6 +135,25 @@ void AppSpawnEnvClear(AppSpawnContent *content, AppSpawnClient *client);
 int AppSpawnProcessMsg(AppSpawnContent *content, AppSpawnClient *client, pid_t *childPid);
 void ProcessExit(int code);
 int AppSpawnChild(AppSpawnContent *content, AppSpawnClient *client);
+enum {
+    SUBSPAWN_MAX_PRELOAD_LENGTH = 8 * 1024,
+    SUBSPAWN_SOCKET_NAME_LENGTH = 108,
+};
+
+#define SUBSPAWN_NAME "subspawn"
+#define SUBSPAWN_SOCKET_DIR "/data/service/el1/startup"
+#define SUBSPAWN_SOCKET_PREFIX SUBSPAWN_SOCKET_DIR "/subspawn_"
+
+// The exec'ed instance reports an int result through the ordinary child-response pipe.
+typedef struct {
+    int pipeFd;
+    int memFd;
+    int listenFd;
+    uint32_t messageLen;
+    uid_t uid;
+    char socketName[SUBSPAWN_SOCKET_NAME_LENGTH];
+} SubspawnStartInfo;
+
 #ifdef __cplusplus
 }
 #endif

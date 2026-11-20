@@ -30,15 +30,23 @@ typedef struct {
     uint32_t value;
 } FlagEntry;
 
+typedef struct {
+    const char *flagName;
+    void (*handler)(PathInfo *paths, uint32_t count);
+} PathFlagHandler;
+
+void SetUgcControlScope(PathInfo *paths, uint32_t count);
+
 static FlagEntry g_mountFlagMap[] = {
     {"ugc", SEC_UGC_PATH_TYPE},
     {"isolate", SEC_ISOLATE_PATH_TYPE},
     {"dec", SEC_DEC_PATH_TYPE},
     {"sandbox", SEC_SANDBOX_PATH_TYPE},
+    {"deny", SEC_DENY_PATH_TYPE},
 };
 
-static FlagEntry g_pathModeMap[] = {
-    {"ugc", UGC_CONSTRAINT_MODE},
+static PathFlagHandler g_pathFlagHandlers[] = {
+    {"ugc", SetUgcControlScope},
 };
 
 static int AppSpawnExtDataCompareDataId(ListNode *node, void *data)
@@ -66,6 +74,14 @@ APPSPAWN_STATIC void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config)
         free(config->mounts);
         config->mounts = NULL;
         config->mountCount = 0;
+    }
+    if (config->pathFlagNames != NULL) {
+        for (uint32_t i = 0; i < config->pathCount; i++) {
+            free(config->pathFlagNames[i]);
+            config->pathFlagNames[i] = NULL;
+        }
+        free(config->pathFlagNames);
+        config->pathFlagNames = NULL;
     }
     if (config->paths != NULL) {
         for (uint32_t i = 0; i < config->pathCount; i++) {
@@ -169,18 +185,42 @@ static void ParsePathsSection(const cJSON *root, SandboxPathMarkConfig *config)
     APPSPAWN_CHECK_ONLY_EXPER(paths != NULL, return);
     config->paths = (PathInfo *)calloc(count, sizeof(PathInfo));
     APPSPAWN_CHECK(config->paths != NULL, return, "calloc paths failed");
+    config->pathFlagNames = (char **)calloc(count, sizeof(char *));
+    APPSPAWN_CHECK(config->pathFlagNames != NULL, return, "calloc pathFlagNames failed");
     for (int i = 0; i < count; i++) {
         cJSON *item = cJSON_GetArrayItem(paths, i);
         char *path = GetStringFromJsonObj(item, "path");
         APPSPAWN_CHECK(path != NULL, continue, "paths entry path missing, skip");
-        uint32_t mode = ParseFlagsFromArray(item, g_pathModeMap, ARRAY_LENGTH(g_pathModeMap), path);
-        APPSPAWN_CHECK(mode != 0, continue, "No valid modes for path %{public}s, skip", path);
+        char *flagName = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(item, "flag"));
+        APPSPAWN_CHECK(flagName != NULL, continue, "paths entry flag missing for %{public}s, skip", path);
+        bool flagMatched = false;
+        for (size_t h = 0; h < ARRAY_LENGTH(g_pathFlagHandlers); h++) {
+            if (strcmp(flagName, g_pathFlagHandlers[h].flagName) == 0) {
+                flagMatched = true;
+                break;
+            }
+        }
+        APPSPAWN_CHECK(flagMatched, continue,
+            "Invalid flag %{public}s for path %{public}s, skip", flagName, path);
+        cJSON *modeItem = cJSON_GetObjectItemCaseSensitive(item, "mode");
+        APPSPAWN_CHECK(modeItem != NULL && cJSON_IsNumber(modeItem), continue,
+            "paths entry mode missing/invalid for %{public}s, skip", path);
+        double modeVal = cJSON_GetNumberValue(modeItem);
+        APPSPAWN_CHECK(modeVal > 0 && modeVal <= UINT32_MAX, continue,
+            "paths entry mode out of range for %{public}s, skip", path);
         config->paths[config->pathCount].path = strdup(path);
         APPSPAWN_CHECK(config->paths[config->pathCount].path != NULL, continue,
             "strdup failed for path %{public}s, skip", path);
         config->paths[config->pathCount].pathLen = (uint32_t)strlen(path);
-        config->paths[config->pathCount].mode = mode;
+        config->paths[config->pathCount].mode = (uint32_t)modeVal;
         config->paths[config->pathCount].flag = false;
+        config->pathFlagNames[config->pathCount] = strdup(flagName);
+        if (config->pathFlagNames[config->pathCount] == NULL) {
+            free(config->paths[config->pathCount].path);
+            config->paths[config->pathCount].path = NULL;
+            APPSPAWN_LOGE("strdup failed for flag %{public}s, skip", flagName);
+            continue;
+        }
         config->pathCount++;
     }
     APPSPAWN_LOGV("Parsed paths: %{public}u entries", config->pathCount);
@@ -197,11 +237,11 @@ APPSPAWN_STATIC int ParsePathConfig(const cJSON *root, ParseJsonContext *context
     return APPSPAWN_OK;
 }
 
-void SetConstraintPaths(PathInfo *paths, uint32_t count)
+void SetUgcControlScope(PathInfo *paths, uint32_t count)
 {
     APPSPAWN_CHECK_ONLY_EXPER(paths != NULL && count != 0, return);
     int fd = open(DEV_DEC, O_RDWR);
-    APPSPAWN_CHECK(fd >= 0, return, "Failed to open %{public}s for constraint, errno %{public}d", DEV_DEC, errno);
+    APPSPAWN_CHECK(fd >= 0, return, "Failed to open %{public}s for ugc control, errno %{public}d", DEV_DEC, errno);
     uint32_t batches = (count + KERNEL_BATCH_SIZE - 1) / KERNEL_BATCH_SIZE;
     for (uint32_t batch = 0; batch < batches; batch++) {
         uint32_t start = batch * KERNEL_BATCH_SIZE;
@@ -212,11 +252,11 @@ void SetConstraintPaths(PathInfo *paths, uint32_t count)
         for (uint32_t i = start; i < end; i++) {
             info.path[i - start] = paths[i];
         }
-        if (ioctl(fd, CONSTRAINT_DEC_POLICY_CMD, &info) < 0) {
-            APPSPAWN_LOGE("CONSTRAINT_DEC_POLICY_CMD failed batch %{public}u errno %{public}d", batch, errno);
+        if (ioctl(fd, ADD_UGC_CONTROL_MARK_CMD, &info) < 0) {
+            APPSPAWN_LOGE("ADD_UGC_CONTROL_MARK_CMD failed batch %{public}u errno %{public}d", batch, errno);
         }
     }
-    APPSPAWN_LOGI("set CONSTRAINT_DEC_POLICY_CMD success");
+    APPSPAWN_LOGI("set ADD_UGC_CONTROL_MARK_CMD success");
     close(fd);
 }
 
@@ -249,6 +289,25 @@ APPSPAWN_STATIC int SpawnSetPathMark(AppSpawnMgr *content, AppSpawningCtx *prope
     return APPSPAWN_OK;
 }
 
+static void DispatchPathConfigs(const SandboxPathMarkConfig *config)
+{
+    APPSPAWN_CHECK_ONLY_EXPER(config != NULL, return);
+    for (size_t h = 0; h < ARRAY_LENGTH(g_pathFlagHandlers); h++) {
+        PathInfo batch[MAX_PATH_RULE_NUM];
+        uint32_t n = 0;
+        for (uint32_t i = 0; i < config->pathCount; i++) {
+            if (strcmp(config->pathFlagNames[i], g_pathFlagHandlers[h].flagName) == 0) {
+                batch[n] = config->paths[i];
+                batch[n].flag = false;
+                n++;
+            }
+        }
+        if (n > 0) {
+            g_pathFlagHandlers[h].handler(batch, n);
+        }
+    }
+}
+
 int SpawnLoadPathConfig(AppSpawnMgr *content)
 {
     APPSPAWN_CHECK(content != NULL, return APPSPAWN_SYSTEM_ERROR, "Invalid content");
@@ -260,7 +319,7 @@ int SpawnLoadPathConfig(AppSpawnMgr *content)
     (void)ParseJsonConfig("etc/sandbox", "/sandbox-path-mark-policy.json", ParsePathConfig, &ctx);
     APPSPAWN_LOGV("Config loaded: mounts=%{public}u paths=%{public}u", config->mountCount, config->pathCount);
     if (config->pathCount > 0) {
-        SetConstraintPaths(config->paths, config->pathCount);
+        DispatchPathConfigs(config);
     }
     return APPSPAWN_OK;
 }
@@ -270,4 +329,5 @@ MODULE_CONSTRUCTOR(void)
     AddPreloadHook(HOOK_PRIO_COMMON, SpawnLoadPathConfig);
     /* Path marking should be done between sandbox and setuid. */
     AddAppSpawnHook(STAGE_CHILD_EXECUTE, HOOK_PRIO_SANDBOX_MARK_PATH, SpawnSetPathMark);
+    AddAppSpawnHook(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_PRIO_SANDBOX_MARK_PATH, SpawnSetPathMark);
 }

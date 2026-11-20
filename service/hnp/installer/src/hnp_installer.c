@@ -502,7 +502,8 @@ static int HnpInstallForceCheck(HnpCfgInfo *hnpCfgInfo, HnpInstallInfo *hnpInfo)
             return HNP_ERRNO_INSTALLER_PATH_IS_EXIST;
         }
         if (hnpInfo->isPublic == false) {
-            if (HnpDeleteFolder(hnpInfo->hnpSoftwarePath) != 0) {
+            ret = HnpDeleteFolder(hnpInfo->hnpSoftwarePath);
+            if (ret != 0) {
                 return ret;
             }
         }
@@ -1137,6 +1138,18 @@ static int GetRespFd()
     long fd = strtol(fdEnv, NULL, HNP_BASE_DEC);
     HNP_ERROR_CHECK(fd >= 0 && fd < INT_MAX, return -1, "fd out of range");
     return (int)fd;
+}
+
+int HnpReportApiResult(int ret)
+{
+    int respFd = GetRespFd();
+    HNP_ONLY_EXPER(respFd <= 0, return ret);
+    HnpApiResult result = {
+        .result = ret,
+    };
+    HNP_ERROR_CHECK(write(respFd, &result, sizeof(HnpApiResult)) == sizeof(HnpApiResult),
+        return HNP_ERRNO_WRITE_ERROR, "write result failed %{public}d", errno);
+    return ret;
 }
 
 int HnpCmdInstall(int argc, char *argv[])

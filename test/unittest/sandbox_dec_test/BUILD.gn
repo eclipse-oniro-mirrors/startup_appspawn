@@ -39,6 +39,7 @@ if (!defined(ohos_lite)) {
 
     sources = [
       "${appspawn_path}/modules/sandbox/sandbox_dec.c",
+      "sandbox_dec_calloc_mock.c",
       "sandbox_dec_test.cpp",
     ]
 
@@ -49,6 +50,7 @@ if (!defined(ohos_lite)) {
       "-Wl,--wrap=clock_gettime",
       "-Wl,--wrap=AddServerStageHook",
       "-Wl,--wrap=strdup",
+      "-Wl,--wrap=calloc",
     ]
 
     deps = [ "${appspawn_path}/util:libappspawn_util" ]

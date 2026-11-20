@@ -19,7 +19,11 @@ if (!defined(ohos_lite)) {
   ohos_unittest("AppSpawn_Sandbox_Normal_Test") {
     module_out_path = "appspawn/appspawn"
     cflags = [ "-Dprivate=public" ]
-    ldflags = [ "-Wl,--wrap=calloc", "-Wl,--wrap=GetPermissionIndex" ]
+    ldflags = [
+      "-Wl,--wrap=calloc",
+      "-Wl,--wrap=GetPermissionIndex",
+      "-Wl,--wrap=mkdir",
+    ]
 
     if (appspawn_unittest_coverage) {
       cflags += [ "--coverage" ]
@@ -103,6 +107,7 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/standard/appspawn_kickdog.c",
       "${appspawn_path}/standard/appspawn_msgmgr.c",
       "${appspawn_path}/standard/appspawn_service.c",
+      "${appspawn_path}/standard/subspawn_manager.c",
       "${appspawn_path}/util/src/appspawn_utils.c",
       "${appspawn_path}/util/src/appspawndf_utils.cpp",
     ]
@@ -145,6 +150,7 @@ if (!defined(ohos_lite)) {
     # Test specific sources
     sources += [
       "app_spawn_sandbox_common_test.cpp",
+      "app_spawn_sandbox_weak_permission_test.cpp",
       "app_spawn_sandbox_core_test.cpp",
       "app_spawn_sandbox_clone_app_test.cpp",
       "app_spawn_sandbox_manager_test.cpp",

@@ -52,6 +52,7 @@ typedef void *AppSpawnClientHandle;
 #define NATIVESPAWN_SERVER_NAME "nativespawn"
 #define HYBRIDSPAWN_SERVER_NAME "hybridspawn"
 #define APPSPAWNDF_SERVER_NAME "appspawndf"
+#define SUBSPAWN_SERVER_NAME "subspawn"
 
 #pragma pack(4)
 #define APP_MAX_GIDS 64
@@ -80,11 +81,36 @@ typedef struct {
 /**
  * @brief init spawn client, eg: nwebspawn、appspawn
  *
- * @param serviceName service name, eg: nwebspawn、appspawn
+ * @param serviceName service name, eg: nwebspawn、appspawn, or an absolute subspawn_<uid> socket path
  * @param handle handle for client
  * @return if succeed return 0,else return other value
  */
 int AppSpawnClientInit(const char *serviceName, AppSpawnClientHandle *handle);
+
+/**
+ * @brief Query whether subspawn is supported by the current device configuration.
+ *
+ * @return true only when const.startup.appspawn_support_subspawn.enable is "1".
+ * Returns false when the parameter is absent or cannot be read.
+ */
+bool IsSupportSubSpawn(void);
+
+/**
+ * @brief Get the absolute socket path for a subspawn instance.
+ *
+ * @param uid Application UID, which must be nonnegative.
+ * @return A newly allocated /data/service/el1/startup/subspawn_<uid> string.
+ * The caller must free() the result. Returns NULL for a negative UID or on failure.
+ */
+char *GetSubSpawnSocketName(int uid);
+
+/**
+ * Create an independent client for /data/service/el1/startup/subspawn_<decimal uid>.
+ * After CREATE succeeds, build the path using the application uid supplied in its DAC information.
+ * The caller owns the handle and must destroy it after all sends have completed.
+ * MSG_APP_SPAWN requests are not automatically replayed after a send attempt.
+ */
+int AppSpawnClientInitSubspawn(const char *socketName, AppSpawnClientHandle *handle);
 /**
  * @brief destroy client
  *
@@ -99,6 +125,7 @@ int AppSpawnClientDestroy(AppSpawnClientHandle handle);
  * @param handle handle for client
  * @param reqHandle handle for request
  * @param result result from appspawn service
+ * @note Requests use the configured client timeout.
  * @return if succeed return 0,else return other value
  */
 int AppSpawnClientSendMsg(AppSpawnClientHandle handle, AppSpawnReqMsgHandle reqHandle, AppSpawnResult *result);
@@ -131,6 +158,8 @@ typedef enum {
     MSG_SPAWN_IMAGE_PROCESS,      // Request to spawn the image process
     MSG_SPAWN_WORKER_PROCESS,     // Request to spawn the worker process
     MSG_SPAWN_SERVICE_BIN,        // Request to spawn a daemon process (IPC boundary — needs protocol owner review)
+    MSG_SUBSPAWN_CREATE,         // Create or reuse a per-application subspawn instance
+    MSG_SUBSPAWN_SHUTDOWN,       // Ask main appspawn to terminate and clean up an instance
     MAX_TYPE_INVALID
 } AppSpawnMsgType;
 
@@ -315,6 +344,7 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 #define MSG_EXT_NAME_APP_ENV "AppEnv"
 #define MSG_EXT_NAME_APP_EXTENSION "AppExtension"
 #define MSG_EXT_NAME_BEGET_PID "AppPid"
+#define MSG_EXT_NAME_SUBSPAWN_PID "SubspawnPid" // SHUTDOWN target, binary pid_t; sent to main appspawn
 #define MSG_EXT_NAME_BEGET_PTY_NAME "ptyName"
 #define MSG_EXT_NAME_ACCOUNT_ID "AccountId"
 #define MSG_EXT_NAME_PROVISION_TYPE "ProvisionType"
@@ -335,6 +365,14 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 
 #define AGENT_ID_STR_MAX_LEN 64
 #define USER_ID_STR_MAX_LEN 16
+
+/**
+ * Optional CREATE extension containing a JSON object with hapPath, so, entry and ns.
+ * The JSON payload is limited to 8 KiB. Omission requests an instance without preloading.
+ * Preload data is not part of the (bundleName, uid) reuse key; callers must SHUTDOWN
+ * the existing instance before CREATE when application assets change.
+ */
+#define MSG_EXT_NAME_SUBSPAWN_PRELOAD "SubspawnPreload"
 
 int AppSpawnReqMsgAddExtInfo(AppSpawnReqMsgHandle reqHandle, const char *name, const uint8_t *value, uint32_t valueLen);
 

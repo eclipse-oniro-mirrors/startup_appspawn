@@ -85,3 +85,69 @@ HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_003, TestSize.Level0)
     cJSON_Delete(root);
     ASSERT_EQ(ret, false);
 }
+
+/**
+ * @brief ParseSilkConfig处理超长 appName（> 256）时跳过该项
+ *        覆盖len > SILK_JSON_NAME_MAX 的continue 分支
+ */
+HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_001, TestSize.Level0)
+{
+    std::string longName(257, 'x');
+    std::string jsonStr = "{\"enabled_app_list\":[\"" + longName + "\",\"com.valid.app\"]}";
+    cJSON *root = cJSON_Parse(jsonStr.c_str());
+    ASSERT_NE(root, nullptr);
+    bool ret = ParseSilkConfig(root, &g_silkConfig);
+    cJSON_Delete(root);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(g_silkConfig.configCursor, 1);
+    if (g_silkConfig.configCursor == 1) {
+        EXPECT_STREQ(g_silkConfig.configItems[0], "com.valid.app");
+    }
+    for (int i = 0; i < g_silkConfig.configCursor; i++) {
+        free(g_silkConfig.configItems[i]);
+        g_silkConfig.configItems[i] = nullptr;
+    }
+    free(g_silkConfig.configItems);
+    g_silkConfig.configItems = nullptr;
+    g_silkConfig.configCursor = 0;
+}
+
+/**
+ * @brief 超长 appName 位于数组末位时，末位continue后循环结束
+ *        isSuccess保持false，FreeAllSilkConfig全量释放并返回false
+ */
+HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_002, TestSize.Level0)
+{
+    std::string longName(257, 'x');
+    std::string jsonStr = "{\"enabled_app_list\":[\"com.valid.app\",\"" + longName + "\"]}";
+    cJSON *root = cJSON_Parse(jsonStr.c_str());
+    ASSERT_NE(root, nullptr);
+    bool ret = ParseSilkConfig(root, &g_silkConfig);
+    cJSON_Delete(root);
+    EXPECT_EQ(ret, false);
+    EXPECT_EQ(g_silkConfig.configItems, nullptr);
+    EXPECT_EQ(g_silkConfig.configCursor, 0);
+}
+
+/**
+ * @brief 边界值：appName 255字符（len=256 <= SILK_JSON_NAME_MAX）应被接受
+ *        放在末位时末位成功拷贝，isSuccess = true, 返回true
+ */
+HWTEST_F(ParseSilkConfigTest, Parse_Silk_Config_LongName_003, TestSize.Level0)
+{
+    std::string validName(255, 'x');
+    std::string jsonStr = "{\"enabled_app_list\":[\"com.valid.app\",\"" + validName + "\"]}";
+    cJSON *root = cJSON_Parse(jsonStr.c_str());
+    ASSERT_NE(root, nullptr);
+    bool ret = ParseSilkConfig(root, &g_silkConfig);
+    cJSON_Delete(root);
+    EXPECT_EQ(ret, true);
+    EXPECT_EQ(g_silkConfig.configCursor, 2);
+    for (int i = 0; i < g_silkConfig.configCursor; i++) {
+        free(g_silkConfig.configItems[i]);
+        g_silkConfig.configItems[i] = nullptr;
+    }
+    free(g_silkConfig.configItems);
+    g_silkConfig.configItems = nullptr;
+    g_silkConfig.configCursor = 0;
+}

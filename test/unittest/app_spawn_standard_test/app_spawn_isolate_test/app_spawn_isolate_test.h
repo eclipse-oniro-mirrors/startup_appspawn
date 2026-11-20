@@ -25,8 +25,11 @@ extern "C" {
 
 SandboxPathMarkConfig *GetSandboxPathMarkConfig(const AppSpawnMgr *content);
 int ParsePathConfig(const cJSON *root, ParseJsonContext *context);
-void SetConstraintPaths(PathInfo *paths, uint32_t count);
+void SetUgcControlScope(PathInfo *paths, uint32_t count);
 int SpawnLoadPathConfig(AppSpawnMgr *content);
+void ClearSandboxPathMarkConfig(SandboxPathMarkConfig *config);
+void SetMark(MountInfo *mounts, uint32_t count);
+int SpawnSetPathMark(AppSpawnMgr *content, AppSpawningCtx *property);
 
 #ifdef __cplusplus
 }

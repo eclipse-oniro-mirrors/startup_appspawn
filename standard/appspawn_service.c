@@ -23,6 +23,7 @@
 #include <string.h>
 #include <sys/signalfd.h>
 #include <sys/socket.h>
+#include <sys/un.h>
 #include <sys/wait.h>
 #include <sys/mman.h>
 #include <sys/syscall.h>
@@ -43,7 +44,9 @@
 #include "parameter.h"
 #include "appspawn_adapter.h"
 #include "appspawn_fd_manager.h"
+#include "subspawn_manager.h"
 #include "securec.h"
+#include "appspawn_error.h"
 #include "cJSON.h"
 #ifdef APPSPAWN_HISYSEVENT
 #include "hisysevent_adapter.h"
@@ -52,9 +55,14 @@
 #define PATH_SIZE 256
 #define FD_PATH_SIZE 128
 #define UNLOCK_MOUNT_TIMEOUT_MS 30000  // 30s timeout for unlock mount
+#define SUBSPAWN_SHUTDOWN_WAIT_COUNT 100
+#define SUBSPAWN_SHUTDOWN_WAIT_US 10000
 
 #define PREFORK_PROCESS "apppool"
 #define APPSPAWN_MSG_USER_CHECK_COUNT 4
+#define SUBSPAWN_MSG_USER_CHECK_COUNT 2
+#define APPSPAWN_ROOT_UID 0
+#define APPSPAWN_FOUNDATION_UID 5523
 #define USER_ID_MIN_VALUE 100
 #define USER_ID_MAX_VALUE 10736
 #define LOCK_STATUS_PARAM_SIZE 64
@@ -93,6 +101,7 @@ static inline void SetFdCtrl(int fd, int opt)
 static void AppQueueDestroyProc(const AppSpawnMgr *mgr, AppSpawnedProcess *appInfo, void *data)
 {
     pid_t pid = appInfo->pid;
+
     APPSPAWN_LOGI("kill %{public}s pid: %{public}d", appInfo->name, appInfo->pid);
     appInfo->killReason.reason = REASON_APPSPAWN_STOP;
     appInfo->killReason.errorCause = 0;
@@ -161,6 +170,9 @@ APPSPAWN_STATIC void WriteSignalInfoToFd(AppSpawnedProcess *appInfo, AppSpawnCon
     cJSON_AddNumberToObject(root, "uid", appInfo->appUid);
     cJSON_AddNumberToObject(root, "signal", signal);
     cJSON_AddStringToObject(root, "bundleName", appInfo->name);
+    if (appInfo->isSubspawn) {
+        cJSON_AddStringToObject(root, "processType", SUBSPAWN_SERVER_NAME);
+    }
     char *jsonString = cJSON_Print(root);
     cJSON_Delete(root);
     APPSPAWN_CHECK(jsonString != NULL, return, "jsonString is NULL");
@@ -223,6 +235,21 @@ APPSPAWN_STATIC void HandleDiedPid(pid_t pid, uid_t uid, int status)
     TerminateSpawnedProcess(appInfo);
 }
 
+int ReapSubspawnProcess(pid_t pid)
+{
+    AppSpawnedProcess *process = GetSubspawnProcess(pid);
+    if (process == NULL) {
+        return 0;
+    }
+    int status;
+    pid_t result = waitpid(pid, &status, WNOHANG);
+    if (result > 0) {
+        HandleDiedPid(pid, process->uid, status);
+        return 1;
+    }
+    return 0;
+}
+
 APPSPAWN_STATIC void ProcessSignal(const struct signalfd_siginfo *siginfo)
 {
     APPSPAWN_DUMPI("ProcessSignal signum %{public}d %{public}d", siginfo->ssi_signo, siginfo->ssi_pid);
@@ -237,6 +264,7 @@ APPSPAWN_STATIC void ProcessSignal(const struct signalfd_siginfo *siginfo)
             }
 #if (defined(CJAPP_SPAWN) || defined(NATIVE_SPAWN))
             if (OH_ListGetCnt(&GetAppSpawnMgr()->appQueue) == 0 &&
+                OH_ListGetCnt(&GetAppSpawnMgr()->subspawnQueue) == 0 &&
                 OH_ListGetCnt(&GetAppSpawnMgr()->appSpawnQueue) == 0) {
                 LE_StopLoop(LE_GetDefaultLoop());
             }
@@ -271,7 +299,7 @@ APPSPAWN_STATIC void CloseFdArgsFromConnection(AppSpawnConnection *connection)
     APPSPAWN_CHECK(connection != NULL, return, "Invalid connection");
     int fdCount = connection->receiverCtx.fdCount;
     int *fds = connection->receiverCtx.fds;
-    APPSPAWN_CHECK_LOGW(fds != NULL && fdCount > 0, return,
+    APPSPAWN_CHECK_LOGV(fds != NULL && fdCount > 0, return,
         "Invalid fd info %{public}d %{public}d", fds == NULL, fdCount);
 
     APPSPAWN_LOGI("CloseFdArgsFromConnection: close %{public}d fds", fdCount);
@@ -466,6 +494,20 @@ APPSPAWN_STATIC bool OnConnectionUserCheck(uid_t uid)
         1090, //storage_manager 1090
     };
 
+    // subspawn socket uids list
+    const uid_t subspawnUids[SUBSPAWN_MSG_USER_CHECK_COUNT] = {
+        APPSPAWN_ROOT_UID, // root 0
+        APPSPAWN_FOUNDATION_UID, // foundation 5523
+    };
+    if (IsSubSpawnMode(GetAppSpawnMgr())) {
+        for (int i = 0; i < SUBSPAWN_MSG_USER_CHECK_COUNT; i++) {
+            if (uid == subspawnUids[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     for (int i = 0; i < APPSPAWN_MSG_USER_CHECK_COUNT; i++) {
         if (uid == uids[i]) {
             return true;
@@ -480,11 +522,8 @@ APPSPAWN_STATIC bool OnConnectionUserCheck(uid_t uid)
     return false;
 }
 
-static int OnConnection(const LoopHandle loopHandle, const TaskHandle server)
+static LE_STATUS AcceptConnectionStream(const LoopHandle loopHandle, const TaskHandle server, TaskHandle *stream)
 {
-    APPSPAWN_CHECK(server != NULL && loopHandle != NULL, return -1, "Error server");
-    static uint32_t connectionId = 0;
-    TaskHandle stream;
     LE_StreamInfo info = {};
     info.baseInfo.flags = TASK_STREAM | TASK_PIPE | TASK_CONNECT;
     info.baseInfo.close = OnClose;
@@ -493,21 +532,44 @@ static int OnConnection(const LoopHandle loopHandle, const TaskHandle server)
     info.sendMessageComplete = SendMessageComplete;
     info.recvMessage = OnReceiveRequest;
     info.handleRecvMsg = HandleRecvMessage;
-    LE_STATUS ret = LE_AcceptStreamClient(loopHandle, server, &stream, &info);
+    return LE_AcceptStreamClient(loopHandle, server, stream, &info);
+}
+
+static int OnConnection(const LoopHandle loopHandle, const TaskHandle server)
+{
+    APPSPAWN_CHECK(server != NULL && loopHandle != NULL, return -1, "Error server");
+    static uint32_t connectionId = 0;
+    TaskHandle stream;
+    LE_STATUS ret = AcceptConnectionStream(loopHandle, server, &stream);
     APPSPAWN_CHECK(ret == 0, return -1, "Failed to alloc stream");
 
     AppSpawnConnection *connection = (AppSpawnConnection *)LE_GetUserData(stream);
     APPSPAWN_CHECK(connection != NULL, return -1, "Failed to alloc stream");
+    connection->peerUid = (uid_t)-1;
+    connection->peerCredValid = false;
+    int socketFd = LE_GetSocketFd(stream);
     struct ucred cred = {-1, -1, -1};
     socklen_t credSize = sizeof(struct ucred);
-    if ((getsockopt(LE_GetSocketFd(stream), SOL_SOCKET, SO_PEERCRED, &cred, &credSize) < 0) ||
-        !OnConnectionUserCheck(cred.uid)) {
-        APPSPAWN_LOGE("Invalid uid %{public}d from client", cred.uid);
+    if (getsockopt(socketFd, SOL_SOCKET, SO_PEERCRED, &cred, &credSize) < 0) {
+        APPSPAWN_LOGE("Failed to get client credentials fd %{public}d errno %{public}d", socketFd, errno);
+        LE_CloseStreamTask(LE_GetDefaultLoop(), stream);
+        return -1;
+    }
+    if (credSize != sizeof(cred)) {
+        APPSPAWN_LOGE("Invalid client credential size %{public}u expected %{public}zu fd %{public}d",
+            (uint32_t)credSize, sizeof(cred), socketFd);
+        LE_CloseStreamTask(LE_GetDefaultLoop(), stream);
+        return -1;
+    }
+    if (!OnConnectionUserCheck(cred.uid)) {
+        APPSPAWN_LOGE("Rejected client uid %{public}d fd %{public}d", cred.uid, socketFd);
         LE_CloseStreamTask(LE_GetDefaultLoop(), stream);
         return -1;
     }
     SetFdCtrl(LE_GetSocketFd(stream), FD_CLOEXEC);
 
+    connection->peerUid = cred.uid;
+    connection->peerCredValid = true;
     connection->connectionId = ++connectionId;
     connection->stream = stream;
     connection->receiverCtx.fdCount = 0;
@@ -727,6 +789,7 @@ static void ProcessChildProcessFd(const WatcherHandle taskHandle, int fd, uint32
     AppSpawnedProcess *appInfo = GetSpawnedProcess(pid);
     if (appInfo == NULL) {
         APPSPAWN_LOGW("Cannot get app info by bundle name: %{public}d", pid);
+        LE_CloseTask(LE_GetDefaultLoop(), taskHandle);
         return;
     }
     ProcessMgrHookExecute(STAGE_SERVER_APP_DIED, GetAppSpawnContent(), appInfo);
@@ -1283,7 +1346,7 @@ static void ProcessPreFork(AppSpawnContent *content, AppSpawningCtx *property)
 static int NormalSpawnChild(AppSpawnContent *content, AppSpawnClient *client, pid_t *childPid)
 {
     APPSPAWN_CHECK(client != NULL, return APPSPAWN_ARG_INVALID, "client is null");
-    int ret = InitForkContext((AppSpawningCtx *)client);
+    int ret = InitForkContext((AppSpawningCtx *)client); //创建pipefd
     APPSPAWN_CHECK(ret == 0, return ret, "init fork context failed");
     return AppSpawnProcessMsg(content, client, childPid);
 }
@@ -1473,6 +1536,9 @@ static int AppSpawnProcessMsgForPrefork(AppSpawnContent *content, AppSpawnClient
 
 static bool IsSupportPrefork(AppSpawnContent *content, AppSpawnClient *client)
 {
+    if (GetAppSpawnMsgType((AppSpawningCtx *)client) == MSG_SUBSPAWN_CREATE) {
+        return false;
+    }
 #ifdef APPSPAWN_SUPPORT_PREFORK
     if (client == NULL || content == NULL) {
         return false;
@@ -1520,13 +1586,49 @@ static void AbortSpawnAndCleanup(int ret, AppSpawnConnection *connection,
     DeleteAppSpawningCtx(property);
 }
 
-static void ProcessSpawnReqMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message)
+static int CheckSubspawnReuse(AppSpawningCtx *property, pid_t *reusedPid)
+{
+    *reusedPid = 0;
+    AppSpawnMgr *mgr = GetAppSpawnMgr();
+    const AppSpawnMsgDacInfo *dac = GetAppProperty(property, TLV_DAC_INFO);
+    const char *bundleName = GetBundleName(property);
+    APPSPAWN_CHECK(dac != NULL && bundleName != NULL,
+        return APPSPAWN_SUBSPAWN_INSTANCE_INVALID, "Missing subspawn instance key");
+    ListNode *node = mgr->subspawnQueue.next;
+    while (node != &mgr->subspawnQueue) {
+        AppSpawnedProcess *process = ListEntry(node, AppSpawnedProcess, node);
+        node = node->next;
+        if (process->uid != dac->uid) {
+            continue;
+        }
+        if (ReapSubspawnProcess(process->pid) != 0) {
+            continue;
+        }
+        APPSPAWN_CHECK(strcmp(process->name, bundleName) == 0,
+            return APPSPAWN_SUBSPAWN_INSTANCE_INVALID, "Subspawn uid already belongs to another bundle");
+        *reusedPid = process->pid;
+        return 0;
+    }
+    for (node = mgr->appSpawnQueue.next; node != &mgr->appSpawnQueue; node = node->next) {
+        const AppSpawningCtx *pending = ListEntry(node, AppSpawningCtx, node);
+        if (pending == property || pending->state != APP_STATE_SPAWNING ||
+            GetAppSpawnMsgType(pending) != MSG_SUBSPAWN_CREATE) {
+            continue;
+        }
+        const AppSpawnMsgDacInfo *pendingDac = GetAppProperty(pending, TLV_DAC_INFO);
+        APPSPAWN_CHECK(pendingDac == NULL || pendingDac->uid != dac->uid,
+            return APPSPAWN_SUBSPAWN_INSTANCE_INVALID, "Subspawn instance creation is already in progress");
+    }
+    return 0;
+}
+
+static AppSpawningCtx *CreateSpawnRequest(AppSpawnConnection *connection, AppSpawnMsgNode *message)
 {
     int ret = CheckAppSpawnMsg(message);
     if (ret != 0) {
         SendResponse(connection, &message->msgHeader, ret, 0);
         DeleteAppSpawnMsg(&message);
-        return;
+        return NULL;
     }
 
     if (IsDeveloperModeOpen()) {
@@ -1541,16 +1643,77 @@ static void ProcessSpawnReqMsg(AppSpawnConnection *connection, AppSpawnMsgNode *
     if (property == NULL) {
         SendResponse(connection, &message->msgHeader, APPSPAWN_SYSTEM_ERROR, 0);
         DeleteAppSpawnMsg(&message);
-        return;
+        return NULL;
     }
 
     property->state = APP_STATE_SPAWNING;
     property->message = message;
     message->connection = connection;
 
-    StartAppspawnTrace("STAGE_PARENT_MSG_DECODE");
-    ret = AppSpawnHookExecute(STAGE_PARENT_MSG_DECODE, HOOK_STOP_WHEN_ERROR, GetAppSpawnContent(), &property->client);
+    return property;
+}
+
+static void ProcessSpawnCreateSubspawn(AppSpawnConnection *connection, AppSpawnMsgNode *message)
+{
+    AppSpawnMgr *mgr = GetAppSpawnMgr();
+    if (mgr->content.mode != MODE_FOR_APP_SPAWN ||
+        strcmp(mgr->content.longProcName, APPSPAWN_SERVER_NAME) != 0) {
+        SendResponse(connection, &message->msgHeader, APPSPAWN_SUBSPAWN_INSTANCE_INVALID, 0);
+        DeleteAppSpawnMsg(&message);
+        return;
+    }
+    AppSpawningCtx *property = CreateSpawnRequest(connection, message);
+    APPSPAWN_CHECK_ONLY_EXPER(property != NULL, return);
+
+    StartAppspawnTrace("STAGE_CREATE_SUBSPAWN_PRE_FORK");
+    int ret = AppSpawnHookExecute(STAGE_CREATE_SUBSPAWN_PRE_FORK, HOOK_STOP_WHEN_ERROR,
+        GetAppSpawnContent(), &property->client);
     FinishAppspawnTrace();
+    // SPM may replace and free the original message, including on a later hook failure.
+    message = property->message;
+    APPSPAWN_CHECK(ret == 0, AbortSpawnAndCleanup(ret, connection, message, property);
+        return, "Subspawn PRE_FORK hook failed: %{public}d", ret);
+
+    pid_t reusedPid = 0;
+    ret = CheckSubspawnReuse(property, &reusedPid);
+    APPSPAWN_CHECK(ret == 0, AbortSpawnAndCleanup(ret, connection, message, property);
+        return, "Subspawn instance reuse check failed: %{public}d", ret);
+    if (reusedPid > 0) {
+        AppSpawnHookExecute(STAGE_SERVER_SPAWN_ABORT, 0, GetAppSpawnContent(), &property->client);
+        SendResponse(connection, &message->msgHeader, 0, reusedPid);
+        DeleteAppSpawningCtx(property);
+        return;
+    }
+
+    property->client.flags &= ~APP_COLD_START;
+    DumpAppSpawnMsg(message);
+    clock_gettime(CLOCK_MONOTONIC, &property->spawnStart);
+    ret = NormalSpawnChild(GetAppSpawnContent(), &property->client, &property->pid);
+    AppSpawnHookExecute(STAGE_PARENT_POST_FORK, 0, GetAppSpawnContent(), &property->client);
+    APPSPAWN_CHECK(ret == 0, AbortSpawnAndCleanup(ret, connection, message, property);
+        return, "Subspawn fork failed: %{public}d", ret);
+
+    ret = AddChildWatcher(property);
+    if (ret != 0) {
+        (void)kill(property->pid, SIGKILL);
+        AbortSpawnAndCleanup(ret, connection, message, property);
+    }
+}
+
+static void ProcessSpawnReqMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message)
+{
+    AppSpawningCtx *property = CreateSpawnRequest(connection, message);
+    APPSPAWN_CHECK_ONLY_EXPER(property != NULL, return);
+
+    StartAppspawnTrace("STAGE_PARENT_MSG_DECODE");
+    int ret = AppSpawnHookExecute(STAGE_PARENT_MSG_DECODE, HOOK_STOP_WHEN_ERROR,
+        GetAppSpawnContent(), &property->client);
+    FinishAppspawnTrace();
+    message = property->message;
+    if (IsSubSpawnMode(GetAppSpawnMgr())) {
+        APPSPAWN_CHECK(ret == 0, AbortSpawnAndCleanup(ret, connection, message, property);
+            return, "Subspawn MSG_DECODE hook failed: %{public}d, aborting spawn", ret);
+    }
     // Check if SPM message rebuild hook failed
     APPSPAWN_CHECK(ret == 0, SendResponse(connection, &message->msgHeader, ret, 0);
         DeleteAppSpawningCtx(property);
@@ -1564,13 +1727,21 @@ static void ProcessSpawnReqMsg(AppSpawnConnection *connection, AppSpawnMsgNode *
 
     DumpAppSpawnMsg(property->message);
 
+    if (IsSubSpawnMode(GetAppSpawnMgr())) {
+        property->client.flags &= ~APP_COLD_START;
+    }
+
     clock_gettime(CLOCK_MONOTONIC, &property->spawnStart);
     ret = RunAppSpawnProcessMsg(GetAppSpawnContent(), &property->client, &property->pid);
     AppSpawnHookExecute(STAGE_PARENT_POST_FORK, 0, GetAppSpawnContent(), &property->client);
     APPSPAWN_CHECK(ret == 0, AbortSpawnAndCleanup(ret, connection, message, property);
         return, "POST_FORK hook failed: %{public}d", ret);
 
-    if (AddChildWatcher(property) != 0) { // wait child process result
+    int watcherRet = AddChildWatcher(property);
+    if (watcherRet != 0) { // wait child process result
+        if (IsSubSpawnMode(GetAppSpawnMgr())) {
+            ret = watcherRet;
+        }
         kill(property->pid, SIGKILL);
         AbortSpawnAndCleanup(ret, connection, message, property);
         return;
@@ -1637,7 +1808,16 @@ static void WaitChildTimeout(const TimerHandle taskHandle, void *context)
 static int ProcessChildFdCheck(int fd, AppSpawningCtx *property)
 {
     int result = 0;
-    (void)read(fd, &result, sizeof(result));
+    ssize_t received;
+    do {
+        received = read(fd, &result, sizeof(result));
+    } while (received < 0 && errno == EINTR);
+    if (received != sizeof(result)) {
+        result = APPSPAWN_SYSTEM_ERROR;
+        if (property->pid > 0) {
+            (void)kill(property->pid, SIGKILL);
+        }
+    }
     APPSPAWN_DUMPI("Child process:%{public}s success pid:%{public}d appId:%{public}u result:%{public}d",
         GetProcessName(property), property->pid, property->client.id, result);
     APPSPAWN_CHECK(property->message != NULL, return -1, "Invalid message in ctx %{public}d", property->client.id);
@@ -1672,8 +1852,10 @@ APPSPAWN_STATIC AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *proper
         GetAppSpawnMsgInfo(property->message, TLV_ACCESS_TOKEN_INFO);
     uint64_t tokenid = (tokenInfo != NULL) ? tokenInfo->accessTokenIdEx : 0;
 
-    AppSpawnedProcess *appInfo = AddSpawnedProcess(property->pid, GetBundleName(property),
-        appIndex, isDebuggable, tokenid);
+    bool creatingInstance = GetAppSpawnMsgType(property) == MSG_SUBSPAWN_CREATE;
+    AppSpawnedProcess *appInfo = creatingInstance ?
+        AddSubspawnProcess(property->pid, GetBundleName(property), appIndex, isDebuggable, tokenid) :
+        AddSpawnedProcess(property->pid, GetBundleName(property), appIndex, isDebuggable, tokenid);
     APPSPAWN_CHECK(appInfo != NULL, return NULL, "Failed to add spawned process");
     appInfo->isDaemonBin = IsDaemonBinProperty(property);
 
@@ -1684,6 +1866,9 @@ APPSPAWN_STATIC AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *proper
     appInfo->spawnStart.tv_nsec = property->spawnStart.tv_nsec;
     appInfo->lockBundleRefAdded = property->lockBundleRefAdded;  // Copy flag from AppSpawningCtx
     appInfo->spmRefAdded = property->spmRefAdded;  // Copy SPM refcount flag
+    if (appInfo->isSubspawn) {
+        property->spmRefAdded = 0;
+    }
     appInfo->lockPath = property->lockPath;  // Transfer lockPath ownership to AppSpawnedProcess
     property->lockPath = NULL;  // Prevent double free
 
@@ -1718,6 +1903,11 @@ static void ProcessChildResponse(const WatcherHandle taskHandle, int fd, uint32_
     AppSpawnedProcess *appInfo = InitSpawnedProcessInfo(property);
     APPSPAWN_ONLY_EXPER(appInfo == NULL, HandleSpawnProcessInfoFail(property);
         return);
+    bool creatingInstance = GetAppSpawnMsgType(property) == MSG_SUBSPAWN_CREATE;
+    if (creatingInstance && property->forkCtx.timer != NULL) {
+        LE_StopTimer(LE_GetDefaultLoop(), property->forkCtx.timer);
+        property->forkCtx.timer = NULL;
+    }
 
 #ifdef DEBUG_BEGETCTL_BOOT
     if (IsDeveloperModeOpen()) {
@@ -1777,16 +1967,30 @@ static int CreateAppSpawnServer(TaskHandle *server, const char *socketName)
     int ret = snprintf_s(path, sizeof(path), sizeof(path) - 1, "%s%s", APPSPAWN_SOCKET_DIR, socketName);
     APPSPAWN_CHECK(ret > 0, return -1, "Failed to snprintf_s %{public}d", ret);
     int socketId = GetControlSocket(socketName);
+    bool subspawn = IsSubSpawnMode(GetAppSpawnMgr());
+    if (subspawn) {
+        const SubspawnStartInfo *start = GetSubspawnStartInfo();
+        APPSPAWN_CHECK(start->listenFd >= 0, return -1, "Subspawn listen fd not inherited");
+        socketId = start->listenFd;
+        ret = strcpy_s(path, sizeof(path), start->socketName);
+        APPSPAWN_CHECK(ret == EOK, return -1, "Invalid subspawn socket path");
+    }
     APPSPAWN_LOGI("get socket form env %{public}s socketId %{public}d", socketName, socketId);
 
     LE_StreamServerInfo info = {};
-    info.baseInfo.flags = TASK_STREAM | TASK_PIPE | TASK_SERVER;
+    if (subspawn) {
+        info.baseInfo.flags = TASK_STREAM | TASK_SERVER;
+    } else {
+        info.baseInfo.flags = TASK_STREAM | TASK_PIPE | TASK_SERVER;
+    }
     info.socketId = socketId;
     info.server = path;
     info.baseInfo.close = OnListenFdClose;
     info.incommingConnect = OnConnection;
 
-    MakeDirRec(path, 0711, 0);  // 0711 default mask
+    if (!subspawn) {
+        MakeDirRec(path, 0711, 0);
+    }
     ret = LE_CreateStreamServer(LE_GetDefaultLoop(), server, &info);
     APPSPAWN_CHECK(ret == 0, return -1, "Failed to create socket for %{public}s errno: %{public}d", path, errno);
     SetFdCtrl(LE_GetSocketFd(*server), FD_CLOEXEC);
@@ -1959,9 +2163,20 @@ static void AppSpawnRun(AppSpawnContent *content, int argc, char *const argv[])
     APPSPAWN_KLOGI("AppSpawnRun mode: %{public}d", content->mode);
 
     LE_STATUS status = LE_CreateSignalTask(LE_GetDefaultLoop(), &appSpawnContent->sigHandler, ProcessSignal);
+    int childSignal = -1;
+    int termSignal = -1;
     if (status == 0) {
-        (void)LE_AddSignal(LE_GetDefaultLoop(), appSpawnContent->sigHandler, SIGCHLD);
-        (void)LE_AddSignal(LE_GetDefaultLoop(), appSpawnContent->sigHandler, SIGTERM);
+        childSignal = LE_AddSignal(LE_GetDefaultLoop(), appSpawnContent->sigHandler, SIGCHLD);
+        termSignal = LE_AddSignal(LE_GetDefaultLoop(), appSpawnContent->sigHandler, SIGTERM);
+    }
+    if (IsSubSpawnMode(appSpawnContent)) {
+        int result = status == 0 && childSignal == 0 && termSignal == 0 ? 0 : APPSPAWN_SUBSPAWN_PRESET_FAILED;
+        SubspawnNotifyReady(result);
+        if (result != 0) {
+            (void)ServerStageHookExecute(STAGE_SERVER_EXIT, content);
+            AppSpawnDestroyContent(content);
+            return;
+        }
     }
 
     if (IsAppSpawnMode(appSpawnContent) || IsHybridSpawnMode(appSpawnContent)) {
@@ -2019,7 +2234,7 @@ AppSpawnContent *AppSpawnCreateContent(const char *socketName, char *longProcNam
         APPSPAWN_CHECK(ret == 0, AppSpawnDestroyContent(&appSpawnContent->content);
             return NULL, "Failed to create server");
     }
-    appSpawnContent->content.enablePerfork = IsEnablePrefork();
+    appSpawnContent->content.enablePerfork = IsSubSpawnMode(appSpawnContent) ? 0 : IsEnablePrefork();
     return &appSpawnContent->content;
 }
 
@@ -2109,6 +2324,9 @@ AppSpawnContent *StartSpawnService(const AppSpawnStartArg *startArg, uint32_t ar
 
     StartAppspawnTrace("AppSpawnLoadAutoRunModules");
     AppSpawnLoadAutoRunModules(arg->moduleType);  // load corresponding plugin according to startup mode
+    if (arg->mode == MODE_FOR_APP_SPAWN || arg->mode == MODE_FOR_SUB_SPAWN) {
+        AppSpawnLoadAutoRunModules(MODULE_SUBSPAWN);
+    }
     FinishAppspawnTrace();
     int ret = ServerStageHookExecute(STAGE_SERVER_PRELOAD, content);   // Preload, prase the sandbox
     APPSPAWN_CHECK(ret == 0, AppSpawnDestroyContent(content);
@@ -2459,6 +2677,43 @@ APPSPAWN_STATIC void ProcessObserveProcessSignalMsg(AppSpawnConnection *connecti
     DeleteAppSpawnMsg(&message);
 }
 
+APPSPAWN_STATIC bool IsSubspawnShutdownAllowed(const AppSpawnConnection *connection)
+{
+    return connection != NULL && connection->peerCredValid &&
+        (connection->peerUid == APPSPAWN_ROOT_UID || connection->peerUid == APPSPAWN_FOUNDATION_UID);
+}
+
+APPSPAWN_STATIC int ProcessSubspawnShutdownMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message)
+{
+    APPSPAWN_CHECK(IsSubspawnShutdownAllowed(connection), return APPSPAWN_SUBSPAWN_INSTANCE_INVALID,
+        "Subspawn shutdown denied for peer uid %{public}u",
+        connection == NULL ? (uid_t)-1 : connection->peerUid);
+    AppSpawnMgr *mgr = GetAppSpawnMgr();
+    APPSPAWN_CHECK(mgr != NULL && mgr->content.mode == MODE_FOR_APP_SPAWN &&
+        strcmp(mgr->content.longProcName, APPSPAWN_SERVER_NAME) == 0,
+        return APPSPAWN_SUBSPAWN_INSTANCE_INVALID, "Only main appspawn can shut down a subspawn instance");
+    int ret = CheckAppSpawnMsg(message);
+    APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
+    uint32_t length = 0;
+    const void *pidInfo = GetAppSpawnMsgExtInfo(message, MSG_EXT_NAME_SUBSPAWN_PID, &length);
+    pid_t pid = 0;
+    APPSPAWN_CHECK(pidInfo != NULL && length == sizeof(pid) &&
+        memcpy_s(&pid, sizeof(pid), pidInfo, sizeof(pid)) == 0 && pid > 0,
+        return APPSPAWN_SUBSPAWN_INSTANCE_INVALID, "Invalid subspawn shutdown pid");
+    const AppSpawnMsgDacInfo *dac = GetAppSpawnMsgInfo(message, TLV_DAC_INFO);
+    const AppSpawnMsgBundleInfo *bundle = GetAppSpawnMsgInfo(message, TLV_BUNDLE_INFO);
+    AppSpawnedProcess *process = GetSubspawnProcess(pid);
+    APPSPAWN_CHECK(process != NULL && dac != NULL && bundle != NULL &&
+        process->uid == dac->uid && strcmp(process->name, bundle->bundleName) == 0,
+        return APPSPAWN_SUBSPAWN_INSTANCE_INVALID, "Subspawn shutdown identity mismatch");
+    int status = 0;
+    APPSPAWN_CHECK(KillAndWaitStatus(pid, SIGTERM, &status) == 0,
+        return APPSPAWN_SYSTEM_ERROR, "Failed to reap subspawn instance %{public}d", pid);
+    // Use the normal death hooks for cgroup cleanup, socket removal and reference release.
+    HandleDiedPid(pid, process->uid, status);
+    return 0;
+}
+
 static void ProcessRecvMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message)
 {
     AppSpawnMsg *msg = &message->msgHeader;
@@ -2468,8 +2723,19 @@ static void ProcessRecvMsg(AppSpawnConnection *connection, AppSpawnMsgNode *mess
         "Invalid msg id %{public}u %{public}u", connection->receiverCtx.nextMsgId, msg->msgId);
     connection->receiverCtx.nextMsgId++;
 
+    if (IsSubSpawnMode(GetAppSpawnMgr()) && msg->msgType != MSG_APP_SPAWN) {
+        SendResponse(connection, msg, APPSPAWN_SUBSPAWN_INSTANCE_INVALID, 0);
+        DeleteAppSpawnMsg(&message);
+        return;
+    }
+
     int ret;
     switch (msg->msgType) {
+        case MSG_SUBSPAWN_SHUTDOWN:
+            ret = ProcessSubspawnShutdownMsg(connection, message);
+            SendResponse(connection, msg, ret, 0);
+            DeleteAppSpawnMsg(&message);
+            break;
         case MSG_GET_RENDER_TERMINATION_STATUS: {  // get status
             AppSpawnResult result = {0};
             ret = ProcessTerminationStatusMsg(message, &result);
@@ -2477,6 +2743,9 @@ static void ProcessRecvMsg(AppSpawnConnection *connection, AppSpawnMsgNode *mess
             DeleteAppSpawnMsg(&message);
             break;
         }
+        case MSG_SUBSPAWN_CREATE:
+            ProcessSpawnCreateSubspawn(connection, message);
+            break;
         case MSG_SPAWN_SERVICE_BIN:
         case MSG_SPAWN_NATIVE_PROCESS:  // spawn msg
         case MSG_APP_SPAWN: {

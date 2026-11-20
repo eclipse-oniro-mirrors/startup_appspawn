@@ -26,6 +26,7 @@
 #include "appspawn_utils.h"
 #ifndef OHOS_LITE
 #include "appspawn_manager.h"
+#include "appspawn_modulemgr.h"
 #ifndef APPSPAWN_HELPER
 #include "ffrt_inner.h"
 #endif
@@ -83,10 +84,47 @@ void exit(int code)
 #endif
 
 #ifndef APPSPAWN_HELPER
+#ifndef OHOS_LITE
+static int AppSpawnCreateSubspawnChild(AppSpawnContent *content, AppSpawnClient *client)
+{
+    int ret = AppSpawnHookExecute(STAGE_CREATE_SUBSPAWN_EXECUTE, HOOK_STOP_WHEN_ERROR, content, client);
+    NotifyResToParent(content, client, ret);
+    AppSpawnEnvClear(content, client);
+    return 0;
+}
+#endif
+
+static int AppSpawnRunChildProcessor(AppSpawnContent *content, AppSpawnClient *client)
+{
+    bool isAppspawn = (content->mode == MODE_FOR_APP_SPAWN || content->mode == MODE_FOR_APP_COLD_RUN);
+    APPSPAWN_CHECK_ONLY_EXPER(isAppspawn,
+        NotifyResToParent(content, client, 0));
+
+    StartAppspawnTrace("AppSpawnExecutePostReplyHook");
+    (void)AppSpawnExecutePostReplyHook(content, client);
+    FinishAppspawnTrace();
+
+    int ret = 0;
+    if (content->runChildProcessor != NULL) {
+        ret = content->runChildProcessor(content, client);
+    }
+    if (ret != 0) {
+        APPSPAWN_CHECK_ONLY_EXPER(!isAppspawn,
+            NotifyResToParent(content, client, ret));
+        AppSpawnEnvClear(content, client);
+    }
+    return 0;
+}
+
 int AppSpawnChild(AppSpawnContent *content, AppSpawnClient *client)
 {
     APPSPAWN_CHECK(content != NULL && client != NULL, return -1, "Invalid arg for appspawn child");
     APPSPAWN_DUMPI("AppSpawnChild id %{public}u flags:0x%{public}x", client->id, client->flags);
+#ifndef OHOS_LITE
+    if (GetAppSpawnMsgType((AppSpawningCtx *)client) == MSG_SUBSPAWN_CREATE) {
+        return AppSpawnCreateSubspawnChild(content, client);
+    }
+#endif
     StartAppspawnTrace("AppSpawnExecuteClearEnvHook");
     int ret = AppSpawnExecuteClearEnvHook(content, client);
     FinishAppspawnTrace();
@@ -103,37 +141,21 @@ int AppSpawnChild(AppSpawnContent *content, AppSpawnClient *client)
         APPSPAWN_LOGW("AppSpawnChild cold start fail %{public}u", client->id);
     }
     StartAppspawnTrace("AppSpawnExecuteSpawningHook");
-    ret = AppSpawnExecuteSpawningHook(content, client);
+    ret = AppSpawnExecuteSpawningHook(content, client); // STAGE_CHILD_EXECUTE
     FinishAppspawnTrace();
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0,
         NotifyResToParent(content, client, ret);
         AppSpawnEnvClear(content, client);
         return 0);
     StartAppspawnTrace("AppSpawnExecutePreReplyHook");
-    ret = AppSpawnExecutePreReplyHook(content, client);
+    ret = AppSpawnExecutePreReplyHook(content, client); // STAGE_CHILD_PRE_RELY
     FinishAppspawnTrace();
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0,
         NotifyResToParent(content, client, ret);
         AppSpawnEnvClear(content, client);
         return 0);
 
-    bool isAppspawn = (content->mode == MODE_FOR_APP_SPAWN || content->mode == MODE_FOR_APP_COLD_RUN);
-    APPSPAWN_CHECK_ONLY_EXPER(isAppspawn,
-        NotifyResToParent(content, client, 0));
-
-    StartAppspawnTrace("AppSpawnExecutePostReplyHook");
-    (void)AppSpawnExecutePostReplyHook(content, client);
-    FinishAppspawnTrace();
-
-    if (content->runChildProcessor != NULL) {
-        ret = content->runChildProcessor(content, client);
-    }
-    if (ret != 0) {
-        APPSPAWN_CHECK_ONLY_EXPER(!isAppspawn,
-            NotifyResToParent(content, client, ret));
-        AppSpawnEnvClear(content, client);
-    }
-    return 0;
+    return AppSpawnRunChildProcessor(content, client);
 }
 
 APPSPAWN_STATIC int CloneAppSpawn(void *arg)

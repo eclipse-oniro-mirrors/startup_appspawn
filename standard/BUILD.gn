@@ -58,6 +58,7 @@ ohos_executable("appspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
     "${appspawn_path}/standard/spawn_policy.c",
   ]
 
@@ -198,6 +199,7 @@ ohos_executable("cjappspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
     "${appspawn_path}/standard/spawn_policy.c",
   ]
 
@@ -272,6 +274,7 @@ ohos_executable("nativespawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
     "${appspawn_path}/standard/spawn_policy.c",
   ]
 
@@ -326,6 +329,84 @@ ohos_executable("nativespawn") {
   part_name = "${part_name}"
 }
 
+ohos_executable("subspawn") {
+  branch_protector_ret = "pac_ret"
+  sanitize = {
+    cfi = true
+    cfi_cross_dso = true
+    cfi_no_nvcall = true
+    cfi_vcall_icall_only = true
+    debug = false
+  }
+  sources = [
+    "${appspawn_path}/common/appspawn_server.c",
+    "${appspawn_path}/common/appspawn_trace.cpp",
+    "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
+    "${appspawn_path}/modules/modulemgr/appspawn_modulemgr.c",
+    "${appspawn_path}/standard/appspawn_appmgr.c",
+    "${appspawn_path}/standard/appspawn_fd_manager.c",
+    "${appspawn_path}/standard/appspawn_kickdog.c",
+    "${appspawn_path}/standard/appspawn_main.c",
+    "${appspawn_path}/standard/appspawn_msgmgr.c",
+    "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
+    "${appspawn_path}/standard/spawn_policy.c",
+  ]
+
+  defines = [ "SUBSPAWN_SPAWN" ]
+  configs = [
+    ":appspawn_server_config",
+    "${appspawn_path}:appspawn_config",
+  ]
+  deps = [
+    "${appspawn_path}/modules/module_engine:libappspawn_stub_versionscript",
+    "${appspawn_path}/util:libappspawn_util",
+  ]
+  if (asan_detector || is_asan) {
+    defines += [ "ASAN_DETECTOR" ]
+  }
+
+  external_deps = [
+    "bounds_checking_function:libsec_shared",
+    "cJSON:cjson",
+    "c_utils:utils",
+    "config_policy:configpolicy_util",
+    "ffrt:libffrt",
+    "hilog:libhilog",
+    "hitrace:hitrace_meter",
+    "init:libbegetutil",
+    "faultloggerd:libfaultloggerd"
+  ]
+
+  if (enable_appspawn_dump_catcher) {
+    external_deps += [ "faultloggerd:libdfx_dumpcatcher" ]
+  }
+
+  if (build_selinux) {
+    defines += [ "WITH_SELINUX" ]
+    external_deps += [
+      "selinux:libselinux",
+      "selinux_adapter:libhap_restorecon",
+    ]
+  }
+  cflags = []
+  if (!defined(global_parts_info) ||
+      defined(global_parts_info.security_code_signature)) {
+    defines += [ "CODE_SIGNATURE_ENABLE" ]
+    external_deps += [ "code_signature:libcode_sign_attr_utils" ]
+  }
+
+  version_script = get_label_info(
+                       "${appspawn_path}/modules/module_engine:libappspawn_stub_versionscript",
+                       "target_gen_dir") + "/" + get_label_info(
+                       "${appspawn_path}/modules/module_engine:libappspawn_stub_versionscript",
+                       "name") + stub_version_script_suffix
+
+  install_enable = true
+  subsystem_name = "${subsystem_name}"
+  part_name = "${part_name}"
+}
+
 ohos_prebuilt_etc("cjappspawn.rc") {
   source = "cjappspawn.cfg"
   relative_install_dir = "init"
@@ -361,6 +442,7 @@ ohos_executable("nwebspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
     "${appspawn_path}/standard/spawn_policy.c",
   ]
 
@@ -452,6 +534,7 @@ ohos_executable("hybridspawn") {
     "${appspawn_path}/standard/appspawn_main.c",
     "${appspawn_path}/standard/appspawn_msgmgr.c",
     "${appspawn_path}/standard/appspawn_service.c",
+    "${appspawn_path}/standard/subspawn_manager.c",
     "${appspawn_path}/standard/spawn_policy.c",
   ]
 

@@ -154,14 +154,12 @@ int SandboxCommon::LoadAppSandboxConfigCJson(AppSpawnMgr *content)
         }
         std::string path = files->paths[i];
         std::string appPath = path + SandboxCommonDef::APP_JSON_CONFIG;
-        APPSPAWN_LOGI("LoadAppSandboxConfig %{public}s", appPath.c_str());
         sandboxCJsonRoot = GetJsonObjFromFile(appPath.c_str());
         APPSPAWN_CHECK((sandboxCJsonRoot != nullptr && cJSON_IsObject(sandboxCJsonRoot)), continue,
                        "Failed to load app data sandbox config %{public}s", appPath.c_str());
         StoreCJsonConfig(sandboxCJsonRoot, SandboxCommonDef::SANDBOX_APP_JSON_CONFIG);
 
         std::string isolatedPath = path + SandboxCommonDef::APP_ISOLATED_JSON_CONFIG;
-        APPSPAWN_LOGI("LoadAppSandboxConfig %{public}s", isolatedPath.c_str());
         sandboxCJsonRoot = GetJsonObjFromFile(isolatedPath.c_str());
         APPSPAWN_CHECK_LOGW((sandboxCJsonRoot != nullptr && cJSON_IsObject(sandboxCJsonRoot)), continue,
                        "Failed to load app data sandbox config %{public}s", isolatedPath.c_str());
@@ -253,9 +251,45 @@ std::string SandboxCommon::GetSandboxRootPath(const AppSpawningCtx *appProperty,
     return sandboxRoot;
 }
 
-int SandboxCommon::CreateDirRecursive(const std::string &path, mode_t mode)
+int SandboxCommon::CreateDirRecursive(const std::string &path, mode_t mode, const AppSpawningCtx *appProperty)
 {
-    return MakeDirRec(path.c_str(), mode, 1);
+    // Only NoShareFS custom-sandbox app widens its sandbox directories to 0755.
+    if (appProperty == nullptr || !CheckAppMsgFlagsSet(appProperty, APP_FLAGS_CUSTOM_SANDBOX) || !IsNoShareFsEnable()) {
+        return MakeDirRec(path.c_str(), mode, 1);
+    }
+
+    AppSpawnMsgDacInfo *dacInfo = reinterpret_cast<AppSpawnMsgDacInfo *>(GetAppProperty(appProperty, TLV_DAC_INFO));
+    if (dacInfo == nullptr) {
+        return MakeDirRec(path.c_str(), mode, 1);
+    }
+
+    // Match /mnt/sandbox/<userId>/ so other roots are not affected.
+    const std::string sandboxPrefix = SandboxCommonDef::g_sandBoxRootDir +
+        std::to_string(dacInfo->appUid / UID_BASE) + "/";
+    if (path.compare(0, sandboxPrefix.size(), sandboxPrefix) != 0) {
+        return MakeDirRec(path.c_str(), mode, 1);
+    }
+
+    // Move the boundary past the optional "isolated/", so the isolated directory itself keeps mode.
+    size_t boundary = sandboxPrefix.size();
+    const std::string isolatedPrefix = "isolated/";
+    if (path.compare(boundary, isolatedPrefix.size(), isolatedPrefix) == 0) {
+        boundary += isolatedPrefix.size();
+    }
+
+    // /mnt/sandbox/<userId>[/isolated] is not an app directory and always keeps the original mode.
+    const std::string appDir = path.substr(boundary, path.find('/', boundary) - boundary);
+    if (appDir.empty() || appDir == "." || appDir == ".." || appDir == "isolated") {
+        return MakeDirRec(path.c_str(), mode, 1);
+    }
+
+    // Create user-level and isolated ancestors with mode first; mkdir never re-modes an existing
+    // directory, so the second call widens only the app directory and its sub directories to 0755.
+    const std::string parentPath = path.substr(0, boundary);
+    int ret = MakeDirRec(parentPath.c_str(), mode, 1);
+    APPSPAWN_CHECK(ret == 0, return ret, "mkdir %{public}s failed, errno %{public}d",
+                   parentPath.c_str(), ret);
+    return MakeDirRec(path.c_str(), SandboxCommonDef::WEAK_SANDBOX_DIR_MODE, 1);
 }
 
 void SandboxCommon::CreateDirRecursiveWithClock(const std::string &path, mode_t mode)
@@ -308,7 +342,7 @@ bool SandboxCommon::VerifyDirRecursive(const std::string &path)
     return true;
 }
 
-void SandboxCommon::CreateFileIfNotExist(const char *file)
+void SandboxCommon::CreateFileIfNotExist(const AppSpawningCtx *appProperty, const char *file)
 {
     if (access(file, F_OK) == 0) {
         APPSPAWN_LOGV("file %{public}s already exist", file);
@@ -318,7 +352,7 @@ void SandboxCommon::CreateFileIfNotExist(const char *file)
     auto pos = path.find_last_of('/');
     APPSPAWN_CHECK(pos != std::string::npos, return, "file %{public}s error", file);
     std::string dir = path.substr(0, pos);
-    (void)CreateDirRecursive(dir, SandboxCommonDef::FILE_MODE);
+    (void)CreateDirRecursive(dir, SandboxCommonDef::FILE_MODE, appProperty);
     int fd = open(file, O_CREAT, SandboxCommonDef::FILE_MODE);
     if (fd < 0) {
         APPSPAWN_LOGW("failed create %{public}s, err=%{public}d", file, errno);
@@ -1178,9 +1212,9 @@ int32_t SandboxCommon::DoAppSandboxMountOnce(const AppSpawningCtx *appProperty, 
     }
     bool isFilePath = (arg->pathType == SANDBOX_FILE_PATH);
     if (isFilePath) {
-        CreateFileIfNotExist(arg->destPath);
+        CreateFileIfNotExist(appProperty, arg->destPath);
     } else {
-        (void)CreateDirRecursive(arg->destPath, SandboxCommonDef::FILE_MODE);
+        (void)CreateDirRecursive(arg->destPath, SandboxCommonDef::FILE_MODE, appProperty);
     }
 
     int ret = 0;
@@ -1230,9 +1264,9 @@ int32_t SandboxCommon::DoAppSandboxMountOnceNocheck(const AppSpawningCtx *appPro
     }
     bool isFilePath = (arg->pathType == SANDBOX_FILE_PATH);
     if (isFilePath) {
-        CreateFileIfNotExist(arg->destPath);
+        CreateFileIfNotExist(appProperty, arg->destPath);
     } else {
-        (void)CreateDirRecursive(arg->destPath, SandboxCommonDef::FILE_MODE);
+        (void)CreateDirRecursive(arg->destPath, SandboxCommonDef::FILE_MODE, appProperty);
     }
 
     int ret = 0;

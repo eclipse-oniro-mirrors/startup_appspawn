@@ -176,7 +176,7 @@ APPSPAWN_STATIC int ProcessMgrRemoveApp(const AppSpawnMgr *content, const AppSpa
 {
     APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return -1);
     APPSPAWN_CHECK_ONLY_EXPER(appInfo != NULL, return -1);
-    if (IsNWebSpawnMode(content) || strcmp(appInfo->name, NWEBSPAWN_SERVER_NAME) == 0) {
+    if (IsSubSpawnMode(content) || IsNWebSpawnMode(content) || strcmp(appInfo->name, NWEBSPAWN_SERVER_NAME) == 0) {
         return 0;
     }
     APPSPAWN_CHECK(!appInfo->isDaemonBin, return 0, "ProcessMgrRemoveApp isDaemon skip");
@@ -333,7 +333,7 @@ APPSPAWN_STATIC void CleanupOrphanedCgroupProcesses(void)
 APPSPAWN_STATIC int CgroupPreloadHook(AppSpawnMgr *content)
 {
     // Cold start child processes should not cleanup orphaned cgroup directories
-    APPSPAWN_ONLY_EXPER(IsColdRunMode(content), return 0);
+    APPSPAWN_ONLY_EXPER(IsColdRunMode(content) || IsSubSpawnMode(content), return 0);
     const SpawnModeInfo *modeInfo = GetSpawnModeInfo(content);
     APPSPAWN_CHECK(modeInfo != NULL, return -1, "Failed to get spawn mode info");
     char paramName[APPSPAWN_GRACEFUL_STOP_PARAM_LEN] = {};
@@ -353,6 +353,7 @@ APPSPAWN_STATIC int CgroupPreloadHook(AppSpawnMgr *content)
 // STAGE_SERVER_EXIT hook: clear graceful stop flag to indicate normal exit
 APPSPAWN_STATIC int CgroupExitHook(AppSpawnMgr *content)
 {
+    APPSPAWN_ONLY_EXPER(IsSubSpawnMode(content), return 0);
     char deviceValue[PARAM_VALUE_MAX_LEN] = {};
     int deviceRet = GetParameter(DEVICE_CTL_PARAM, "false", deviceValue, sizeof(deviceValue));
     APPSPAWN_ONLY_EXPER(deviceRet > 0 && strcmp(DEVICE_CMD_STOP, deviceValue) == 0,
@@ -375,7 +376,7 @@ APPSPAWN_STATIC int ProcessMgrAddApp(const AppSpawnMgr *content, const AppSpawne
     APPSPAWN_CHECK_ONLY_EXPER(content != NULL, return -1);
     APPSPAWN_CHECK_ONLY_EXPER(appInfo != NULL, return -1);
     APPSPAWN_CHECK(!appInfo->isDaemonBin, return 0, "ProcessMgrAddApp isDaemon skip");
-    APPSPAWN_ONLY_EXPER(IsNWebSpawnMode(content), return 0);
+    APPSPAWN_ONLY_EXPER(IsNWebSpawnMode(content) || IsSubSpawnMode(content), return 0);
     char path[PATH_MAX] = {};
     APPSPAWN_LOGV("ProcessMgrAddApp %{public}d %{public}d to cgroup ", appInfo->pid, appInfo->appUid);
     int ret = GetCgroupPath(appInfo, path, sizeof(path));

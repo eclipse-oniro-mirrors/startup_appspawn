@@ -115,7 +115,7 @@
                     "sandbox-path" : "/data/storage/el2/base",
                     "sandbox-flags" : [ "bind", "rec" ],
                     "check-action-status": "false",
-                    "controlled-fuse-path": "/data/service/el1/public/dlp_credential_service/mounts/data_fuse"
+                    "controlled-fuse-path": "/data/service/el1/public/dlp_credential_service/mounts/data_fuse/<currentUserId>/<PackageName_index>"
                 }, {
                     "src-path" : "/data/app/el2/<currentUserId>/log/<variablePackageName>",
                     "sandbox-path" : "/data/storage/el2/log",
@@ -208,7 +208,7 @@
                     "check-action-status": "false"
                 }, {
                     "src-path" : "/mnt/data/<currentUserId>/udmf_fuse",
-                    "sandbox-path" : "/data/storage/el2/udmf",
+                    "sandbox-path" : "/data/service/el2/udmf_fuse",
                     "sandbox-flags" : [ "bind", "rec" ],
                     "check-action-status": "false"
                 }, {

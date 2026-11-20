@@ -29,7 +29,7 @@ extern "C" {
 #define SEC_ISOLATE_PATH_TYPE (1 << 1)
 #define SEC_DEC_PATH_TYPE     (1 << 2)
 #define SEC_SANDBOX_PATH_TYPE (1 << 3)
-#define UGC_CONSTRAINT_MODE  1
+#define SEC_DENY_PATH_TYPE (1 << 4)
 #define MARK_ENABLE_RECURSIVE 1
 
 #define MARK_PATH_INFO_RESERVED_SIZE 7
@@ -47,6 +47,7 @@ typedef struct {
     uint32_t mountCount;
     PathInfo *paths;
     uint32_t pathCount;
+    char **pathFlagNames;  // parallel to paths[], each is strdup'd flag name
 } SandboxPathMarkConfig;
 
 struct TagParseJsonContext {

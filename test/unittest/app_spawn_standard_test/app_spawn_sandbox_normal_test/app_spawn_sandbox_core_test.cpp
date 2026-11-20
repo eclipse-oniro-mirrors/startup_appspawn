@@ -374,7 +374,7 @@ HWTEST_F(AppSpawnSandboxCoreTest, DoSandboxRootFolderCreateAdapt_01, TestSize.Le
     g_testHelperCore.SetTestApl("normal");
 
     std::string sandboxPackagePath = "/data/test/sandbox";
-    int ret = AppSpawn::SandboxCore::DoSandboxRootFolderCreateAdapt(sandboxPackagePath);
+    int ret = AppSpawn::SandboxCore::DoSandboxRootFolderCreateAdapt(nullptr, sandboxPackagePath);
     EXPECT_EQ(ret, 0);
 }
 
@@ -436,26 +436,6 @@ HWTEST_F(AppSpawnSandboxCoreTest, SetDecWithDir_01, TestSize.Level0)
     uint32_t userId = 1000;
     int ret = AppSpawn::SandboxCore::SetDecWithDir(appProperty, userId);
     EXPECT_EQ(ret, 0);
-
-    DeleteAppSpawningCtx(appProperty);
-}
-
-/**
- * @tc.name: SetDecDenyWithDir_01
- * @tc.desc: Test setting DEC deny with directory
- * @tc.type: FUNC
- * @tc.require: issueI5NTX6
- */
-HWTEST_F(AppSpawnSandboxCoreTest, SetDecDenyWithDir_01, TestSize.Level0)
-{
-    g_testHelperCore.SetProcessName("com.ohos.test.app");
-    g_testHelperCore.SetTestApl("normal");
-
-    AppSpawningCtx *appProperty = GetTestAppPropertyCore();
-    ASSERT_NE(appProperty, nullptr);
-
-    AppSpawn::SandboxCore::SetDecDenyWithDir(appProperty);
-    ASSERT_NE(appProperty, nullptr);
 
     DeleteAppSpawningCtx(appProperty);
 }

@@ -13,9 +13,11 @@
  * limitations under the License.
  */
 #include <cerrno>
+#include <csignal>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
+#include <pthread.h>
 #include <string>
 #include <thread>
 #include <unistd.h>
@@ -33,10 +35,14 @@
 #include "json_utils.h"
 #include "parameter.h"
 #include "securec.h"
+#include "subspawn_manager.h"
 #include "cJSON.h"
 
 #include "app_spawn_stub.h"
 #include "app_spawn_test_helper.h"
+
+extern "C" bool IsSubspawnShutdownAllowed(const AppSpawnConnection *connection);
+extern "C" int ProcessSubspawnShutdownMsg(AppSpawnConnection *connection, AppSpawnMsgNode *message);
 
 using namespace testing;
 using namespace testing::ext;
@@ -1268,5 +1274,224 @@ HWTEST_F(AppSpawnSingleThreadTest, AppSpawnSingleThreadCheck_002, TestSize.Level
     waitpid(pid, &status, 0);
     EXPECT_TRUE(WIFSIGNALED(status));
     EXPECT_EQ(WTERMSIG(status), SIGABRT);
+}
+
+class AppSpawnSubspawnShutdownTest : public testing::Test {
+protected:
+    void SetUp() override
+    {
+        ownsMgr_ = GetAppSpawnMgr() == nullptr;
+        mgr_ = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+        ASSERT_NE(mgr_, nullptr);
+        savedMode_ = mgr_->content.mode;
+        savedName_ = mgr_->content.longProcName;
+        mgr_->content.mode = MODE_FOR_APP_SPAWN;
+        mgr_->content.longProcName = const_cast<char *>(APPSPAWN_SERVER_NAME);
+        connection_.peerCredValid = true;
+    }
+
+    void TearDown() override
+    {
+        if (mgr_ == nullptr) {
+            return;
+        }
+        if (child_ > 0) {
+            auto *process = GetSubspawnProcess(child_);
+            if (process != nullptr) {
+                TerminateSpawnedProcess(process);
+            }
+            pid_t ret;
+            do {
+                ret = waitpid(child_, nullptr, WNOHANG);
+            } while (ret < 0 && errno == EINTR);
+            if (ret == 0) {
+                (void)kill(child_, SIGKILL);
+                do {
+                    ret = waitpid(child_, nullptr, 0);
+                } while (ret < 0 && errno == EINTR);
+            }
+        }
+        mgr_->content.mode = savedMode_;
+        mgr_->content.longProcName = savedName_;
+        if (ownsMgr_) {
+            DeleteAppSpawnMgr(mgr_);
+        }
+    }
+
+    void StartChild()
+    {
+        // 阻塞 SIGTERM 直到默认处理函数安装完成，避免父进程发信号时的竞态。
+        sigset_t mask;
+        sigset_t oldMask;
+        ASSERT_EQ(sigemptyset(&mask), 0);
+        ASSERT_EQ(sigaddset(&mask, SIGTERM), 0);
+        ASSERT_EQ(pthread_sigmask(SIG_BLOCK, &mask, &oldMask), 0);
+        child_ = fork();
+        if (child_ == 0) {
+            if (signal(SIGTERM, SIG_DFL) == SIG_ERR || sigprocmask(SIG_UNBLOCK, &mask, nullptr) != 0) {
+                _exit(EXIT_FAILURE);
+            }
+            constexpr unsigned int CHILD_TIMEOUT_SEC = 10;
+            unsigned int remainingSeconds = CHILD_TIMEOUT_SEC;
+            while (remainingSeconds > 0) {
+                remainingSeconds = sleep(remainingSeconds);
+            }
+            _exit(EXIT_FAILURE);
+        }
+        ASSERT_EQ(pthread_sigmask(SIG_SETMASK, &oldMask, nullptr), 0);
+        ASSERT_GT(child_, 0);
+    }
+
+    AppSpawningCtx *CreateRequest(pid_t pid, uint32_t pidSize, const char *bundle, uid_t uid)
+    {
+        AppSpawnReqMsgHandle request = INVALID_REQ_HANDLE;
+        if (AppSpawnReqMsgCreate(MSG_SUBSPAWN_SHUTDOWN, bundle, &request) != 0) {
+            return nullptr;
+        }
+        AppDacInfo dac = {};
+        dac.uid = uid;
+        dac.gid = uid;
+        if (AppSpawnReqMsgSetBundleInfo(request, 0, bundle) != 0 ||
+            AppSpawnReqMsgSetAppAccessToken(request, 1) != 0 ||
+            AppSpawnReqMsgSetAppDomainInfo(request, 0, "normal") != 0 ||
+            AppSpawnReqMsgSetAppDacInfo(request, &dac) != 0 ||
+            (pidSize != 0 && AppSpawnReqMsgAddExtInfo(request, MSG_EXT_NAME_SUBSPAWN_PID,
+                reinterpret_cast<const uint8_t *>(&pid), pidSize) != 0)) {
+            AppSpawnReqMsgFree(request);
+            return nullptr;
+        }
+        AppSpawnTestHelper helper;
+        return helper.GetAppProperty(nullptr, request);
+    }
+
+    static constexpr const char *BUNDLE = "com.example.subspawn.ut";
+    static constexpr uid_t TEST_UID = 20010029;
+    using RequestPtr = std::unique_ptr<AppSpawningCtx, decltype(&DeleteAppSpawningCtx)>;
+    AppSpawnMgr *mgr_ = nullptr;
+    AppSpawnConnection connection_ = {};
+    pid_t child_ = -1;
+    bool ownsMgr_ = false;
+    RunMode savedMode_ = MODE_FOR_APP_SPAWN;
+    char *savedName_ = nullptr;
+};
+
+HWTEST_F(AppSpawnSubspawnShutdownTest, SubspawnShutdownRejectsWrongService, TestSize.Level0)
+{
+    mgr_->content.mode = MODE_FOR_NATIVE_SPAWN;
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, nullptr), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+    mgr_->content.mode = MODE_FOR_APP_SPAWN;
+    mgr_->content.longProcName = const_cast<char *>(SUBSPAWN_SERVER_NAME);
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, nullptr), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+}
+
+HWTEST_F(AppSpawnSubspawnShutdownTest, SubspawnShutdownRejectsInvalidPid, TestSize.Level0)
+{
+    struct {
+        pid_t pid;
+        uint32_t size;
+    } cases[] = {{1, 0}, {1, sizeof(pid_t) - 1}, {0, sizeof(pid_t)}, {-1, sizeof(pid_t)}};
+    for (const auto &item : cases) {
+        SCOPED_TRACE(item.size);
+        RequestPtr ctx(CreateRequest(item.pid, item.size, BUNDLE, TEST_UID), &DeleteAppSpawningCtx);
+        ASSERT_NE(ctx, nullptr);
+        ASSERT_EQ(CheckAppSpawnMsg(ctx->message), 0);
+        EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, ctx->message), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+    }
+}
+
+HWTEST_F(AppSpawnSubspawnShutdownTest, SubspawnShutdownValidatesIdentityAndReapsChild, TestSize.Level0)
+{
+    ASSERT_NO_FATAL_FAILURE(StartChild());
+    RequestPtr request(CreateRequest(child_, sizeof(child_), BUNDLE, TEST_UID), &DeleteAppSpawningCtx);
+    ASSERT_NE(request, nullptr);
+    ASSERT_EQ(CheckAppSpawnMsg(request->message), 0);
+    ASSERT_EQ(GetSubspawnProcess(child_), nullptr);
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, request->message), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+    auto *process = AddSubspawnProcess(child_, BUNDLE, 0, false, 0);
+    ASSERT_NE(process, nullptr);
+    process->uid = TEST_UID;
+    RequestPtr wrongUid(CreateRequest(child_, sizeof(child_), BUNDLE, TEST_UID + 1), &DeleteAppSpawningCtx);
+    RequestPtr wrongBundle(CreateRequest(child_, sizeof(child_), "com.example.other", TEST_UID), &DeleteAppSpawningCtx);
+    ASSERT_NE(wrongUid, nullptr);
+    ASSERT_NE(wrongBundle, nullptr);
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, wrongUid->message), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+    ASSERT_EQ(GetSubspawnProcess(child_), process);
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, wrongBundle->message), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+    ASSERT_EQ(GetSubspawnProcess(child_), process);
+    ASSERT_EQ(ProcessSubspawnShutdownMsg(&connection_, request->message), 0);
+    EXPECT_EQ(GetSubspawnProcess(child_), nullptr);
+    EXPECT_EQ(waitpid(child_, nullptr, WNOHANG), -1);
+    EXPECT_EQ(errno, ECHILD);
+}
+
+HWTEST_F(AppSpawnSubspawnShutdownTest, SubspawnShutdownRequiresVerifiedPeer, TestSize.Level0)
+{
+    AppSpawnConnection connection = {};
+    EXPECT_FALSE(IsSubspawnShutdownAllowed(nullptr));
+    EXPECT_FALSE(IsSubspawnShutdownAllowed(&connection));
+    connection.peerUid = 5523;
+    EXPECT_FALSE(IsSubspawnShutdownAllowed(&connection));
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(nullptr, nullptr), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+}
+
+HWTEST_F(AppSpawnSubspawnShutdownTest, SubspawnShutdownAllowsOnlyControlPeers, TestSize.Level0)
+{
+    AppSpawnConnection connection = {};
+    connection.peerCredValid = true;
+    connection.peerUid = 0;
+    EXPECT_TRUE(IsSubspawnShutdownAllowed(&connection));
+    connection.peerUid = 5523;
+    EXPECT_TRUE(IsSubspawnShutdownAllowed(&connection));
+    const uid_t deniedUids[] = {2000, 3350, 1090, 20010043, static_cast<uid_t>(-1)};
+    for (uid_t uid : deniedUids) {
+        connection.peerUid = uid;
+        EXPECT_FALSE(IsSubspawnShutdownAllowed(&connection));
+    }
+}
+
+HWTEST_F(AppSpawnSubspawnShutdownTest, SubspawnShutdownAuthorizesBeforeMessageValidation, TestSize.Level0)
+{
+    const uid_t deniedUids[] = {2000, 3350, 1090, 20010043};
+    for (uid_t uid : deniedUids) {
+        connection_.peerUid = uid;
+        EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, nullptr), APPSPAWN_SUBSPAWN_INSTANCE_INVALID);
+    }
+    connection_.peerUid = 0;
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, nullptr), APPSPAWN_MSG_INVALID);
+    connection_.peerUid = 5523;
+    EXPECT_EQ(ProcessSubspawnShutdownMsg(&connection_, nullptr), APPSPAWN_MSG_INVALID);
+}
+
+HWTEST_F(AppSpawnServiceTest, SubspawnEarlyParseRejectsInvalidBootstrapArguments, TestSize.Level0)
+{
+    char program[] = "subspawn";
+    char modeOption[] = "-mode";
+    char mode[] = "subspawn";
+    char fdOption[] = "-subspawn-fds";
+    char wrongOption[] = "-fds";
+    char *argv[] = {program, modeOption, mode, wrongOption, nullptr};
+    EXPECT_EQ(SubspawnEarlyParse(4, argv), -1);
+    EXPECT_EQ(SubspawnEarlyParse(5, argv), -1);
+    argv[3] = fdOption;
+    const std::string length = std::to_string(sizeof(AppSpawnMsg));
+    const std::string uid = std::to_string(getuid());
+    const std::string suffix = ":" + length + ":" + uid;
+    std::string arguments[] = {
+        "-1:4:5" + suffix,
+        "4294967296:4:5" + suffix,
+        "3,4:5" + suffix,
+        "3:4:5" + suffix + ":0",
+        "2147483648:4:5" + suffix,
+        "3:3:5" + suffix,
+        "3:4:5:0:" + uid,
+        "3:4:5:" + std::to_string(MAX_MSG_TOTAL_LENGTH) + ":" + uid,
+        "3:4:5:" + length + ":0",
+        "3:4:5:" + length + ":" + std::to_string(getuid() == 1 ? 2 : 1),
+    };
+    for (auto &argument : arguments) {
+        SCOPED_TRACE(argument);
+        argv[4] = &argument[0];
+        EXPECT_EQ(SubspawnEarlyParse(5, argv), -1);
+    }
 }
 }  // namespace OHOS

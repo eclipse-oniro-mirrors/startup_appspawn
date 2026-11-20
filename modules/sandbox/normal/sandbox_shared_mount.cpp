@@ -289,7 +289,7 @@ APPSPAWN_STATIC int MountSharedMapItem(const AppSpawningCtx *property, const App
         return 0;
     }
 
-    ret = MakeDirRec(sandboxPath, DIR_MODE, 1);
+    ret = OHOS::AppSpawn::SandboxCommon::CreateDirRecursive(sandboxPath, DIR_MODE, property);
     if (ret != 0) {
         APPSPAWN_LOGE("mkdir %{public}s failed, errno %{public}d", sandboxPath, errno);
         return APPSPAWN_SANDBOX_ERROR_MKDIR_FAIL;
@@ -466,6 +466,9 @@ APPSPAWN_STATIC int ParseDataGroupList(AppSpawnMgr *content, const AppSpawningCt
 
 int UpdateDataGroupDirs(AppSpawnMgr *content)
 {
+    if (IsSubSpawnMode(content)) {
+        return 0;
+    }
     if (content == nullptr) {
         return APPSPAWN_ARG_INVALID;
     }
@@ -551,7 +554,7 @@ APPSPAWN_STATIC int AppCleanupHook(const AppSpawnMgr *content, const AppSpawnedP
         return 0);
 
     // Only process when uid > 0 and device is locked
-    APPSPAWN_CHECK(appInfo->lockBundleRefAdded, return 0, "invalid ref in AppCleanupHook");
+    APPSPAWN_CHECK_LOGV(appInfo->lockBundleRefAdded, return 0, "invalid ref in AppCleanupHook");
     APPSPAWN_CHECK(appInfo->lockPath != nullptr, return 0, "invalid lockPath in AppCleanupHook");
     APPSPAWN_LOGI("AppCleanupHook: cleanup lockPath=%{public}s", appInfo->lockPath);
 

@@ -16,6 +16,7 @@
 #include "appspawn_modulemgr.h"
 
 #include "appspawn_hook.h"
+#include "appspawn_error.h"
 #include "appspawn_manager.h"
 #include "appspawn_utils.h"
 #include "hookmgr.h"
@@ -37,6 +38,7 @@ static struct {
     {NULL, MODULE_COMMON, "appspawn/common"},
     {NULL, MODULE_NATIVESPAWN, "appspawn/nativespawn"},
     {NULL, MODULE_HYBRIDSPAWN, "appspawn/appspawn"},
+    {NULL, MODULE_SUBSPAWN, "appspawn/subspawn"},
 };
 static HOOK_MGR *g_appspawnHookMgr = NULL;
 
@@ -199,7 +201,7 @@ int AppSpawnHookExecute(AppSpawnHookStage stage, uint32_t flags, AppSpawnContent
 {
     APPSPAWN_CHECK(content != NULL && client != NULL, return APPSPAWN_ARG_INVALID, "Invalid arg");
     APPSPAWN_LOGV("Execute hook [%{public}d] for app: %{public}s", stage, GetProcessName((AppSpawningCtx *)client));
-    APPSPAWN_CHECK((stage >= STAGE_PARENT_PRE_FORK) && (stage <= STAGE_CHILD_PRE_RUN),
+    APPSPAWN_CHECK((stage >= STAGE_PARENT_PRE_FORK) && (stage < STAGE_MAX),
         return APPSPAWN_ARG_INVALID, "Invalid stage %{public}d", (int)stage);
     AppSpawnHookArg forkArg;
     forkArg.client = client;
@@ -244,7 +246,7 @@ void AppSpawnEnvClear(AppSpawnContent *content, AppSpawnClient *client)
 int AddAppSpawnHook(AppSpawnHookStage stage, int prio, AppSpawnHook hook)
 {
     APPSPAWN_CHECK(hook != NULL, return APPSPAWN_ARG_INVALID, "Invalid hook");
-    APPSPAWN_CHECK((stage >= STAGE_PARENT_PRE_FORK) && (stage <= STAGE_CHILD_PRE_RUN),
+    APPSPAWN_CHECK((stage >= STAGE_PARENT_PRE_FORK) && (stage < STAGE_MAX),
         return APPSPAWN_ARG_INVALID, "Invalid stage %{public}d", (int)stage);
     HOOK_INFO info;
     info.stage = stage;

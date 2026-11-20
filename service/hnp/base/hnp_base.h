@@ -57,6 +57,7 @@ extern "C" {
 #endif
 #define HNP_OLD_CFG_PATH  APPSPAWN_BASE_DIR "/data/service/el1/startup/hnp_info.json"
 #define HNP_PACKAGE_INFO_JSON_FILE_PATH APPSPAWN_BASE_DIR "/data/service/el1/startup/hnp_info_%d.json"
+#define HNP_GLOBAL_LOCK_PATH APPSPAWN_BASE_DIR "/data/service/el1/startup/hnp_install.lock"
 #define HNP_ELF_FILE_CHECK_HEAD_LEN 4
 
 #define HNP_PUBLIC_BASE_PATH APPSPAWN_BASE_DIR "/data/app/el1/bundle/%d/hnppublic/%s.org/%s_%s/"
@@ -320,6 +321,12 @@ enum {
 // 0x801126 BSSAPI 执行异常
 #define HNP_ERRNO_BSS_ERROR          HNP_ERRNO_COMMON(HNP_MID_BASE, 0x26)
 
+// 0x801127 获取hnp全局锁失败
+#define HNP_ERRNO_BASE_LOCK_FAILED   HNP_ERRNO_COMMON(HNP_MID_BASE, 0x27)
+
+// 0x801128 获取hnp全局锁超时（可重试）
+#define HNP_ERRNO_BASE_LOCK_TIMEOUT  HNP_ERRNO_COMMON(HNP_MID_BASE, 0x28)
+
 int GetFileSizeByHandle(FILE *file, int *size);
 
 int ReadFileToStream(const char *filePath, char **stream, int *streamLen);
@@ -342,6 +349,10 @@ bool CanRecovery(const char *hnpPackageName, HnpCfgInfo *hnpcfgInfo);
 int HnpSymlink(const char *srcFile, const char *dstFile, HnpCfgInfo *hnpCfg, bool canRecovery, bool isPublic);
 
 int HnpProcessRunCheck(const char *runPath);
+
+int HnpGlobalLockAcquire(int *fdOut);
+
+void HnpGlobalLockRelease(int fd);
 
 int HnpDeleteFolder(const char *path);
 

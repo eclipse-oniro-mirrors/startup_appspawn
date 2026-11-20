@@ -107,6 +107,7 @@ group("moduletest") {
     ":AppSpawnModuleTest",
     ":AppSpawnTest",
     "plugin-sample:appspawn_plugin_sample",
+    "subspawn:AppSpawn_Subspawn_MST",
   ]
   deps += [ "hnp_sample:hnpsample" ]
 }
