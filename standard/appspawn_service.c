@@ -299,7 +299,7 @@ APPSPAWN_STATIC void CloseFdArgsFromConnection(AppSpawnConnection *connection)
     APPSPAWN_CHECK(connection != NULL, return, "Invalid connection");
     int fdCount = connection->receiverCtx.fdCount;
     int *fds = connection->receiverCtx.fds;
-    APPSPAWN_CHECK_LOGW(fds != NULL && fdCount > 0, return,
+    APPSPAWN_CHECK_LOGV(fds != NULL && fdCount > 0, return,
         "Invalid fd info %{public}d %{public}d", fds == NULL, fdCount);
 
     APPSPAWN_LOGI("CloseFdArgsFromConnection: close %{public}d fds", fdCount);
