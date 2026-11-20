@@ -554,7 +554,7 @@ APPSPAWN_STATIC int AppCleanupHook(const AppSpawnMgr *content, const AppSpawnedP
         return 0);
 
     // Only process when uid > 0 and device is locked
-    APPSPAWN_CHECK(appInfo->lockBundleRefAdded, return 0, "invalid ref in AppCleanupHook");
+    APPSPAWN_CHECK_LOGV(appInfo->lockBundleRefAdded, return 0, "invalid ref in AppCleanupHook");
     APPSPAWN_CHECK(appInfo->lockPath != nullptr, return 0, "invalid lockPath in AppCleanupHook");
     APPSPAWN_LOGI("AppCleanupHook: cleanup lockPath=%{public}s", appInfo->lockPath);
 
