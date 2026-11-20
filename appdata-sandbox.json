@@ -212,6 +212,11 @@
                     "sandbox-flags" : [ "bind", "rec" ],
                     "check-action-status": "false"
                 }, {
+                    "src-path" : "/mnt/data/<currentUserId>/clipboard_fuse",
+                    "sandbox-path" : "/data/service/el2/clipboard_fuse",
+                    "sandbox-flags" : [ "bind", "rec" ],
+                    "check-action-status": "false"
+                }, {
                     "src-path" : "/vendor/etc/passthrough",
                     "sandbox-path" : "/vendor/etc/passthrough",
                     "sandbox-flags" : [ "bind", "rec" ],
