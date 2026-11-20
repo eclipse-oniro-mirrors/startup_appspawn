@@ -20,68 +20,12 @@
 #include <sys/resource.h>
 #include <unistd.h>
 #include <errno.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <time.h>
 
 #include "hnp_base.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#ifndef HNP_LOCK_RETRY_TIMES
-#define HNP_LOCK_RETRY_TIMES 600
-#endif
-#ifndef HNP_LOCK_RETRY_INTERVAL_MS
-#define HNP_LOCK_RETRY_INTERVAL_MS 100
-#endif
-
-int HnpGlobalLockAcquire(int *fdOut)
-{
-    if (fdOut == NULL) {
-        return HNP_ERRNO_BASE_PARAMS_INVALID;
-    }
-    *fdOut = -1;
-
-    int fd = open(HNP_GLOBAL_LOCK_PATH, O_RDWR | O_CREAT | O_CLOEXEC | O_NOFOLLOW, 0600);
-    if (fd < 0) {
-        HNP_LOGE("open hnp lock file failed, errno=%{public}d", errno);
-        return HNP_ERRNO_BASE_FILE_OPEN_FAILED;
-    }
-
-    for (int i = 0; i < HNP_LOCK_RETRY_TIMES; i++) {
-        if (flock(fd, LOCK_EX | LOCK_NB) == 0) {
-            *fdOut = fd;
-            return 0;
-        }
-        if (errno != EWOULDBLOCK && errno != EAGAIN && errno != EINTR) {
-            HNP_LOGE("flock hnp lock failed, errno=%{public}d", errno);
-            (void)close(fd);
-            return HNP_ERRNO_BASE_LOCK_FAILED;
-        }
-        struct timespec ts = {
-            .tv_sec = 0,
-            .tv_nsec = (long)HNP_LOCK_RETRY_INTERVAL_MS * 1000000L
-        };
-        while (nanosleep(&ts, &ts) != 0 && errno == EINTR) {
-            continue;
-        }
-    }
-    HNP_LOGE("acquire hnp global lock timeout after %{public}d ms",
-        HNP_LOCK_RETRY_TIMES * HNP_LOCK_RETRY_INTERVAL_MS);
-    (void)close(fd);
-    return HNP_ERRNO_BASE_LOCK_TIMEOUT;
-}
-
-void HnpGlobalLockRelease(int fd)
-{
-    if (fd < 0) {
-        return;
-    }
-    (void)flock(fd, LOCK_UN);
-    (void)close(fd);
-}
 
 int HnpProcessRunCheck(const char *runPath)
 {
