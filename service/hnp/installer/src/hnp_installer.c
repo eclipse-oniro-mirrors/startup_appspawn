@@ -1140,18 +1140,6 @@ static int GetRespFd()
     return (int)fd;
 }
 
-int HnpReportApiResult(int ret)
-{
-    int respFd = GetRespFd();
-    HNP_ONLY_EXPER(respFd <= 0, return ret);
-    HnpApiResult result = {
-        .result = ret,
-    };
-    HNP_ERROR_CHECK(write(respFd, &result, sizeof(HnpApiResult)) == sizeof(HnpApiResult),
-        return HNP_ERRNO_WRITE_ERROR, "write result failed %{public}d", errno);
-    return ret;
-}
-
 int HnpCmdInstall(int argc, char *argv[])
 {
     HapInstallInfo *installInfo = (HapInstallInfo *)calloc(1, sizeof(HapInstallInfo));
