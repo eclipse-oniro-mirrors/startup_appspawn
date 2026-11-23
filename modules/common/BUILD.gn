@@ -85,6 +85,7 @@ ohos_shared_library("appspawn_common") {
     external_deps += [
       "selinux:libselinux",
       "selinux_adapter:libhap_restorecon",
+      "selinux_adapter:librestorecon",
     ]
   }
   if (build_seccomp) {
