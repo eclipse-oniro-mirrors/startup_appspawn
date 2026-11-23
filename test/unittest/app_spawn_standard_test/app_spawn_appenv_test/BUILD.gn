@@ -1,0 +1,233 @@
+# Copyright (c) 2026 Huawei Device Co., Ltd.
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+# http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+# Unit tests for the device-env / appenv.conf injection feature in
+# modules/common (appspawn_adapter.cpp: InitAppCommonEnv / SetUserLevelEnvConfig;
+# appspawn_common.c: SpawnEnsureAppenvDir / SpawnSetAppEnv). The production
+# code paths are guarded by #ifdef CUSTOM_SANDBOX, so this target defines it.
+
+import("//base/startup/appspawn/appspawn.gni")
+import("//base/startup/appspawn/modules/sandbox/sandbox.gni")
+import("//build/test.gni")
+
+if (!defined(ohos_lite)) {
+  ohos_unittest("AppSpawn_Appenv_Test") {
+    module_out_path = "appspawn/appspawn"
+    cflags = [ "-Dprivate=public" ]
+    if (appspawn_unittest_coverage) {
+      cflags += [ "--coverage" ]
+      ldflags = [ "--coverage" ]
+      cflags_cc = [ "--coverage" ]
+    }
+
+    deps = []
+    defines = [
+      "APPSPAWN_BASE_DIR=\"/data/appspawn_ut\"",
+      "APPSPAWN_LABEL=\"APPSPAWN_UT\"",
+      "APPSPAWN_TEST",
+      "APPSPAWN_CLIENT",
+      "APPSPAWN_DEBUG",
+      "DEBUG_BEGETCTL_BOOT",
+      "OHOS_DEBUG",
+      "GRAPHIC_PERMISSION_CHECK",
+
+      # Route libc calls of production code to the shared stubs.
+      "capset=CapsetStub",
+      "unshare=UnshareStub",
+      "mount=MountStub",
+      "symlink=SymlinkStub",
+      "chdir=ChdirStub",
+      "chroot=ChrootStub",
+      "syscall=SyscallStub",
+      "umount2=Umount2Stub",
+      "access=AccessStub",
+      "dlopen=DlopenStub",
+      "dlopen_ns=DlopenNsStub",
+      "dlsym=DlsymStub",
+      "dlclose=DlcloseStub",
+      "execv=ExecvStub",
+      "getprocpid=GetprocpidStub",
+      "setgroups=SetgroupsStub",
+      "setresgid=SetresgidStub",
+      "setresuid=SetresuidStub",
+      "setuid=SetuidStub",
+      "setgid=SetgidStub",
+      "execvp=ExecvpStub",
+      "ioctl=IoctlStub",
+      "execve=ExecveStub",
+      "setcon=SetconStub",
+      "prctl=PrctlStub",
+    ]
+
+    include_dirs = [
+      "${appspawn_path}",
+      "${appspawn_path}/common",
+      "${appspawn_path}/standard",
+      "${appspawn_path}/modules/modulemgr",
+      "${appspawn_path}/modules/ace_adapter",
+      "${appspawn_path}/modules/common",
+      "${appspawn_path}/modules/sysevent",
+      "${appspawn_innerkits_path}/client",
+      "${appspawn_innerkits_path}/include",
+      "${appspawn_innerkits_path}/permission",
+      "${appspawn_path}/modules/module_engine/include",
+      "${appspawn_path}/test/mock",
+      "${appspawn_path}/test/unittest",
+      "${appspawn_path}/util/include",
+    ]
+    include_dirs += appspawn_sandbox_inc
+
+    sources = [
+      "app_spawn_appenv_test.cpp",
+      "app_spawn_appenv_test_helper.cpp",
+      "${appspawn_path}/test/unittest/app_spawn_test_helper.cpp",
+      "${appspawn_path}/common/appspawn_server.c",
+      "${appspawn_path}/common/appspawn_trace.cpp",
+      "${appspawn_path}/modules/modulemgr/appspawn_modulemgr.c",
+      "${appspawn_path}/standard/appspawn_appmgr.c",
+      "${appspawn_path}/standard/appspawn_fd_manager.c",
+      "${appspawn_path}/standard/appspawn_kickdog.c",
+      "${appspawn_path}/standard/appspawn_msgmgr.c",
+      "${appspawn_path}/standard/appspawn_service.c",
+      "${appspawn_path}/util/src/appspawn_utils.c",
+      "${appspawn_path}/util/src/appspawndf_utils.cpp",
+    ]
+
+    # client
+    sources += [
+      "${appspawn_innerkits_path}/client/appspawn_client.c",
+      "${appspawn_innerkits_path}/client/appspawn_msg.c",
+      "${appspawn_innerkits_path}/permission/appspawn_mount_permission.c",
+    ]
+
+    # modules sources (the two modified production files plus shared deps)
+    sources += [
+      "${appspawn_path}/modules/ace_adapter/ace_adapter.cpp",
+      "${appspawn_path}/modules/ace_adapter/appspawn_servicebin_adapter.cpp",
+      "${appspawn_path}/modules/ace_adapter/command_lexer.cpp",
+      "${appspawn_path}/modules/common/appspawn_adapter.cpp",
+      "${appspawn_path}/modules/common/appspawn_begetctl.c",
+      "${appspawn_path}/modules/common/appspawn_cgroup.c",
+      "${appspawn_path}/modules/common/appspawn_common.c",
+      "${appspawn_path}/modules/common/appspawn_custom_config.cpp",
+      "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
+      "${appspawn_path}/modules/common/appspawn_kill_reason.c",
+      "${appspawn_path}/modules/common/appspawn_namespace.c",
+      "${appspawn_path}/modules/common/appspawn_silk.c",
+      "${appspawn_path}/modules/common/spawn_primitives.c",
+      "${appspawn_path}/modules/nweb_adapter/nwebspawn_adapter.cpp",
+      "${appspawn_path}/modules/sysevent/event_reporter.cpp",
+    ]
+    sources += [ "${appspawn_path}/standard/spawn_policy.c" ]
+    sources += appspawn_sandbox_src
+
+    # add stub
+    include_dirs += [
+      "${appspawn_path}/test/mock",
+      "${appspawn_path}/test/mock/wrapper/include",
+    ]
+    sources += [
+      "${appspawn_path}/test/mock/app_spawn_stub.cpp",
+      "${appspawn_path}/test/mock/app_system_stub.c",
+      "${appspawn_path}/test/mock/wrapper/src/lib_wrapper.c",
+    ]
+
+    configs = [ "${appspawn_path}:appspawn_config" ]
+    external_deps = [
+      "ability_base:want",
+      "ability_runtime:app_manager",
+      "ability_runtime:appkit_native",
+      "ability_runtime:runtime",
+      "access_token:libaccesstoken_sdk",
+      "access_token:libtokenid_sdk",
+      "access_token:libtokensetproc_shared",
+      "ace_engine:ace_forward_compatibility",
+      "bounds_checking_function:libsec_shared",
+      "cJSON:cjson",
+      "c_utils:utils",
+      "config_policy:configpolicy_util",
+      "eventhandler:libeventhandler",
+      "ffrt:libffrt",
+      "hilog:libhilog",
+      "hitrace:hitrace_meter",
+      "init:libbegetutil",
+      "init:seccomp",
+      "ipc:ipc_core",
+      "napi:ace_napi",
+      "os_account:os_account_innerkits",
+      "resource_management:global_resmgr",
+    ]
+    if (enable_appspawn_dump_catcher) {
+      external_deps += [ "faultloggerd:libdfx_dumpcatcher" ]
+    }
+    if (asan_detector || is_asan) {
+      defines += [ "ASAN_DETECTOR" ]
+      sources += [ "${appspawn_path}/modules/asan/asan_detector.c" ]
+    }
+
+    if (appspawn_support_nweb) {
+      external_deps += [ "webview:libarkweb_utils" ]
+    }
+
+    # WITH_SELINUX compiles the Restorecon path in SpawnEnsureAppenvDir and
+    # pulls in policycoreutils.h. Link librestorecon (provides Restorecon) and
+    # libhap_restorecon (provides HapContextLoadConfig used by appspawn_adapter).
+    if (build_selinux) {
+      defines += [ "WITH_SELINUX" ]
+      external_deps += [
+        "selinux:libselinux",
+        "selinux_adapter:libhap_restorecon",
+        "selinux_adapter:librestorecon",
+      ]
+    }
+
+    # CUSTOM_SANDBOX gates the PC-only appenv feature (SetUserLevelEnvConfig /
+    # SpawnEnsureAppenvDir) in appspawn_adapter.cpp / appspawn_common.c, which
+    # production compiles only under this flag. Define it under the SAME
+    # condition as production (modules/common/BUILD.gn and appspawn_config:
+    # build_seccomp && appspawn_custom_sandbox) so the test exercises these
+    # symbols iff production builds them. On non-PC products
+    # (appspawn_custom_sandbox=false) the #ifdef CUSTOM_SANDBOX test bodies fall
+    # through to their #else SUCCEED() branches instead of running PC-only code
+    # that relies on per-user dirs the device never creates for test userIds.
+    if (appspawn_custom_sandbox) {
+      defines += [ "CUSTOM_SANDBOX" ]
+    }
+
+    if (appspawn_report_event) {
+      defines += [ "REPORT_EVENT" ]
+      external_deps += [ "hisysevent:libhisysevent" ]
+      sources += [ "${appspawn_path}/modules/sysevent/hisysevent_adapter.cpp" ]
+    }
+
+    if (appspawn_change_sched) {
+      defines += [ "APPSPAWN_CHANGE_SCHED_ENABLE" ]
+    }
+
+    if (target_cpu == "arm64" || target_cpu == "x86_64" ||
+        target_cpu == "riscv64") {
+      defines += [ "APPSPAWN_64" ]
+    }
+
+    if (dlp_permission_enable) {
+      cflags_cc = [ "-DWITH_DLP" ]
+      external_deps += [ "dlp_permission_service:libdlp_fuse" ]
+    }
+
+    if (!defined(global_parts_info) ||
+        defined(global_parts_info.security_code_signature)) {
+      defines += [ "CODE_SIGNATURE_ENABLE" ]
+      external_deps += [ "code_signature:libcode_sign_attr_utils" ]
+    }
+  }
+}

@@ -71,6 +71,7 @@
 #endif
 #ifdef WITH_SELINUX
 #include "selinux/selinux.h"
+#include "policycoreutils.h"
 #endif
 
 #define PROVISION_TYPE_DEBUG "debug"
@@ -896,9 +897,18 @@ static int SpawnInitSubspawnEnv(AppSpawnMgr *content, AppSpawningCtx *property)
     return SpawnInitSpawningEnv(content, property);
 }
 
-static int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property)
+APPSPAWN_STATIC int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property)
 {
     APPSPAWN_LOGV("Spawning: set appEnv");
+    // Order: InitAppCommonEnv (USER var) → SetUserLevelEnvConfig (per-user
+    // appenv.conf) → SetEnvInfo (per-app AppEnv JSON, overrides user-level).
+    // SetUserLevelEnvConfig and SetEnvInfo each have their own guards
+    // (IsAppSpawnMode / APP_FLAGS_CUSTOM_SANDBOX / envEnable policy);
+    // InitAppCommonEnv is unconditional (USER var is needed for all apps).
+    InitAppCommonEnv(property);
+#ifdef CUSTOM_SANDBOX
+    SetUserLevelEnvConfig(content, property);
+#endif
     int ret = SetEnvInfo(content, property);
     APPSPAWN_CHECK_ONLY_EXPER(ret == 0, return ret);
     return 0;
@@ -1036,6 +1046,66 @@ static int SpawnGetSpawningFlag(AppSpawnMgr *content, AppSpawningCtx *property)
     return 0;
 }
 
+// Create per-user appenv dir (deviceinfo-owned) for the SA to write appenv.conf.
+// Compiled only for PC products (CUSTOM_SANDBOX); non-PC skip this hook.
+#ifdef CUSTOM_SANDBOX
+#define APPENV_DIR_USERID_MAX_LEN 16
+#define APPENV_DIR_DEDUPE_CAP 8
+static const char *g_appenvDirPrefix = "/data/service/el1/";
+static const char *g_appenvDirSuffix = "/appenv";
+static const mode_t APPENV_DIR_MODE = 0755;
+static const uid_t APPENV_DIR_OWNER_UID = 1102;  // deviceinfo
+static const gid_t APPENV_DIR_OWNER_GID = 1102;  // deviceinfo
+
+APPSPAWN_STATIC int SpawnEnsureAppenvDir(AppSpawnMgr *content, AppSpawningCtx *property)
+{
+    if (!IsAppSpawnMode(content)) {
+        return 0;
+    }
+    char *userIdStr = (char *)GetAppSpawnMsgExtInfo(property->message, MSG_EXT_NAME_USERID, NULL);
+    if (userIdStr == NULL || userIdStr[0] == '\0') {
+        APPSPAWN_LOGW("SpawnEnsureAppenvDir: userId is null, skip");
+        return 0;
+    }
+    // dedupe: scan process-level static array (PRE_FORK is serial, no lock needed)
+    static char createdUserIds[APPENV_DIR_DEDUPE_CAP][APPENV_DIR_USERID_MAX_LEN + 1] = {0};
+    static int createdCount = 0;
+    for (int i = 0; i < createdCount; i++) {
+        APPSPAWN_ONLY_EXPER(strcmp(createdUserIds[i], userIdStr) == 0, return 0);
+    }
+    char dirPath[PATH_MAX] = {0};
+    int len = snprintf_s(dirPath, sizeof(dirPath), sizeof(dirPath) - 1, "%s%s%s",
+        g_appenvDirPrefix, userIdStr, g_appenvDirSuffix);
+    APPSPAWN_CHECK(len > 0 && (size_t)len < sizeof(dirPath), return 0,
+        "SpawnEnsureAppenvDir: path too long for userId %{public}s", userIdStr);
+    // mkdir (EEXIST ok if a prior boot/restorecon created it); mode is enforced
+    // by mkdir's mode arg + process umask, no redundant chmod needed. Then
+    // restorecon (relabel to file_contexts-matched type, no-op if no rule),
+    // then chown to deviceinfo:deviceinfo. Order: mkdir → restorecon → chown
+    // — relabel must happen before chown so chown's label-affecting op (if any)
+    // doesn't race with restorecon.
+    if (mkdir(dirPath, APPENV_DIR_MODE) != 0 && errno != EEXIST) {
+        APPSPAWN_LOGE("SpawnEnsureAppenvDir: mkdir %{public}s failed: %{public}d", dirPath, errno);
+        return 0;
+    }
+#ifdef WITH_SELINUX
+    APPSPAWN_CHECK_ONLY_LOGW(Restorecon(dirPath) == 0,
+        "SpawnEnsureAppenvDir: Restorecon %{public}s failed: %{public}d", dirPath, errno);
+#endif
+    APPSPAWN_CHECK_ONLY_LOGW(chown(dirPath, APPENV_DIR_OWNER_UID, APPENV_DIR_OWNER_GID) == 0,
+        "SpawnEnsureAppenvDir: chown %{public}s failed: %{public}d", dirPath, errno);
+    APPSPAWN_LOGI("SpawnEnsureAppenvDir: ensured %{public}s (mode 0755, owner deviceinfo:deviceinfo)", dirPath);
+    if (createdCount < APPENV_DIR_DEDUPE_CAP) {
+        int copied = snprintf_s(createdUserIds[createdCount], sizeof(createdUserIds[createdCount]),
+            sizeof(createdUserIds[createdCount]) - 1, "%s", userIdStr);
+        if (copied > 0) {
+            createdCount++;
+        }
+    }
+    return 0;
+}
+#endif // CUSTOM_SANDBOX
+
 static int SpawnLoadConfig(AppSpawnMgr *content)
 {
     LoadSilkConfig();
@@ -1147,6 +1217,9 @@ MODULE_CONSTRUCTOR(void)
     AddAppSpawnHook(STAGE_PARENT_BOOT_IMG, HOOK_PRIO_HIGHEST - 1, NormalizeDacAppUid);
 
     AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_HIGHEST, SpawnGetSpawningFlag);
+#ifdef CUSTOM_SANDBOX
+    AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_HIGHEST + 1, SpawnEnsureAppenvDir);
+#endif
 #ifdef CODE_SIGNATURE_ENABLE
     AddAppSpawnHook(STAGE_PARENT_PRE_FORK, HOOK_PRIO_COMMON, PreOpenXpmFd);
     AddAppSpawnHook(STAGE_SERVER_EXIT, HOOK_PRIO_HIGHEST, CloseXpmFdArgs);

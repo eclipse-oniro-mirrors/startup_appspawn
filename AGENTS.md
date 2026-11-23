@@ -2,6 +2,8 @@
 
 OpenHarmony `appspawn` component (subsystem `startup`, part `appspawn`). The app-process spawner/service manager, started by `init` on boot. Not a standalone project — it builds inside the OpenHarmony top-level source tree; there is no Makefile/CMake/npm here.
 
+odk_resource_gate: codespec/resource_gate.sh
+
 ## Architecture reference
 
 `docs/` is a generated knowledge base (in Chinese): `docs/index.md` is the entry point with a module index + glossary, `docs/architecture.md` covers data flow and cross-module wiring (pre-fork → post-fork → child-execute), and `docs/modules/` has one detail page per module.

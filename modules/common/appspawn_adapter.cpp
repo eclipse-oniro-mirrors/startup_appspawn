@@ -33,9 +33,11 @@
 #include "tokenid_kit.h"
 #include "securec.h"
 
-#ifdef NORMAL_SANDBOX
+#include <cstdint>
 #include <cstring>
-#endif
+
+#include <fstream>
+#include <string>
 
 #ifdef WITH_SELINUX
 #include "hap_restorecon.h"
@@ -347,7 +349,7 @@ int SetInternetPermission(const AppSpawningCtx *property)
     return 0;
 }
 
-static void InitAppCommonEnv(const AppSpawningCtx *property)
+void InitAppCommonEnv(const AppSpawningCtx *property)
 {
     AppDacInfo *appInfo = reinterpret_cast<AppDacInfo *>(GetAppProperty(property, TLV_DAC_INFO));
     if (appInfo == NULL) {
@@ -361,6 +363,53 @@ static void InitAppCommonEnv(const AppSpawningCtx *property)
     APPSPAWN_CHECK(ret == 0, return, "setenv failed, userid:%{public}u, errno: %{public}d", userId, errno);
 }
 
+#ifdef CUSTOM_SANDBOX
+static constexpr uint32_t DEVICE_ENV_CONFIG_MAX_ENTRIES = 256;
+static constexpr size_t DEVICE_ENV_CONFIG_MAX_LINE = 4096;
+static constexpr const char *APPENV_DIR_PREFIX = "/data/service/el1/";
+static constexpr const char *APPENV_DIR_USERID_SUFFIX = "/appenv/appenv.conf";
+
+void SetUserLevelEnvConfig(const AppSpawnMgr *content, const AppSpawningCtx *property)
+{
+    if (!IsAppSpawnMode(content)) {
+        return;
+    }
+    if (!CheckAppMsgFlagsSet(property, APP_FLAGS_CUSTOM_SANDBOX)) {
+        return;
+    }
+    char *userIdStr = reinterpret_cast<char *>(
+        GetAppPropertyExt(property, MSG_EXT_NAME_USERID, nullptr));
+    if (userIdStr == nullptr || userIdStr[0] == '\0') {
+        APPSPAWN_LOGW("SetUserLevelEnvConfig: userId is null, skip device env");
+        return;
+    }
+    std::string path = std::string(APPENV_DIR_PREFIX) + userIdStr + APPENV_DIR_USERID_SUFFIX;
+    std::ifstream file(path);
+    if (!file.is_open()) {
+        APPSPAWN_LOGW("no device env config at %{public}s, skip", path.c_str());
+        return;
+    }
+    std::string line;
+    uint32_t count = 0;
+    while (std::getline(file, line)) {
+        if (line.empty() || line[0] == '#' || line.size() > DEVICE_ENV_CONFIG_MAX_LINE ||
+            count >= DEVICE_ENV_CONFIG_MAX_ENTRIES) {
+            continue;
+        }
+        size_t pos = line.find('=');
+        if (pos == std::string::npos || pos == 0 || pos + 1 == line.size()) {
+            continue;
+        }
+        std::string key = line.substr(0, pos);
+        std::string value = line.substr(pos + 1);
+        APPSPAWN_CHECK_LOGW(setenv(key.c_str(), value.c_str(), 1) == 0, continue,
+            "setenv %{public}s failed, errno %{public}d", key.c_str(), errno);
+        count++;
+    }
+    APPSPAWN_LOGI("user-level env config loaded from %{public}s, count %{public}u", path.c_str(), count);
+}
+#endif // CUSTOM_SANDBOX
+
 int32_t SetEnvInfo(const AppSpawnMgr *content, const AppSpawningCtx *property)
 {
     const SpawnPolicy *pl = ResolvePolicy(property);
@@ -368,7 +417,6 @@ int32_t SetEnvInfo(const AppSpawnMgr *content, const AppSpawningCtx *property)
         APPSPAWN_CHECK_LOGV(pl->envEnable, return 0, "SetEnvInfo: skip by policy %{public}s", pl->name);
         return 0;
     }
-    InitAppCommonEnv(property);
 
     uint32_t size = 0;
     char *envStr = reinterpret_cast<char *>(GetAppPropertyExt(property, "AppEnv", &size));
