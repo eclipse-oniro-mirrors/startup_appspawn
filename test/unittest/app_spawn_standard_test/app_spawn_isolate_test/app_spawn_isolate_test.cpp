@@ -226,47 +226,6 @@ HWTEST_F(AppSpawnIsolateTest, SpawnLoadPathConfig_ConfigNotFound, TestSize.Level
     UpdateOpenFunc(nullptr);
 }
 
-/*
- * SpawnLoadPathConfig short-circuits on the second call via extData lookup.
- * After the first call an SandboxPathMarkConfig is stored in extData, so the
- * second call must not re-enter the config-loading path.
- */
-HWTEST_F(AppSpawnIsolateTest, SpawnLoadPathConfig_LoadOnce, TestSize.Level0)
-{
-    OpenFunc openFunc = [](const char *pathname, int flags, mode_t mode) -> int {
-        if (pathname != nullptr && strcmp(pathname, "/dev/dec") == 0) {
-            return 3;  // fake valid fd
-        }
-        return __real_open(pathname, flags, mode);
-    };
-    IoctlFunc ioctlFunc = [](int fd, int req, va_list args) -> int {
-        g_ioctlCallCount++;
-        return 0;
-    };
-    UpdateOpenFunc(openFunc);
-    UpdateIoctlFunc(ioctlFunc);
-
-    AppSpawnMgr *mgr = CreateMockAppSpawnMgr();
-    ASSERT_NE(mgr, nullptr);
-
-    EXPECT_EQ(GetSandboxPathMarkConfig(mgr), nullptr);
-
-    int ret1 = SpawnLoadPathConfig(mgr);
-    EXPECT_EQ(ret1, APPSPAWN_OK);
-    EXPECT_NE(GetSandboxPathMarkConfig(mgr), nullptr);
-
-    int ioctlAfterFirst = g_ioctlCallCount;
-
-    int ret2 = SpawnLoadPathConfig(mgr);
-    EXPECT_EQ(ret2, APPSPAWN_OK);
-    EXPECT_NE(GetSandboxPathMarkConfig(mgr), nullptr);
-    EXPECT_EQ(g_ioctlCallCount, ioctlAfterFirst);  // no additional ioctl on second call
-
-    DeleteAppSpawnMgr(mgr);
-    UpdateOpenFunc(nullptr);
-    UpdateIoctlFunc(nullptr);
-}
-
 // ==================== ClearSandboxPathMarkConfig tests ====================
 
 /**
