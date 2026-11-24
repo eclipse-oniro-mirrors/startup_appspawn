@@ -130,6 +130,7 @@ struct MockHiSysEventState {
     std::string lastEventName;
     int lastEventType = 0;
     std::optional<int32_t> lastUid;
+    std::string lastParamStr;  // Written key-value params, space separated
 };
 
 // Singleton mock state, accessible from both test and adapter code
@@ -137,6 +138,28 @@ inline MockHiSysEventState& GetMockHiSysEventState()
 {
     static MockHiSysEventState state;
     return state;
+}
+
+// Append one written key or value to the captured param string
+inline void AppendMockParam(std::string& paramStr, const char* value)
+{
+    if (value != nullptr) {
+        paramStr += value;
+    }
+    paramStr += " ";
+}
+
+inline void AppendMockParam(std::string& paramStr, const std::string& value)
+{
+    paramStr += value;
+    paramStr += " ";
+}
+
+template<typename T>
+inline void AppendMockParam(std::string& paramStr, T value)
+{
+    paramStr += std::to_string(value);
+    paramStr += " ";
 }
 
 class HiSysEvent {
@@ -180,6 +203,8 @@ public:
         state.lastEventType = static_cast<int>(type);
         state.lastUid.reset();
         CaptureUid(state, keyValues...);
+        state.lastParamStr.clear();
+        (AppendMockParam(state.lastParamStr, keyValues), ...);
         return state.returnValue;
     }
 };

@@ -13,16 +13,17 @@
  * limitations under the License.
  */
 
+#include <atomic>
 #include <string>
 #include <thread>
 #include <unistd.h>
 #include <vector>
-#include <csignal>
 #include <cstring>
 #include <dirent.h>
 #include <fcntl.h>
 #include <sys/prctl.h>
 #include <sys/resource.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 
 #include <gtest/gtest.h>
@@ -30,6 +31,7 @@
 #include "appspawn_manager.h"
 #include "appspawn_modulemgr.h"
 #include "appspawn_service.h"
+#include "hisysevent.h"
 #include "parameter.h"
 #include "securec.h"
 
@@ -41,6 +43,12 @@ extern "C" {
 #endif
 
 APPSPAWN_STATIC int SetParameterWithRetry(const char *name, const char *value);
+
+APPSPAWN_STATIC void AppendThreadToList(const char *tidName, const char *comm, char *threadList,
+    size_t listSize, size_t *listLen, int *truncated);
+
+APPSPAWN_STATIC void ReportMultiThreadEvent(const char *serviceName, int count,
+    const char *threadList, int truncated);
 
 int RestoreconRecurse(const char *path)
 {
@@ -142,17 +150,6 @@ HWTEST_F(AppSpawnServiceParamTest, SetParameterWithRetry_006, TestSize.Level0)
     EXPECT_STREQ(value, "true");
 }
 
-#define UT_CHILD_ABORT_EXIT 134
-
-static void ChildAbortDumpHandler(int sig)
-{
-    (void)sig;
-    if (__gcov_dump != nullptr) {
-        __gcov_dump();
-    }
-    _exit(UT_CHILD_ABORT_EXIT);
-}
-
 class CheckSingleThreadTest : public testing::Test {
 public:
     static void SetUpTestCase() {}
@@ -174,8 +171,12 @@ HWTEST_F(CheckSingleThreadTest, CheckSingleThread_001, TestSize.Level0)
     }
     closedir(dir);
     ASSERT_EQ(count, 1);
-    CheckSingleThread();
+    auto &state = OHOS::HiviewDFX::GetMockHiSysEventState();
+    state.callCount = 0;
+    CheckSingleThread("appspawn");
     SUCCEED();
+    // single-thread path: no multi-thread event reported
+    EXPECT_EQ(state.callCount, 0);
 }
 
 HWTEST_F(CheckSingleThreadTest, CheckSingleThread_002, TestSize.Level0)
@@ -185,13 +186,13 @@ HWTEST_F(CheckSingleThreadTest, CheckSingleThread_002, TestSize.Level0)
     if (pid == 0) {
         std::thread t([]() { while (true) { sleep(1); } });
         t.detach();
-        CheckSingleThread();
+        CheckSingleThread("appspawn");
         _exit(0);
     }
     int status = 0;
     waitpid(pid, &status, 0);
-    EXPECT_TRUE(WIFSIGNALED(status));
-    EXPECT_EQ(WTERMSIG(status), SIGABRT);
+    EXPECT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), 0);
 }
 
 HWTEST_F(CheckSingleThreadTest, CheckSingleThread_003, TestSize.Level0)
@@ -216,7 +217,7 @@ HWTEST_F(CheckSingleThreadTest, CheckSingleThread_003, TestSize.Level0)
     }
     DIR *dir = opendir("/proc/self/task");
     ASSERT_EQ(dir, nullptr) << "fd exhaustion not achieved, limit: " << rl.rlim_cur;
-    CheckSingleThread();
+    CheckSingleThread("appspawn");
     for (int fd : fds) {
         close(fd);
     }
@@ -230,17 +231,226 @@ HWTEST_F(CheckSingleThreadTest, CheckSingleThread_004, TestSize.Level0)
     pid_t pid = fork();
     ASSERT_GE(pid, 0);
     if (pid == 0) {
-        signal(SIGABRT, ChildAbortDumpHandler);
         std::thread t([]() { while (true) { sleep(1); } });
         t.detach();
         prctl(PR_SET_NAME, "ut_short_name");
-        CheckSingleThread();
+        CheckSingleThread("appspawn");
+        if (__gcov_dump != nullptr) {
+            __gcov_dump();
+        }
         _exit(0);
     }
     int status = 0;
     waitpid(pid, &status, 0);
     EXPECT_TRUE(WIFEXITED(status));
-    EXPECT_EQ(WEXITSTATUS(status), UT_CHILD_ABORT_EXIT);
+    EXPECT_EQ(WEXITSTATUS(status), 0);
+}
+
+/**
+ * @tc.name: CheckSingleThread_005
+ * @tc.desc: Multi-threaded process reports MULTI_THREAD_DETECTED with the thread list
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, CheckSingleThread_005, TestSize.Level0)
+{
+    auto &state = OHOS::HiviewDFX::GetMockHiSysEventState();
+    state.callCount = 0;
+    state.returnValue = 0;
+    state.lastDomain.clear();
+    state.lastEventName.clear();
+    state.lastEventType = 0;
+    state.lastParamStr.clear();
+
+    // Keep a live second thread (it records its tid, then sleeps) so
+    // CheckSingleThread takes the multi-thread branch in this process.
+    pid_t mainTid = static_cast<pid_t>(syscall(SYS_gettid));
+    std::atomic<pid_t> childTid(0);
+    std::thread t([&childTid]() {
+        childTid = static_cast<pid_t>(syscall(SYS_gettid));
+        sleep(2);
+    });
+    while (childTid.load() == 0) {
+        usleep(1000);
+    }
+    CheckSingleThread("appspawn");
+    t.join();
+
+    // the multi-thread scene is reported through the SPAWN_KEY_EVENT behavior event
+    EXPECT_EQ(state.callCount, 1);
+    EXPECT_EQ(state.lastEventName, "SPAWN_KEY_EVENT");
+    EXPECT_EQ(state.lastDomain, "APPSPAWN");
+    EXPECT_EQ(state.lastEventType, static_cast<int>(OHOS::HiviewDFX::HiSysEvent::EventType::BEHAVIOR));
+    // EVENT_NAME carries the scene, the service name, the total count and the "tid:comm" entries
+    EXPECT_NE(state.lastParamStr.find("MULTI_THREAD_DETECTED service=appspawn count=2 threads="),
+        std::string::npos);
+    EXPECT_NE(state.lastParamStr.find(std::to_string(mainTid) + ":"), std::string::npos);
+    EXPECT_NE(state.lastParamStr.find(std::to_string(childTid.load()) + ":"), std::string::npos);
+}
+
+/**
+ * @tc.name: CheckSingleThread_006
+ * @tc.desc: Thread list beyond the buffer capacity is truncated and marked
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, CheckSingleThread_006, TestSize.Level0)
+{
+    auto &state = OHOS::HiviewDFX::GetMockHiSysEventState();
+    state.callCount = 0;
+    state.returnValue = 0;
+    state.lastParamStr.clear();
+
+    // Threads inherit the 15-char comm, so every list entry needs at least
+    // 18 bytes ("tid:comm;"); threadNum threads then exceed the 512-byte
+    // list buffer and force the truncation branch.
+    prctl(PR_SET_NAME, "ut_multithread_l");
+    constexpr int threadNum = 50;
+    std::atomic<int> started(0);
+    std::vector<std::thread> threads;
+    for (int i = 0; i < threadNum; i++) {
+        threads.emplace_back([&started]() {
+            started++;
+            sleep(2);
+        });
+    }
+    while (started.load() < threadNum) {
+        usleep(1000);
+    }
+    CheckSingleThread("appspawn");
+    for (auto &t : threads) {
+        t.join();
+    }
+
+    EXPECT_EQ(state.callCount, 1);
+    // the total count still reflects every detected thread
+    EXPECT_NE(state.lastParamStr.find("MULTI_THREAD_DETECTED service=appspawn count=51 threads="),
+        std::string::npos);
+    // entries beyond the buffer capacity are dropped and marked with ";..."
+    EXPECT_NE(state.lastParamStr.find(";..."), std::string::npos);
+}
+
+/**
+ * @tc.name: AppendThreadToList_001
+ * @tc.desc: Append one tid:comm entry to an empty thread list
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, AppendThreadToList_001, TestSize.Level0)
+{
+    char threadList[64] = {0};
+    size_t listLen = 0;
+    int truncated = 0;
+    AppendThreadToList("123", "appspawn", threadList, sizeof(threadList), &listLen, &truncated);
+    EXPECT_STREQ(threadList, "123:appspawn");
+    EXPECT_EQ(listLen, strlen(threadList));
+    EXPECT_EQ(truncated, 0);
+}
+
+/**
+ * @tc.name: AppendThreadToList_002
+ * @tc.desc: Append a second entry separates it with a semicolon
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, AppendThreadToList_002, TestSize.Level0)
+{
+    char threadList[64] = {0};
+    (void)strcpy_s(threadList, sizeof(threadList), "123:appspawn");
+    size_t listLen = strlen(threadList);
+    int truncated = 0;
+    AppendThreadToList("456", "helperthrea", threadList, sizeof(threadList), &listLen, &truncated);
+    EXPECT_STREQ(threadList, "123:appspawn;456:helperthrea");
+    EXPECT_EQ(listLen, strlen(threadList));
+    EXPECT_EQ(truncated, 0);
+}
+
+/**
+ * @tc.name: AppendThreadToList_003
+ * @tc.desc: An entry beyond the buffer capacity is dropped and marked truncated
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, AppendThreadToList_003, TestSize.Level0)
+{
+    char threadList[16] = {0};
+    (void)strcpy_s(threadList, sizeof(threadList), "123:appspawn");
+    size_t listLen = strlen(threadList);
+    int truncated = 0;
+    AppendThreadToList("456", "helperthrea", threadList, sizeof(threadList), &listLen, &truncated);
+    // the failed append keeps the collected content and length untouched
+    EXPECT_STREQ(threadList, "123:appspawn");
+    EXPECT_EQ(listLen, strlen(threadList));
+    EXPECT_EQ(truncated, 1);
+}
+
+/**
+ * @tc.name: ReportMultiThreadEvent_001
+ * @tc.desc: Report carries the event scene, the service, the count and the thread list
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, ReportMultiThreadEvent_001, TestSize.Level0)
+{
+    auto &state = OHOS::HiviewDFX::GetMockHiSysEventState();
+    state.callCount = 0;
+    state.returnValue = 0;
+    state.lastDomain.clear();
+    state.lastEventName.clear();
+    state.lastEventType = 0;
+    state.lastParamStr.clear();
+
+    ReportMultiThreadEvent("appspawn", 2, "100:appspawn;101:helperthrea", 0);
+
+    EXPECT_EQ(state.callCount, 1);
+    EXPECT_EQ(state.lastEventName, "SPAWN_KEY_EVENT");
+    EXPECT_EQ(state.lastDomain, "APPSPAWN");
+    EXPECT_EQ(state.lastEventType, static_cast<int>(OHOS::HiviewDFX::HiSysEvent::EventType::BEHAVIOR));
+    EXPECT_NE(state.lastParamStr.find("MULTI_THREAD_DETECTED service=appspawn count=2 "
+        "threads=100:appspawn;101:helperthrea"), std::string::npos);
+}
+
+/**
+ * @tc.name: ReportMultiThreadEvent_002
+ * @tc.desc: A truncated list is reported with the ";..." tail marker
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, ReportMultiThreadEvent_002, TestSize.Level0)
+{
+    auto &state = OHOS::HiviewDFX::GetMockHiSysEventState();
+    state.callCount = 0;
+    state.returnValue = 0;
+    state.lastParamStr.clear();
+
+    ReportMultiThreadEvent("nwebspawn", 2, "100:nwebspawn;101:helperthrea", 1);
+
+    EXPECT_EQ(state.callCount, 1);
+    EXPECT_EQ(state.lastEventName, "SPAWN_KEY_EVENT");
+    EXPECT_NE(state.lastParamStr.find("MULTI_THREAD_DETECTED service=nwebspawn count=2 "
+        "threads=100:nwebspawn;101:helperthrea;..."), std::string::npos);
+}
+
+/**
+ * @tc.name: ReportMultiThreadEvent_003
+ * @tc.desc: A thread list too long for the event name degrades to the bare event name
+ * @tc.type: FUNC
+ */
+HWTEST_F(CheckSingleThreadTest, ReportMultiThreadEvent_003, TestSize.Level0)
+{
+    auto &state = OHOS::HiviewDFX::GetMockHiSysEventState();
+    state.callCount = 0;
+    state.returnValue = 0;
+    state.lastParamStr.clear();
+
+    // the list plus the fixed fields exceeds the 608-byte event name buffer
+    std::string longList;
+    constexpr int entryNum = 40;
+    for (int i = 0; i < entryNum; i++) {
+        if (i > 0) {
+            longList += ";";
+        }
+        longList += "1234567890:abcdefghij";
+    }
+    ReportMultiThreadEvent("appspawn", 2, longList.c_str(), 0);
+
+    EXPECT_EQ(state.callCount, 1);
+    EXPECT_EQ(state.lastEventName, "SPAWN_KEY_EVENT");
+    EXPECT_NE(state.lastParamStr.find("EVENT_NAME MULTI_THREAD_DETECTED"), std::string::npos);
+    EXPECT_EQ(state.lastParamStr.find("service="), std::string::npos);
 }
 
 class AppSpawnStartServiceTest : public testing::Test {

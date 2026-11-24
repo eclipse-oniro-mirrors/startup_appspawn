@@ -1256,7 +1256,7 @@ public:
 
 HWTEST_F(AppSpawnSingleThreadTest, AppSpawnSingleThreadCheck_001, TestSize.Level0)
 {
-    CheckSingleThread();
+    CheckSingleThread(APPSPAWN_SERVER_NAME);
     SUCCEED();
 }
 
@@ -1267,13 +1267,13 @@ HWTEST_F(AppSpawnSingleThreadTest, AppSpawnSingleThreadCheck_002, TestSize.Level
     if (pid == 0) {
         std::thread t([]() { while (true) { sleep(1); } });
         t.detach();
-        CheckSingleThread();
+        CheckSingleThread(APPSPAWN_SERVER_NAME);
         _exit(0);
     }
     int status = 0;
     waitpid(pid, &status, 0);
-    EXPECT_TRUE(WIFSIGNALED(status));
-    EXPECT_EQ(WTERMSIG(status), SIGABRT);
+    EXPECT_TRUE(WIFEXITED(status));
+    EXPECT_EQ(WEXITSTATUS(status), 0);
 }
 
 class AppSpawnSubspawnShutdownTest : public testing::Test {
