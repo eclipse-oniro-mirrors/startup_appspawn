@@ -276,11 +276,16 @@ int CheckAppSpawnMsg(const AppSpawnMsgNode *message)
 static int CheckExtTlvInfo(const AppSpawnTlv *tlv, uint32_t remainLen)
 {
     AppSpawnTlvExt *tlvExt = (AppSpawnTlvExt *)(tlv);
+    APPSPAWN_CHECK(tlvExt->tlvLen >= sizeof(AppSpawnTlvExt), return APPSPAWN_MSG_INVALID,
+        "Invalid ext tlv type: %{public}u tlvLen: %{public}u", tlvExt->tlvType, tlvExt->tlvLen);
+    APPSPAWN_CHECK(strnlen(tlvExt->tlvName, sizeof(tlvExt->tlvName)) < sizeof(tlvExt->tlvName),
+        return APPSPAWN_MSG_INVALID, "Invalid ext tlv name not terminated, type: %{public}u", tlvExt->tlvType);
     APPSPAWN_LOGV("Recv type [%{public}s %{public}u] real len: %{public}u",
         tlvExt->tlvName, tlvExt->tlvLen, tlvExt->dataLen);
-    if (tlvExt->dataLen > tlvExt->tlvLen - sizeof(AppSpawnTlvExt)) {
-        APPSPAWN_LOGE("Invalid tlv [%{public}s %{public}u] real len: %{public}u %{public}zu",
-            tlvExt->tlvName, tlvExt->tlvLen, tlvExt->dataLen, sizeof(AppSpawnTlvExt));
+    uint32_t availLen = tlvExt->tlvLen - sizeof(AppSpawnTlvExt);
+    if (tlvExt->dataLen > availLen) {
+        APPSPAWN_LOGE("Invalid tlv [%{public}s %{public}u] real len: %{public}u %{public}u",
+            tlvExt->tlvName, tlvExt->tlvLen, tlvExt->dataLen, availLen);
         return APPSPAWN_MSG_INVALID;
     }
     return 0;
@@ -288,6 +293,9 @@ static int CheckExtTlvInfo(const AppSpawnTlv *tlv, uint32_t remainLen)
 
 static int CheckMsgTlv(const AppSpawnTlv *tlv, uint32_t remainLen)
 {
+    APPSPAWN_CHECK(tlv->tlvLen >= sizeof(AppSpawnTlv), return APPSPAWN_MSG_INVALID,
+        "Invalid tlv %{public}d tlvLen: %{public}u", tlv->tlvType, tlv->tlvLen);
+    uint32_t availLen = tlv->tlvLen - sizeof(AppSpawnTlv);
     uint32_t tlvLen = 0;
     switch (tlv->tlvType) {
         case TLV_MSG_FLAGS:
@@ -300,15 +308,15 @@ static int CheckMsgTlv(const AppSpawnTlv *tlv, uint32_t remainLen)
             tlvLen = sizeof(AppSpawnMsgDacInfo);
             break;
         case TLV_BUNDLE_INFO:
-            APPSPAWN_CHECK((tlv->tlvLen - sizeof(AppSpawnTlv)) <= (sizeof(AppSpawnMsgBundleInfo) + APP_LEN_BUNDLE_NAME),
+            APPSPAWN_CHECK(availLen <= (sizeof(AppSpawnMsgBundleInfo) + APP_LEN_BUNDLE_NAME),
                 return APPSPAWN_MSG_INVALID, "Invalid property tlv %{public}d %{public}d ", tlv->tlvType, tlv->tlvLen);
             break;
         case TLV_OWNER_INFO:
-            APPSPAWN_CHECK((tlv->tlvLen - sizeof(AppSpawnTlv)) <= APP_OWNER_ID_LEN,
+            APPSPAWN_CHECK(availLen <= APP_OWNER_ID_LEN,
                 return APPSPAWN_MSG_INVALID, "Invalid property tlv %{public}d %{public}d ", tlv->tlvType, tlv->tlvLen);
             break;
         case TLV_DOMAIN_INFO:
-            APPSPAWN_CHECK((tlv->tlvLen - sizeof(AppSpawnTlv)) <= (APP_APL_MAX_LEN + sizeof(AppSpawnMsgDomainInfo)),
+            APPSPAWN_CHECK(availLen <= (APP_APL_MAX_LEN + sizeof(AppSpawnMsgDomainInfo)),
                 return APPSPAWN_MSG_INVALID, "Invalid property tlv %{public}d %{public}d ", tlv->tlvType, tlv->tlvLen);
             break;
         case TLV_MAX:

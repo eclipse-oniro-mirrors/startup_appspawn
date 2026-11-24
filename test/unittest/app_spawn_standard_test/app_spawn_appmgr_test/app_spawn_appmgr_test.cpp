@@ -1710,6 +1710,185 @@ HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_002, TestSize.Level0)
     DeleteAppSpawnMgr(mgr);
 }
 
+static AddTlvFunction MakeBadHeaderTlv(uint16_t type, uint16_t len)
+{
+    return [type, len](uint8_t *buf, uint32_t bufLen, uint32_t &realLen, uint32_t &tlvCount) -> int {
+        AppSpawnTlv tlv = {};
+        tlv.tlvType = type;
+        tlv.tlvLen = len;
+        if (sizeof(tlv) > bufLen) {
+            return -1;
+        }
+        int r = memcpy_s(buf, bufLen, &tlv, sizeof(tlv));
+        if (r != 0) {
+            return -1;
+        }
+        realLen = sizeof(tlv);
+        tlvCount = 1;
+        return 0;
+    };
+}
+
+/**
+* @brief DecodeAppSpawnMsg rejects TLV with tlvLen < sizeof(AppSpawnTlv)
+* @note tlvLen in {1,2,3}: non-zero and within buffer but smaller than header size; CheckMsgTlv top guard rejects
+*/
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_003, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    EXPECT_EQ(mgr != nullptr, 1);
+    AppMgrTestHelper testHelper;
+    const uint16_t types[] = {TLV_MSG_FLAGS, TLV_BUNDLE_INFO, TLV_OWNER_INFO,
+                              TLV_DOMAIN_INFO, TLV_INTERNET_INFO};
+    for (size_t i = 0; i < sizeof(types) / sizeof(types[0]); i++) {
+        for (uint16_t badLen = 1; badLen < sizeof(AppSpawnTlv); badLen++) {
+            std::vector<uint8_t> buffer(1024);
+            uint32_t msgLen = 0;
+            int ret = testHelper.AppMgrTestCreateSendMsg(buffer, MSG_APP_SPAWN, msgLen,
+                {AppMgrTestHelper::AppMgrTestAddBaseTlv, MakeBadHeaderTlv(types[i], badLen)});
+            EXPECT_EQ(0, ret);
+            AppSpawnMsgNode *outMsg = nullptr;
+            uint32_t msgRecvLen = 0;
+            uint32_t reminder = 0;
+            EXPECT_EQ(0, GetAppSpawnMsgFromBuffer(buffer.data(), msgLen, &outMsg, &msgRecvLen, &reminder));
+            EXPECT_NE(0, DecodeAppSpawnMsg(outMsg));
+            DeleteAppSpawnMsg(&outMsg);
+        }
+    }
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+* @brief DecodeAppSpawnMsg rejects TLV whose payload exceeds the type bound
+* @note Covers the three availLen<=bound refactors in CheckMsgTlv (BUNDLE/OWNER/DOMAIN); oversized payload rejected
+*/
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_004, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    EXPECT_EQ(mgr != nullptr, 1);
+    AppMgrTestHelper testHelper;
+    struct Bound { uint16_t type; uint32_t bound; };
+    const Bound bounds[] = {
+        {TLV_BUNDLE_INFO, sizeof(AppSpawnMsgBundleInfo) + APP_LEN_BUNDLE_NAME},
+        {TLV_OWNER_INFO, APP_OWNER_ID_LEN},
+        {TLV_DOMAIN_INFO, APP_APL_MAX_LEN + sizeof(AppSpawnMsgDomainInfo)},
+    };
+    for (size_t i = 0; i < sizeof(bounds) / sizeof(bounds[0]); i++) {
+        std::vector<uint8_t> buffer(2048);
+        uint32_t msgLen = 0;
+        int ret = testHelper.AppMgrTestCreateSendMsg(buffer, MSG_APP_SPAWN, msgLen, {
+            AppMgrTestHelper::AppMgrTestAddBaseTlv,
+            [&](uint8_t *buf, uint32_t bufLen, uint32_t &realLen, uint32_t &tlvCount) -> int {
+                AppSpawnTlv tlv = {};
+                tlv.tlvType = bounds[i].type;
+                tlv.tlvLen = sizeof(AppSpawnTlv) + bounds[i].bound + 1;
+                if (tlv.tlvLen > bufLen) {
+                    return -1;
+                }
+                int r = memcpy_s(buf, bufLen, &tlv, sizeof(tlv));
+                if (r != 0) {
+                    return -1;
+                }
+                realLen = tlv.tlvLen;
+                tlvCount = 1;
+                return 0;
+            }
+        });
+        EXPECT_EQ(0, ret);
+        AppSpawnMsgNode *outMsg = nullptr;
+        uint32_t msgRecvLen = 0;
+        uint32_t reminder = 0;
+        EXPECT_EQ(0, GetAppSpawnMsgFromBuffer(buffer.data(), msgLen, &outMsg, &msgRecvLen, &reminder));
+        EXPECT_NE(0, DecodeAppSpawnMsg(outMsg));
+        DeleteAppSpawnMsg(&outMsg);
+    }
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+* @brief DecodeAppSpawnMsg rejects ext TLV with tlvLen < sizeof(AppSpawnTlvExt)
+* @note tlvLen=sizeof(AppSpawnTlv)=4 (<40); CheckExtTlvInfo guard tlvExt->tlvLen>=sizeof(AppSpawnTlvExt) rejects
+*/
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_005, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    EXPECT_EQ(mgr != nullptr, 1);
+    AppMgrTestHelper testHelper;
+    std::vector<uint8_t> buffer(1024);
+    uint32_t msgLen = 0;
+    int ret = testHelper.AppMgrTestCreateSendMsg(buffer, MSG_APP_SPAWN, msgLen, {
+        AppMgrTestHelper::AppMgrTestAddBaseTlv,
+        [&](uint8_t *buf, uint32_t bufLen, uint32_t &realLen, uint32_t &tlvCount) -> int {
+            AppSpawnTlv tlv = {};
+            tlv.tlvType = TLV_MAX;
+            tlv.tlvLen = sizeof(AppSpawnTlv);
+            if (sizeof(tlv) > bufLen) {
+                return -1;
+            }
+            int r = memcpy_s(buf, bufLen, &tlv, sizeof(tlv));
+            if (r != 0) {
+                return -1;
+            }
+            realLen = sizeof(tlv);
+            tlvCount = 1;
+            return 0;
+        }
+    });
+    EXPECT_EQ(0, ret);
+    AppSpawnMsgNode *outMsg = nullptr;
+    uint32_t msgRecvLen = 0;
+    uint32_t reminder = 0;
+    EXPECT_EQ(0, GetAppSpawnMsgFromBuffer(buffer.data(), msgLen, &outMsg, &msgRecvLen, &reminder));
+    EXPECT_NE(0, DecodeAppSpawnMsg(outMsg));
+    DeleteAppSpawnMsg(&outMsg);
+    DeleteAppSpawnMgr(mgr);
+}
+
+/**
+* @brief DecodeAppSpawnMsg rejects ext TLV whose tlvName is not null-terminated
+* @note tlvName filled with 'A' (no NUL); strnlen check strnlen(name,sizeof)<sizeof rejects
+*/
+HWTEST_F(AppSpawnAppMgrTest, App_Spawn_DecodeAppSpawnMsg_006, TestSize.Level0)
+{
+    AppSpawnMgr *mgr = CreateAppSpawnMgr(MODE_FOR_APP_SPAWN);
+    EXPECT_EQ(mgr != nullptr, 1);
+    AppMgrTestHelper testHelper;
+    std::vector<uint8_t> buffer(1024);
+    uint32_t msgLen = 0;
+    int ret = testHelper.AppMgrTestCreateSendMsg(buffer, MSG_APP_SPAWN, msgLen, {
+        AppMgrTestHelper::AppMgrTestAddBaseTlv,
+        [&](uint8_t *buf, uint32_t bufLen, uint32_t &realLen, uint32_t &tlvCount) -> int {
+            AppSpawnTlvExt tlv = {};
+            tlv.tlvType = TLV_MAX;
+            tlv.tlvLen = sizeof(AppSpawnTlvExt);
+            tlv.dataLen = 0;
+            tlv.dataType = DATA_TYPE_STRING;
+            int r = memset_s(tlv.tlvName, sizeof(tlv.tlvName), 'A', sizeof(tlv.tlvName));
+            if (r != 0) {
+                return -1;
+            }
+            if (sizeof(tlv) > bufLen) {
+                return -1;
+            }
+            r = memcpy_s(buf, bufLen, &tlv, sizeof(tlv));
+            if (r != 0) {
+                return -1;
+            }
+            realLen = sizeof(tlv);
+            tlvCount = 1;
+            return 0;
+        }
+    });
+    EXPECT_EQ(0, ret);
+    AppSpawnMsgNode *outMsg = nullptr;
+    uint32_t msgRecvLen = 0;
+    uint32_t reminder = 0;
+    EXPECT_EQ(0, GetAppSpawnMsgFromBuffer(buffer.data(), msgLen, &outMsg, &msgRecvLen, &reminder));
+    EXPECT_NE(0, DecodeAppSpawnMsg(outMsg));
+    DeleteAppSpawnMsg(&outMsg);
+    DeleteAppSpawnMgr(mgr);
+}
+
 /**
 * @brief TerminateSpawnedProcess died queue eviction in nweb mode
 * @note 预期结果：nweb 模式下进程终止后移入死亡队列，队列最多保留
