@@ -45,6 +45,7 @@ void HandleDiedPid(pid_t pid, uid_t uid, int status);
 AppSpawnedProcess *InitSpawnedProcessInfo(AppSpawningCtx *property);
 void WriteSignalInfoToFd(AppSpawnedProcess *appInfo, AppSpawnContent *content, int signal);
 int32_t SetEnvInfo(const AppSpawnMgr *content, const AppSpawningCtx *property);
+int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *property);
 }
 
 #ifdef WITH_SELINUX
@@ -853,8 +854,9 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_DomainInfo_SetHapDomainInfo_001, TestSize
 
 /*
  * @tc.name: AppUid_EnvInfo_UserEnvUsesAppUid_001
- * @tc.desc: common env - SetEnvInfo exports USER derived from appUid/UID_BASE
- *           (20010052 -> "100"), never the 10x uid (which would give "0").
+ * @tc.desc: common env - SpawnSetAppEnv exports USER (via InitAppCommonEnv)
+ *           derived from appUid/UID_BASE (20010052 -> "100"), never the 10x
+ *           uid (which would give "0").
  */
 HWTEST_F(AppSpawnAppUidDacTest, AppUid_EnvInfo_UserEnvUsesAppUid_001, TestSize.Level1)
 {
@@ -864,7 +866,7 @@ HWTEST_F(AppSpawnAppUidDacTest, AppUid_EnvInfo_UserEnvUsesAppUid_001, TestSize.L
         CUSTOM_SANDBOX_UID, CUSTOM_SANDBOX_APPUID, true);
     ASSERT_NE(property, nullptr);
 
-    int32_t ret = SetEnvInfo(mgr, property);
+    int ret = SpawnSetAppEnv(mgr, property);
     EXPECT_EQ(ret, 0);
     const char *user = getenv("USER");
     ASSERT_NE(user, nullptr);

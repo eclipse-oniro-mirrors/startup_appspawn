@@ -902,9 +902,17 @@ APPSPAWN_STATIC int SpawnSetAppEnv(AppSpawnMgr *content, AppSpawningCtx *propert
     APPSPAWN_LOGV("Spawning: set appEnv");
     // Order: InitAppCommonEnv (USER var) → SetUserLevelEnvConfig (per-user
     // appenv.conf) → SetEnvInfo (per-app AppEnv JSON, overrides user-level).
-    // SetUserLevelEnvConfig and SetEnvInfo each have their own guards
-    // (IsAppSpawnMode / APP_FLAGS_CUSTOM_SANDBOX / envEnable policy);
-    // InitAppCommonEnv is unconditional (USER var is needed for all apps).
+    // envEnable policy gate is shared by all three steps: when the policy
+    // disables env (e.g. daemon-owned), skip the whole chain. Before
+    // InitAppCommonEnv was lifted out of SetEnvInfo it sat behind this same
+    // gate (SetEnvInfo checked envEnable, then ran InitAppCommonEnv), so
+    // restoring the gate here preserves pre-refactor behavior.
+    // SetUserLevelEnvConfig and SetEnvInfo keep their own additional guards
+    // (IsAppSpawnMode / APP_FLAGS_CUSTOM_SANDBOX / AppEnv JSON presence).
+    const SpawnPolicy *pl = ResolvePolicy(property);
+    if (!pl->envEnable) {
+        return 0;
+    }
     InitAppCommonEnv(property);
 #ifdef CUSTOM_SANDBOX
     SetUserLevelEnvConfig(content, property);
