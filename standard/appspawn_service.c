@@ -54,6 +54,7 @@
 #define PARAM_BUFFER_SIZE 10
 #define PATH_SIZE 256
 #define FD_PATH_SIZE 128
+#define THREAD_LIST_BUFFER_SIZE 512
 #define UNLOCK_MOUNT_TIMEOUT_MS 30000  // 30s timeout for unlock mount
 #define SUBSPAWN_SHUTDOWN_WAIT_COUNT 100
 #define SUBSPAWN_SHUTDOWN_WAIT_US 10000
@@ -2238,13 +2239,35 @@ AppSpawnContent *AppSpawnCreateContent(const char *socketName, char *longProcNam
     return &appSpawnContent->content;
 }
 
-void CheckSingleThread(void)
+#ifdef APPSPAWN_HISYSEVENT
+APPSPAWN_STATIC void AppendThreadToList(const char *tidName, const char *comm, char *threadList,
+    size_t listSize, size_t *listLen, int *truncated)
+{
+    int listWriteLen = sprintf_s(threadList + *listLen, listSize - *listLen, "%s%s:%s",
+        *listLen > 0 ? ";" : "", tidName, comm);
+    if (listWriteLen > 0) {
+        *listLen += (size_t)listWriteLen;
+    } else {
+        *truncated = 1;
+    }
+}
+
+APPSPAWN_STATIC void ReportMultiThreadEvent(const char *serviceName, int count,
+    const char *threadList, int truncated)
+{
+    char eventName[THREAD_LIST_BUFFER_SIZE + 96] = {0};
+    int eventNameLen = sprintf_s(eventName, sizeof(eventName), "%s service=%s count=%d threads=%s%s",
+        MULTI_THREAD_DETECTED, serviceName, count, threadList, truncated > 0 ? ";..." : "");
+    APPSPAWN_CHECK_ONLY_EXPER(eventNameLen > 0, ReportKeyEvent(MULTI_THREAD_DETECTED); return);
+    ReportKeyEvent(eventName);
+}
+#endif
+
+void CheckSingleThread(const char *serviceName)
 {
     DIR *dir = opendir("/proc/self/task");
-    if (dir == NULL) {
-        APPSPAWN_LOGW("skip thread count check: /proc unavailable, err=%{public}d", errno);
-        return;
-    }
+    APPSPAWN_CHECK_LOGW(dir != NULL, return,
+        "skip thread count check: /proc unavailable, err=%{public}d, service: %{public}s", errno, serviceName);
     int count = 0;
     struct dirent *entry = NULL;
     while ((entry = readdir(dir)) != NULL) {
@@ -2253,13 +2276,15 @@ void CheckSingleThread(void)
         }
         count++;
     }
-    if (count <= 1) {
-        closedir(dir);
-        APPSPAWN_LOGI("single thread check passed");
-        return;
-    }
+    APPSPAWN_CHECK_LOGV(count > 1, closedir(dir); return,
+        "single thread check passed, service: %{public}s", serviceName);
     rewinddir(dir);
-    APPSPAWN_LOGF("thread count: %{public}d, expected: 1", count);
+    APPSPAWN_LOGF("thread count: %{public}d, expected: 1, service: %{public}s", count, serviceName);
+#ifdef APPSPAWN_HISYSEVENT
+    char threadList[THREAD_LIST_BUFFER_SIZE] = {0};
+    size_t listLen = 0;
+    int truncated = 0;
+#endif
     while ((entry = readdir(dir)) != NULL) {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0) {
             continue;
@@ -2276,9 +2301,14 @@ void CheckSingleThread(void)
         char *nl = strchr(comm, '\n');
         APPSPAWN_ONLY_EXPER(nl != NULL, *nl = '\0');
         APPSPAWN_LOGF("thread[%{public}s]: %{public}s", entry->d_name, comm);
+#ifdef APPSPAWN_HISYSEVENT
+        AppendThreadToList(entry->d_name, comm, threadList, sizeof(threadList), &listLen, &truncated);
+#endif
     }
     closedir(dir);
-    abort();
+#ifdef APPSPAWN_HISYSEVENT
+    ReportMultiThreadEvent(serviceName, count, threadList, truncated);
+#endif
 }
 
 APPSPAWN_STATIC int SetParameterWithRetry(const char *name, const char *value)
@@ -2332,7 +2362,7 @@ AppSpawnContent *StartSpawnService(const AppSpawnStartArg *startArg, uint32_t ar
     APPSPAWN_CHECK(ret == 0, AppSpawnDestroyContent(content);
         return NULL, "Failed to prepare load %{public}s result: %{public}d", arg->serviceName, ret);
 #ifndef APPSPAWN_TEST
-    CheckSingleThread();
+    CheckSingleThread(arg->serviceName);
     if (content->runChildProcessor == NULL) {
         APPSPAWN_LOGE("ChildLooper is not registered for %{public}s", arg->serviceName);
         APPSPAWN_KLOGE("ChildLooper is not registered for %{public}s", arg->serviceName);

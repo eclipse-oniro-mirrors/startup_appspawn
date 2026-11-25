@@ -35,13 +35,17 @@ if (!defined(ohos_lite)) {
       "APPSPAWN_TEST",
       "APPSPAWN_CLIENT",
       "APPSPAWN_DEBUG",
+      "APPSPAWN_HISYSEVENT",  # Enable CheckSingleThread hisysevent branch for coverage
     ]
 
     include_dirs = [
+      # Mock hisysevent.h must come first to shadow the real header
+      "${appspawn_path}/test/mock/include/hisysevent_mock",
       "${appspawn_path}/common",
       "${appspawn_path}/modules/common",
       "${appspawn_path}/modules/modulemgr",
       "${appspawn_path}/modules/module_engine/include",
+      "${appspawn_path}/modules/sysevent",
       "${appspawn_path}/standard",
       "${appspawn_innerkits_path}/client",
       "${appspawn_innerkits_path}/permission",
@@ -56,6 +60,7 @@ if (!defined(ohos_lite)) {
       "${appspawn_path}/common/appspawn_trace.cpp",
       "${appspawn_path}/modules/common/appspawn_dfx_dump.cpp",
       "${appspawn_path}/modules/modulemgr/appspawn_modulemgr.c",
+      "${appspawn_path}/modules/sysevent/hisysevent_adapter.cpp",
       "${appspawn_path}/standard/appspawn_appmgr.c",
       "${appspawn_path}/standard/appspawn_fd_manager.c",
       "${appspawn_path}/standard/appspawn_msgmgr.c",
