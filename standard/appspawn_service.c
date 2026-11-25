@@ -2412,8 +2412,11 @@ static void ProcessBegetCmdMsg(AppSpawnConnection *connection, AppSpawnMsgNode *
         return;
     }
     ProcessSpawnReqMsg(connection, msgNode);
+    // msgNode ownership is transferred to AppSpawningCtx inside ProcessSpawnReqMsg
+    // (CreateSpawnRequest frees it on every failure exit, DeleteAppSpawningCtx frees it
+    // on success/abort). Deleting it here would free a message the ctx still references,
+    // and a double free if the SPM decode-stage rebuild already replaced it.
     DeleteAppSpawnMsg(&message);
-    DeleteAppSpawnMsg(&msgNode);
 }
 
 
@@ -2494,6 +2497,9 @@ APPSPAWN_STATIC void ProcessCheckpointReqMsg(AppSpawnConnection *connection, App
     property->message = message;
     message->connection = connection;
     ret = AppSpawnHookExecute(STAGE_PARENT_MSG_DECODE, HOOK_STOP_WHEN_ERROR, GetAppSpawnContent(), &property->client);
+    // SPM rebuild hook may replace property->message and free the original message; refresh the
+    // local pointer before any later use (SendResponseEx below reads message->msgHeader).
+    message = property->message;
     APPSPAWN_ONLY_EXPER(ret != 0, APPSPAWN_LOGE("rebuild hook failed: %{public}d, aborting spawn", ret);
         SendResponse(connection, &message->msgHeader, ret, 0);
         DeleteAppSpawningCtx(property);
