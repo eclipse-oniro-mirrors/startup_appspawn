@@ -42,6 +42,22 @@ bool SetSeccompPolicyWithName(SeccompFilterType filter, const char *filterName)
 }
 #endif
 
+static bool g_hasCurrentUid = false;
+static uid_t g_currentUid = 0;
+
+uid_t __real_getuid(void);
+
+uid_t __wrap_getuid(void)
+{
+    return g_hasCurrentUid ? g_currentUid : __real_getuid();
+}
+
+void AppUidMockSetCurrentUid(uint32_t uid)
+{
+    g_currentUid = uid;
+    g_hasCurrentUid = true;
+}
+
 static AppUidIoctlCall g_ioctlCalls[APPUID_MOCK_MAX_IOCTL_CALLS];
 static int g_ioctlCallCount = 0;
 static int g_rawIoctlCallCount = 0;
@@ -144,6 +160,8 @@ static unsigned long AppUidMockEncodeIoctl(int isWrite, unsigned int nr)
 
 void AppUidMockReset(void)
 {
+    g_hasCurrentUid = false;
+    g_currentUid = 0;
     (void)memset_s(&g_eventCall, sizeof(g_eventCall), 0, sizeof(g_eventCall));
     g_killUid = 0;
     g_killCallCount = 0;
