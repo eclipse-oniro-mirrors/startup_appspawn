@@ -90,9 +90,10 @@ if (!defined(ohos_lite)) {
   ohos_unittest("AppSpawn_AppUid_Test") {
     module_out_path = "appspawn/appspawn"
     cflags = [ "-Dprivate=public" ]
+    ldflags = [ "-Wl,--wrap=getuid" ]
     if (appspawn_unittest_coverage) {
       cflags += [ "--coverage" ]
-      ldflags = [ "--coverage" ]
+      ldflags += [ "--coverage" ]
       cflags_cc = [ "--coverage" ]
     }
 

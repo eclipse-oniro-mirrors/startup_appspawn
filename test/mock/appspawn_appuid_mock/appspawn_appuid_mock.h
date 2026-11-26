@@ -117,6 +117,8 @@ void AppUidMockSetLockStatus(const char *status);
 int AppUidGetParameterStub(const char *key, const char *def, char *value, uint32_t len);
 
 /* --- configurable stub results --- */
+/* Override getuid until AppUidMockReset; otherwise use the real process UID. */
+void AppUidMockSetCurrentUid(uint32_t uid);
 void AppUidMockSetIoctlRet(int ret);
 void AppUidMockSetOpenRet(int fd);
 void AppUidMockSetPrctlRet(int ret);

@@ -278,30 +278,39 @@ HWTEST_F(AppSpawnAppUidDacTest, SetAppUidGid_SubspawnIsolatedUid_001, TestSize.L
 
 /*
  * @tc.name: SetAppUidGid_SubspawnIsolatedUid_002
- * @tc.desc: CREATE and business FORK accept both isolated UID boundaries for multiple users.
+ * @tc.desc: CREATE and business FORK accept isolated UID boundaries with matching parent user IDs.
  * @tc.type: SECU
  */
 HWTEST_F(AppSpawnAppUidDacTest, SetAppUidGid_SubspawnIsolatedUid_002, TestSize.Level1)
 {
     AppUidMgrPtr mgr(CreateAppSpawnMgr(MODE_FOR_APP_SPAWN), DeleteAppSpawnMgr);
     ASSERT_NE(mgr, nullptr);
-    const uint32_t validUids[] = {110000, 119999, 310000, 319999, 20110000, 20119999};
+    struct UidIdentity {
+        uint32_t parentUid;
+        uint32_t childUid;
+    };
+    const UidIdentity identities[] = {
+        {10000, 110000}, {10000, 119999}, {210000, 310000},
+        {210000, 319999}, {20010029, 20110000}, {20010029, 20119999},
+    };
     for (bool creatingInstance : {true, false}) {
         mgr->content.mode = creatingInstance ? MODE_FOR_APP_SPAWN : MODE_FOR_SUB_SPAWN;
-        for (uint32_t uid : validUids) {
-            SCOPED_TRACE(testing::Message() << "create=" << creatingInstance << " uid=" << uid);
-            AppUidPropertyPtr property(BuildAppUidProperty("com.test.subspawnuid", uid, NORMAL_APP_UID, false),
-                CleanupAppUidProperty);
+        for (const auto &identity : identities) {
+            SCOPED_TRACE(testing::Message() << "create=" << creatingInstance << " parent=" << identity.parentUid
+                << " child=" << identity.childUid);
+            AppUidPropertyPtr property(BuildAppUidProperty("com.test.subspawnuid", identity.childUid,
+                NORMAL_APP_UID, false), CleanupAppUidProperty);
             ASSERT_NE(property, nullptr);
             property->message->msgHeader.msgType = creatingInstance ? MSG_SUBSPAWN_CREATE : MSG_APP_SPAWN;
             AppUidMockReset();
+            AppUidMockSetCurrentUid(identity.parentUid);
             EXPECT_EQ(SetAppUidGid(mgr.get(), property.get()), 0);
             ASSERT_EQ(AppUidMockSetresuidCallCount(), 1);
             AppUidSetresuidCall call = {};
             ASSERT_EQ(AppUidMockGetSetresuidCall(0, &call), 0);
-            EXPECT_EQ(call.ruid, uid);
-            EXPECT_EQ(call.euid, uid);
-            EXPECT_EQ(call.suid, uid);
+            EXPECT_EQ(call.ruid, identity.childUid);
+            EXPECT_EQ(call.euid, identity.childUid);
+            EXPECT_EQ(call.suid, identity.childUid);
         }
     }
 }

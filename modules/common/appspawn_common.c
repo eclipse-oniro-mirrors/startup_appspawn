@@ -621,9 +621,10 @@ APPSPAWN_STATIC int SetAppUidGid(const AppSpawnMgr *content, const AppSpawningCt
         dacInfo->appUid, dacInfo->uid, dacInfo->gid, dacInfo->gidCount);
 
     bool creatingInstance = IsSubspawnInstanceCreate(content, property);
-    if (IsSubSpawnMode(content)) {
-        uint32_t isolatedUid = dacInfo->uid % UID_BASE;
-        APPSPAWN_CHECK(isolatedUid >= MIN_ISOLATED_UID && isolatedUid <= MAX_ISOLATED_UID,
+    if (IsSubSpawnMode(content) && dacInfo->uid != getuid()) {
+        uint32_t modUser = dacInfo->uid % UID_BASE;
+        APPSPAWN_CHECK(getuid() / UID_BASE == dacInfo->uid / UID_BASE && modUser <= MAX_ISOLATED_UID &&
+            modUser >= MIN_ISOLATED_UID,
             return APPSPAWN_MSG_INVALID, "Subspawn uid %{public}u is outside the isolated range", dacInfo->uid);
     }
     // append gids configured per-permission (gated same as cap path)
