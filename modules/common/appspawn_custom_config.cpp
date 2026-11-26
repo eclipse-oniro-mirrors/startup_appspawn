@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 
-
 #include <string>
 #include <fstream>
 #include <climits>
@@ -183,27 +182,28 @@ enum {
 #define ACCESS_TOKENID_GET_APPUID _IOR(HM_ACCESS_TOKEN_ID_IOCTL_BASE, HM_GET_APPUID, uint32_t)
 
 constexpr const char* HDAC_DEV = "/dev/access_token_id";
- 
+
 constexpr const char* HKIDS_DEV = "/dev/hkids";
 constexpr int HM_HKIDS_IOCTL_BASE = 'h';
- 
+
 struct HkidsIoctlArg {
     uint32_t moduleId;
     uint32_t cmdId;
     void *cmdArgs;
     uint32_t cmdArgsSize;
 };
- 
+
 struct AidsSetAInfoArg {
     uint32_t userid;
     uint64_t appidentifier;
+    uint32_t pid;
 };
- 
+
 constexpr int HM_HKIDS_CMD_SEC_INIT_APPSPAWN_ID = 0x18;
 constexpr int HKIDS_CMD_SEC_EXEC_CMD_ID = 0x04;
 constexpr int HKIDS_APPSPAWN_MODULE = 0;
 constexpr int AGENTID_CMD_SET_AINFO = 0;
- 
+
 #define HKIDS_CMD_SEC_INIT_APPSPAWN \
     _IOW(HM_HKIDS_IOCTL_BASE, HM_HKIDS_CMD_SEC_INIT_APPSPAWN_ID, struct HkidsIoctlArg)
 #define HKIDS_CMD_SEC_EXEC_CMD \
@@ -263,10 +263,11 @@ int GetUserId(uint32_t *userId)
     return rc;
 }
 
-static int SetHdacAgentId(uint64_t agentId, uint32_t userId)
+static int SetHdacAgentId(uint64_t agentId, uint32_t userId, uint32_t pid)
 {
-    APPSPAWN_CHECK(agentId > 0 && userId > 0, return -1, "Invalid agentId or userId");
-    APPSPAWN_LOGV("SetHdacAgentId called with agentId=%{public}" PRIu64 "userId=%{public}u", agentId, userId);
+    APPSPAWN_CHECK(agentId > 0 && userId > 0 && pid > 0, return -1, "Invalid agentId or userId or pid");
+    APPSPAWN_LOGV("SetHdacAgentId called with agentId=%{public}" PRIu64 " userId=%{public}u pid=%{public}u",
+        agentId, userId, pid);
     int fd = open(HKIDS_DEV, O_RDWR | O_CLOEXEC);
     APPSPAWN_CHECK_LOGW(fd >= 0, return -1,
         "Failed to open %{public}s: %{public}s", HKIDS_DEV, strerror(errno));
@@ -275,16 +276,21 @@ static int SetHdacAgentId(uint64_t agentId, uint32_t userId)
         close(fd);
         return -1;
     }
-    struct AidsSetAInfoArg ainfo = { userId, agentId };
-    struct HkidsIoctlArg hkArg = {
-        HKIDS_APPSPAWN_MODULE,
-        AGENTID_CMD_SET_AINFO,
-        &ainfo,
-        static_cast<uint32_t>(sizeof(ainfo)),
-    };
+    struct AidsSetAInfoArg ainfo;
+    (void)memset_s(&ainfo, sizeof(ainfo), 0, sizeof(ainfo));
+    ainfo.userid = userId;
+    ainfo.appidentifier = agentId;
+    ainfo.pid = pid;
+    struct HkidsIoctlArg hkArg;
+    (void)memset_s(&hkArg, sizeof(hkArg), 0, sizeof(hkArg));
+    hkArg.moduleId = HKIDS_APPSPAWN_MODULE;
+    hkArg.cmdId = AGENTID_CMD_SET_AINFO;
+    hkArg.cmdArgs = &ainfo;
+    hkArg.cmdArgsSize = static_cast<uint32_t>(sizeof(ainfo));
     int rc = ioctl(fd, HKIDS_CMD_SEC_EXEC_CMD, &hkArg);
     if (rc != 0) {
-        APPSPAWN_LOGW("Failed to set agentId for userId=%{public}u: %{public}s", userId, strerror(errno));
+        APPSPAWN_LOGW("Failed to set agentId=%{public}" PRIu64 " for userId=%{public}u pid=%{public}u: %{public}s",
+            agentId, userId, pid, strerror(errno));
     }
     close(fd);
     return rc;
@@ -305,8 +311,10 @@ static int ParseAgentIdFromMsg(const AppSpawningCtx *property, uint64_t *agentId
     errno = 0;
     char *endPtr = nullptr;
     unsigned long long value = strtoull(agentIdStr, &endPtr, 10);
-    if (endPtr == agentIdStr || *endPtr != '\0' || errno == ERANGE ||
-        value < 0 || value > UINT64_MAX) {
+    if (endPtr == agentIdStr || *endPtr != '\0' || value == 0) {
+        return -1;
+    }
+    if (errno == ERANGE) {
         return -1;
     }
 
@@ -329,13 +337,13 @@ static int ParseUserIdFromMsg(const AppSpawningCtx *property, uint32_t *userId)
     char *endPtr = nullptr;
     long long tmpUserId = strtoll(userIdStr, &endPtr, 10);
     if (endPtr == userIdStr || *endPtr != '\0' || errno == ERANGE ||
-        tmpUserId < 0 || tmpUserId > UINT32_MAX) {
+        tmpUserId <= 0 || tmpUserId > UINT32_MAX) {
         return -1;
     }
-    *userId = static_cast<uint64_t>(tmpUserId);
+    *userId = static_cast<uint32_t>(tmpUserId);
     return 0;
 }
- 
+
 void SetAgentIdFromMsg(const AppSpawningCtx *property)
 {
     if (!CheckAppMsgFlagsSet(property, APP_FLAGS_AGENT)) {
@@ -351,7 +359,11 @@ void SetAgentIdFromMsg(const AppSpawningCtx *property)
     APPSPAWN_CHECK_LOGW(ret == 0, return,
         "ParseUserIdFromMsg ret=%{public}d, skip userId write to kernel", ret);
 
-    (void)SetHdacAgentId(agentId, userId);
+    pid_t pid = getprocpid();
+    APPSPAWN_CHECK(pid > 0, return,
+        "Get proc pid failed: %{public}d, skip agentId write to kernel", pid);
+
+    (void)SetHdacAgentId(agentId, userId, static_cast<uint32_t>(pid));
 }
 
 // ioctl only takes effect on the calling thread.

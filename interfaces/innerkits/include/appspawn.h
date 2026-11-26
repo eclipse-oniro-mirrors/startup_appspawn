@@ -365,8 +365,6 @@ int AppSpawnClientAddPermission(AppSpawnClientHandle handle, AppSpawnReqMsgHandl
 #define MSG_EXT_NAME_IPC_GROUP "IPCGroup"
 #define MSG_EXT_NAME_AGENT_ID "AgentId"
 
-#define AGENT_ID_STR_MAX_LEN 64
-#define USER_ID_STR_MAX_LEN 16
 
 /**
  * Optional CREATE extension containing a JSON object with hapPath, so, entry and ns.
