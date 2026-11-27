@@ -40,10 +40,6 @@ if (!defined(ohos_lite)) {
       "DEBUG_BEGETCTL_BOOT",
       "OHOS_DEBUG",
       "GRAPHIC_PERMISSION_CHECK",
-      # Production code under test guards SetUserLevelEnvConfig and
-      # SpawnEnsureAppenvDir behind #ifdef CUSTOM_SANDBOX; define it so the
-      # symbols are compiled into the test binary.
-      "CUSTOM_SANDBOX",
 
       # Route libc calls of production code to the shared stubs.
       "capset=CapsetStub",
@@ -193,6 +189,19 @@ if (!defined(ohos_lite)) {
         "selinux_adapter:libhap_restorecon",
         "selinux_adapter:librestorecon",
       ]
+    }
+
+    # CUSTOM_SANDBOX gates the PC-only appenv feature (SetUserLevelEnvConfig /
+    # SpawnEnsureAppenvDir) in appspawn_adapter.cpp / appspawn_common.c, which
+    # production compiles only under this flag. Define it under the SAME
+    # condition as production (modules/common/BUILD.gn and appspawn_config:
+    # build_seccomp && appspawn_custom_sandbox) so the test exercises these
+    # symbols iff production builds them. On non-PC products
+    # (appspawn_custom_sandbox=false) the #ifdef CUSTOM_SANDBOX test bodies fall
+    # through to their #else SUCCEED() branches instead of running PC-only code
+    # that relies on per-user dirs the device never creates for test userIds.
+    if (appspawn_custom_sandbox) {
+      defines += [ "CUSTOM_SANDBOX" ]
     }
 
     if (appspawn_report_event) {
