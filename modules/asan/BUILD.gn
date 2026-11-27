@@ -46,6 +46,17 @@ ohos_shared_library("appspawn_asan") {
   if ((!is_asan && asan_detector) || use_hwasan) {
       defines += [ "HWASAN_TW" ]
   }
+  # RaceGuard detector: conditionally compile into appspawn_asan so (file isolation).
+  # When use_raceguard=false (default), raceguard_detector.c is not compiled,
+  # and libappspawn_asan.z.so is identical to the stock build (AC-1.2 zero-cost).
+  # use_raceguard is declared in build/config/sanitizers/sanitizers.gni (default false),
+  # "Enable clang raceguard checker plugin" — system-level switch that also gates the
+  # RaceGuard so presence. appspawn consumes it directly (plugin enabled => so present =>
+  # preload needed). NOT declared in appspawn.gni (product config owns it).
+  if (sanitizer_build_type == "raceguard") {
+    sources += [ "raceguard_detector.c" ]
+    defines += [ "RACEGUARD_TW" ]
+  }
   external_deps = [
     "bounds_checking_function:libsec_shared",
     "c_utils:utils",
